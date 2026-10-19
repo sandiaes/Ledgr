@@ -68,6 +68,7 @@ create table public.ca_subscriptions (
 
   -- One ca_subscriptions row per subscription transaction.
   unique (transaction_id),
+  unique (id, user_id),
 
   check ((manual_value is null) = (manual_value_date is null))
 );
@@ -78,6 +79,23 @@ create index ca_subscriptions_series_id_idx on public.ca_subscriptions (series_i
 create trigger ca_subscriptions_set_updated_at
   before update on public.ca_subscriptions
   for each row execute function public.set_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- Optional link from a redemption transaction to the subscription it redeems.
+-- Lives on transactions (not here) because one subscription can be redeemed in
+-- several partial redemptions. When null, packages/core allocates FIFO.
+-- ---------------------------------------------------------------------------
+
+alter table public.transactions
+  add column ca_subscription_id uuid,
+  add foreign key (ca_subscription_id, user_id)
+    references public.ca_subscriptions (id, user_id),
+  add constraint transactions_ca_subscription_only_on_redemption
+    check (ca_subscription_id is null or type = 'redemption');
+
+create index transactions_ca_subscription_id_idx
+  on public.transactions (ca_subscription_id)
+  where ca_subscription_id is not null;
 
 -- ---------------------------------------------------------------------------
 -- RLS (same pattern as the ledger: no hard deletes, soft delete via UPDATE)

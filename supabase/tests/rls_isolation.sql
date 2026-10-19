@@ -34,8 +34,26 @@ insert into public.transactions
   (id, account_id, asset_id, type, trade_date, quantity, unit_price, currency, fx_rate_to_eur) values
   ('a0000000-0000-4000-8000-000000000006', 'a0000000-0000-4000-8000-000000000001',
    'a0000000-0000-4000-8000-000000000005', 'subscription', '2024-03-01', 1000, 1, 'EUR', 1);
-insert into public.ca_subscriptions (series_id, transaction_id) values
-  ('a0000000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-000000000006');
+insert into public.ca_subscriptions (id, series_id, transaction_id) values
+  ('a0000000-0000-4000-8000-000000000007', 'a0000000-0000-4000-8000-000000000004',
+   'a0000000-0000-4000-8000-000000000006');
+-- Partial redemption linked to that subscription.
+insert into public.transactions
+  (account_id, asset_id, type, trade_date, quantity, unit_price, currency, fx_rate_to_eur, ca_subscription_id) values
+  ('a0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000005',
+   'redemption', '2025-03-01', 200, 1.02, 'EUR', 1, 'a0000000-0000-4000-8000-000000000007');
+-- The link is only allowed on redemptions.
+do $$
+begin
+  begin
+    insert into public.transactions
+      (account_id, asset_id, type, trade_date, quantity, unit_price, currency, fx_rate_to_eur, ca_subscription_id) values
+      ('a0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000005',
+       'buy', '2025-03-01', 1, 1, 'EUR', 1, 'a0000000-0000-4000-8000-000000000007');
+    raise exception 'ca_subscription_id accepted on a non-redemption';
+  exception when check_violation then null;
+  end;
+end $$;
 insert into public.prices (asset_id, price_date, close, currency, source) values
   ('a0000000-0000-4000-8000-000000000002', '2026-01-02', 111.00, 'EUR', 'yahoo');
 insert into public.fx_rates (currency, rate_date, rate_to_eur, source) values
@@ -50,7 +68,7 @@ do $$
 begin
   assert (select count(*) from public.accounts) = 1,            'A should see 1 account';
   assert (select count(*) from public.assets) = 2,              'A should see 2 assets';
-  assert (select count(*) from public.transactions) = 2,        'A should see 2 transactions';
+  assert (select count(*) from public.transactions) = 3,        'A should see 3 transactions';
   assert (select count(*) from public.ca_series) = 1,           'A should see 1 ca_series';
   assert (select count(*) from public.ca_subscriptions) = 1,    'A should see 1 ca_subscription';
   assert (select count(*) from public.prices) = 1,              'A should see 1 price';
@@ -127,6 +145,21 @@ begin
     insert into public.prices (asset_id, price_date, close, currency, source)
       values ('a0000000-0000-4000-8000-000000000002', '2026-01-03', 1, 'EUR', 'x');
     raise exception 'B wrote a price for A''s asset';
+  exception when foreign_key_violation then null;
+  end;
+end $$;
+
+-- 4b. B cannot link own redemption to A's certificado subscription.
+insert into public.assets (id, name, asset_type, trading_currency, price_source) values
+  ('b0000000-0000-4000-8000-000000000002', 'B CA', 'certificado_aforro', 'EUR', 'ca_accrual');
+do $$
+begin
+  begin
+    insert into public.transactions
+      (account_id, asset_id, type, trade_date, quantity, unit_price, currency, fx_rate_to_eur, ca_subscription_id)
+      values ('b0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000002',
+              'redemption', '2025-03-01', 1, 1, 'EUR', 1, 'a0000000-0000-4000-8000-000000000007');
+    raise exception 'B linked a redemption to A''s subscription';
   exception when foreign_key_violation then null;
   end;
 end $$;
