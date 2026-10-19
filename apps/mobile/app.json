@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "Ledgr",
+    "slug": "ledgr",
+    "version": "0.0.0",
+    "platforms": ["android"],
+    "android": { "package": "app.ledgr.mobile" }
+  }
+}

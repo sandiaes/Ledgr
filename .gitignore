@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.expo/
+*.log
+.DS_Store
+
+# Secrets: never commit
+.env
+.env.*
+!.env.example
+supabase/.env
+supabase/.branches/
+supabase/.temp/

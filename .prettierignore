@@ -1,0 +1,6 @@
+node_modules
+dist
+.expo
+coverage
+pnpm-lock.yaml
+supabase/.branches
