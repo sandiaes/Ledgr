@@ -25,3 +25,13 @@ cp .env.example .env   # fill in URL + anon key only
 | `pnpm typecheck` | tsc in every workspace        |
 | `pnpm test`      | Vitest                        |
 | `pnpm check`     | all of the above, as CI would |
+
+## Desktop: sign in and TOTP enrollment
+
+```sh
+cp apps/desktop/.env.example apps/desktop/.env.local   # URL + anon key only
+pnpm --filter @ledgr/desktop dev                         # http://localhost:5173
+```
+
+Sign in with email + password, enroll an authenticator app, verify a code. Sign out
+and back in to confirm you are asked for a code and reach `aal2`.
