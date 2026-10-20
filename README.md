@@ -24,8 +24,8 @@ cp .env.example .env   # fill in URL + anon key only
 | `pnpm format`        | Prettier (write)              |
 | `pnpm typecheck`     | tsc in every workspace        |
 | `pnpm test`          | Vitest                        |
-| `pnpm test:coverage` | Vitest + v8 coverage (core)   |
 | `pnpm check`         | all of the above, as CI would |
+| `pnpm test:coverage` | Vitest + v8 coverage (core)   |
 
 ## Desktop: sign in and TOTP enrollment
 
