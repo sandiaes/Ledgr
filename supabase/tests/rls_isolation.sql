@@ -16,7 +16,7 @@ insert into auth.users (id, email, aud, role) values
 -- ---------------------------------------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claims',
-  '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated"}', true);
+  '{"sub":"aaaaaaaa-0000-4000-8000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 insert into public.accounts (id, name, account_type) values
   ('a0000000-0000-4000-8000-000000000001', 'A broker', 'broker');
@@ -80,7 +80,7 @@ end $$;
 -- As user B: try to read and tamper with A's data.
 -- ---------------------------------------------------------------------------
 select set_config('request.jwt.claims',
-  '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated"}', true);
+  '{"sub":"bbbbbbbb-0000-4000-8000-00000000000b","role":"authenticated","aal":"aal2"}', true);
 
 -- 1. B reads nothing from any table.
 do $$
