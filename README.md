@@ -18,13 +18,14 @@ cp .env.example .env   # fill in URL + anon key only
 
 ## Scripts
 
-| Command          | Purpose                       |
-| ---------------- | ----------------------------- |
-| `pnpm lint`      | ESLint                        |
-| `pnpm format`    | Prettier (write)              |
-| `pnpm typecheck` | tsc in every workspace        |
-| `pnpm test`      | Vitest                        |
-| `pnpm check`     | all of the above, as CI would |
+| Command              | Purpose                       |
+| -------------------- | ----------------------------- |
+| `pnpm lint`          | ESLint                        |
+| `pnpm format`        | Prettier (write)              |
+| `pnpm typecheck`     | tsc in every workspace        |
+| `pnpm test`          | Vitest                        |
+| `pnpm test:coverage` | Vitest + v8 coverage (core)   |
+| `pnpm check`         | all of the above, as CI would |
 
 ## Desktop: sign in and TOTP enrollment
 
