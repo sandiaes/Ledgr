@@ -4,7 +4,7 @@ import { ZERO, type Decimal } from './decimal';
 import { MissingValuationError } from './errors';
 import { netContributions } from './gains';
 import { computeHoldings } from './holdings';
-import { cashBalanceEur } from './ledger';
+import { cashBalanceEur, hasDeposits } from './ledger';
 import type { Asset, AssetType, FxLookup, PriceLookup, Transaction } from './types';
 
 export interface SnapshotInput {
@@ -14,16 +14,22 @@ export interface SnapshotInput {
   prices: PriceLookup;
   fx: FxLookup;
   ca?: CaContext;
+  /**
+   * Include cash in the snapshot. Defaults to whether the ledger records any deposit;
+   * without deposits the cash balance would just be minus the amount invested.
+   */
+  trackCash?: boolean;
 }
 
 /** One public.portfolio_snapshots row (all EUR). */
 export interface PortfolioSnapshot {
   snapshotDate: IsoDate;
-  /** Positions at market value + cash. */
+  /** Positions at market value, plus cash when it is tracked. */
   totalValueEur: Decimal;
   totalCostBasisEur: Decimal;
   netContributionsEur: Decimal;
-  cashEur: Decimal;
+  /** Null when cash is not tracked. */
+  cashEur: Decimal | null;
   stockValueEur: Decimal;
   etfValueEur: Decimal;
   cryptoValueEur: Decimal;
@@ -51,12 +57,13 @@ export function buildSnapshot(input: SnapshotInput): PortfolioSnapshot {
     byType[h.assetType] = byType[h.assetType].plus(h.marketValueEur as Decimal);
     costBasis = costBasis.plus(h.costBasisEur);
   }
-  const cashEur = cashBalanceEur(transactions, date);
+  const trackCash = input.trackCash ?? hasDeposits(transactions);
+  const cashEur = trackCash ? cashBalanceEur(transactions, date) : null;
   const positions = Object.values(byType).reduce((s, v) => s.plus(v), ZERO);
 
   return {
     snapshotDate: date,
-    totalValueEur: positions.plus(cashEur),
+    totalValueEur: cashEur ? positions.plus(cashEur) : positions,
     totalCostBasisEur: costBasis,
     netContributionsEur: netContributions(transactions, date).netEur,
     cashEur,

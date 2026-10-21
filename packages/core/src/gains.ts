@@ -3,7 +3,7 @@ import { ZERO, type Decimal } from './decimal';
 import { MissingValuationError } from './errors';
 import { runFifo } from './fifo';
 import type { Holding } from './holdings';
-import { amountEur, feesEur, prepareLedger } from './ledger';
+import { amountEur, feesEur, prepareLedger, withholdingTaxEur } from './ledger';
 import type { Transaction } from './types';
 
 export interface NetContributions {
@@ -27,18 +27,22 @@ export function netContributions(
 }
 
 export interface GainsSummary {
-  /** Sum of disposal gains (fees already in cost and proceeds). */
+  /**
+   * Sum of disposal gains (pooled FIFO, fees in cost and proceeds). A performance metric,
+   * not a tax figure.
+   */
   realizedEur: Decimal;
   /** Market value - cost basis of open positions. */
   unrealizedEur: Decimal;
   /** realized + unrealized (capital gains only). */
   totalGainEur: Decimal;
-  /** Dividends + interest, net of fees on those rows. */
+  /** Dividends + interest, net of withholding tax and fees on those rows. */
   incomeNetEur: Decimal;
-  /** Standalone fee rows plus fees on deposits/withdrawals. */
+  /** Standalone fee rows plus fees on deposits, withdrawals and transfers. */
   otherCostsEur: Decimal;
   /**
-   * totalGain + incomeNet - otherCosts. Equals holdings value + cash - net contributions.
+   * totalGain + incomeNet - otherCosts. Equals holdings value + cash - net contributions
+   * (cash as computed by cashBalanceEur, whether or not it is tracked in snapshots).
    */
   totalReturnEur: Decimal;
 }
@@ -61,10 +65,13 @@ export function gainsSummary(input: {
   let otherCostsEur = ZERO;
   for (const tx of prepareLedger(transactions, asOf)) {
     if (tx.type === 'dividend' || tx.type === 'interest') {
-      incomeNetEur = incomeNetEur.plus(amountEur(tx)).minus(feesEur(tx));
+      incomeNetEur = incomeNetEur
+        .plus(amountEur(tx))
+        .minus(withholdingTaxEur(tx))
+        .minus(feesEur(tx));
     } else if (tx.type === 'fee') {
       otherCostsEur = otherCostsEur.plus(amountEur(tx)).plus(feesEur(tx));
-    } else if (tx.type === 'deposit' || tx.type === 'withdrawal') {
+    } else if (tx.type === 'deposit' || tx.type === 'withdrawal' || tx.type === 'transfer') {
       otherCostsEur = otherCostsEur.plus(feesEur(tx));
     }
   }

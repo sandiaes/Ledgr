@@ -79,6 +79,27 @@ describe('buildSnapshot', () => {
     expectDec(s.netContributionsEur, '5000');
   });
 
+  it('without deposits, cash is not tracked and not in the total', () => {
+    // same ledger minus the deposit: positions 1100 + 506 + 600 + 1005.4 = 3211.4
+    const noDeposit = input.transactions.filter((t) => t.type !== 'deposit');
+    const s = buildSnapshot({ ...input, transactions: noDeposit });
+    expect(s.cashEur).toBeNull();
+    expectDec(s.totalValueEur, '3211.4');
+    expectDec(s.netContributionsEur, '0');
+  });
+
+  it('trackCash overrides the default either way', () => {
+    // forced on without deposits: cash = -1001 - 450 - 500 - 1000 + 10 = -2941
+    const noDeposit = input.transactions.filter((t) => t.type !== 'deposit');
+    const on = buildSnapshot({ ...input, transactions: noDeposit, trackCash: true });
+    expectDec(on.cashEur, '-2941');
+    expectDec(on.totalValueEur, '270.4');
+    // forced off with deposits
+    const off = buildSnapshot({ ...input, trackCash: false });
+    expect(off.cashEur).toBeNull();
+    expectDec(off.totalValueEur, '3211.4');
+  });
+
   it('before any activity everything is zero', () => {
     const s = buildSnapshot({ ...input, date: '2023-12-31' });
     for (const v of Object.values(s).filter((x) => typeof x !== 'string')) expectDec(v, '0');

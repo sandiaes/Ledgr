@@ -11,11 +11,12 @@ export interface AllocationSlice {
   weight: Decimal;
 }
 
-const keyFor: Record<AllocationDimension, (h: Holding) => string> = {
-  assetType: (h) => h.assetType,
-  asset: (h) => h.assetId,
-  account: (h) => h.accountId,
-  currency: (h) => h.currency,
+/** [group key, value] pairs a holding contributes; by account it is split by units held. */
+const partsOf: Record<AllocationDimension, (h: Holding) => [string, Decimal][]> = {
+  assetType: (h) => [[h.assetType, h.marketValueEur as Decimal]],
+  asset: (h) => [[h.assetId, h.marketValueEur as Decimal]],
+  account: (h) => h.accounts.map((a) => [a.accountId, a.marketValueEur as Decimal]),
+  currency: (h) => [[h.currency, h.marketValueEur as Decimal]],
 };
 
 /**
@@ -31,8 +32,9 @@ export function allocation(
 
   const groups = new Map<string, Decimal>();
   for (const h of holdings) {
-    const key = keyFor[by](h);
-    groups.set(key, (groups.get(key) ?? ZERO).plus(h.marketValueEur as Decimal));
+    for (const [key, value] of partsOf[by](h)) {
+      groups.set(key, (groups.get(key) ?? ZERO).plus(value));
+    }
   }
   const total = [...groups.values()].reduce((s, v) => s.plus(v), ZERO);
   return [...groups.entries()]

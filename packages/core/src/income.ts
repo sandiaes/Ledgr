@@ -1,16 +1,19 @@
 import { dayNumber, minDate, yearOf, type IsoDate } from './dates';
 import { ZERO, type Decimal } from './decimal';
 import { runFifo, type FifoOptions } from './fifo';
-import { amountEur, feesEur, prepareLedger } from './ledger';
+import { amountEur, feesEur, prepareLedger, withholdingTaxEur } from './ledger';
 import type { Transaction } from './types';
 
 export interface IncomeTotals {
   dividendsEur: Decimal;
   interestEur: Decimal;
-  /** dividends + interest, as recorded in `amount`. */
+  /** dividends + interest, as recorded in `amount` (before withholding and fees). */
   grossEur: Decimal;
+  /** Tax withheld at source, as recorded on the rows. */
+  withholdingTaxEur: Decimal;
   /** Fees recorded on the income rows. */
   feesEur: Decimal;
+  /** gross - withholding - fees: the cash actually received. */
   netEur: Decimal;
 }
 
@@ -32,15 +35,24 @@ export function incomeTotals(
 ): IncomeTotals {
   let dividendsEur = ZERO;
   let interestEur = ZERO;
+  let withheld = ZERO;
   let fees = ZERO;
   for (const tx of prepareLedger(filterAsset(transactions, options.assetId), options.asOf)) {
     if (tx.type === 'dividend') dividendsEur = dividendsEur.plus(amountEur(tx));
     else if (tx.type === 'interest') interestEur = interestEur.plus(amountEur(tx));
     else continue;
+    withheld = withheld.plus(withholdingTaxEur(tx));
     fees = fees.plus(feesEur(tx));
   }
   const grossEur = dividendsEur.plus(interestEur);
-  return { dividendsEur, interestEur, grossEur, feesEur: fees, netEur: grossEur.minus(fees) };
+  return {
+    dividendsEur,
+    interestEur,
+    grossEur,
+    withholdingTaxEur: withheld,
+    feesEur: fees,
+    netEur: grossEur.minus(withheld).minus(fees),
+  };
 }
 
 export interface IncomeYear extends IncomeTotals {

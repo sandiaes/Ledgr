@@ -28,6 +28,7 @@ export interface Extra {
   currency?: string;
   fx?: string;
   caSubscriptionId?: string;
+  withholding?: string;
 }
 
 let seq = 0;
@@ -42,6 +43,7 @@ function base(type: TransactionType, date: string, extra: Extra) {
     currency: extra.currency ?? 'EUR',
     fxRateToEur: d(extra.fx ?? '1'),
     caSubscriptionId: extra.caSubscriptionId ?? null,
+    withholdingTax: extra.withholding ? d(extra.withholding) : null,
   };
 }
 
@@ -89,3 +91,21 @@ export const interest = (...a: FlowArgs) => flow('interest', ...a);
 export const deposit = (...a: FlowArgs) => flow('deposit', ...a);
 export const withdraw = (...a: FlowArgs) => flow('withdrawal', ...a);
 export const fee = (...a: FlowArgs) => flow('fee', ...a);
+
+/** Moves `qty` of `asset` from `extra.account` (default acc1) to `to`. */
+export function transfer(
+  date: string,
+  asset: string,
+  qty: string,
+  to: string,
+  extra: Extra = {},
+): Transaction {
+  return {
+    ...base('transfer', date, extra),
+    assetId: asset,
+    quantity: d(qty),
+    unitPrice: null,
+    amount: null,
+    transferToAccountId: to,
+  };
+}

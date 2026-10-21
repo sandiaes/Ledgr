@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { LedgerError } from './errors';
+import { InsufficientHoldingsError, LedgerError } from './errors';
 import { computeHoldings } from './holdings';
 import { createFxLookup, createPriceLookup } from './lookups';
-import { buy, d, expectDec, sell } from './test-utils';
+import { buy, d, expectDec, sell, transfer } from './test-utils';
 import type { Asset } from './types';
 
 const assets: Asset[] = [
@@ -37,7 +37,7 @@ describe('computeHoldings', () => {
   const byAsset = (id: string) => holdings.find((h) => h.assetId === id)!;
 
   it('omits fully sold positions (zero holdings)', () => {
-    expect(holdings.map((h) => h.assetId)).toEqual(['A', 'US', 'BTC']);
+    expect(holdings.map((h) => h.assetId)).toEqual(['A', 'BTC', 'US']);
   });
 
   it('EUR stock: quantity, cost basis, average cost, value, unrealized', () => {
@@ -68,9 +68,111 @@ describe('computeHoldings', () => {
   it('crypto in another account', () => {
     // 0.05 * 60000 = 3000; cost 2002; unrealized 998
     const btc = byAsset('BTC');
-    expect(btc.accountId).toBe('acc2');
+    expect(btc.accounts.map((a) => [a.accountId, a.quantity.toString()])).toEqual([
+      ['acc2', '0.05'],
+    ]);
     expectDec(btc.marketValueEur, '3000');
     expectDec(btc.unrealizedGainEur, '998');
+  });
+
+  it('one holding per asset across accounts, with units and value per account', () => {
+    // acc1 buys 6 @ 10 (60), acc2 buys 4 @ 15 (60); acc2 sells 2 -> pooled FIFO takes
+    // 2 of acc1's older lot (cost 20). Left: 8 units, cost 100, avg 12.5.
+    // Units: acc1 6, acc2 4 - 2 = 2. Price 11: value 88 -> acc1 66, acc2 22.
+    const [h, ...rest] = computeHoldings({
+      transactions: [
+        buy('2024-01-01', 'A', '6', '10', { account: 'acc1' }),
+        buy('2024-01-02', 'A', '4', '15', { account: 'acc2' }),
+        sell('2024-03-01', 'A', '2', '12', { account: 'acc2' }),
+      ],
+      assets,
+      asOf: '2024-06-30',
+      prices: createPriceLookup([
+        { assetId: 'A', date: '2024-06-30', close: d('11'), currency: 'EUR' },
+      ]),
+      fx,
+    });
+    expect(rest).toEqual([]);
+    expectDec(h!.quantity, '8');
+    expectDec(h!.costBasisEur, '100');
+    expectDec(h!.averageCostEur, '12.5');
+    expect(
+      h!.accounts.map((a) => [a.accountId, a.quantity.toString(), a.marketValueEur!.toString()]),
+    ).toEqual([
+      ['acc1', '6', '66'],
+      ['acc2', '2', '22'],
+    ]);
+  });
+
+  it('transfers move units between accounts without touching cost basis', () => {
+    // exchange buys 1 BTC @ 40000 + 10 fee = 40010
+    // transfer 0.4 to wallet (2 EUR fee: a cost, not part of the cost basis)
+    // wallet sells 0.1 @ 50000: pooled FIFO, cost 40010 * 0.1 = 4001; left 0.9, cost 36009
+    // units: exchange 0.6, wallet 0.4 - 0.1 = 0.3; value 0.9 * 60000 = 54000 = 36000 + 18000
+    const [h] = computeHoldings({
+      transactions: [
+        buy('2024-01-01', 'BTC', '1', '40000', { fees: '10', account: 'ex' }),
+        transfer('2024-02-01', 'BTC', '0.4', 'wal', { fees: '2', account: 'ex' }),
+        sell('2024-03-01', 'BTC', '0.1', '50000', { account: 'wal' }),
+      ],
+      assets,
+      asOf: '2024-06-30',
+      prices: createPriceLookup([
+        { assetId: 'BTC', date: '2024-06-30', close: d('60000'), currency: 'EUR' },
+      ]),
+      fx,
+    });
+    expectDec(h!.quantity, '0.9');
+    expectDec(h!.costBasisEur, '36009');
+    expect(
+      h!.accounts.map((a) => [a.accountId, a.quantity.toString(), a.marketValueEur!.toString()]),
+    ).toEqual([
+      ['ex', '0.6', '36000'],
+      ['wal', '0.3', '18000'],
+    ]);
+  });
+
+  it('same-day buy, transfer and sell work in any row order', () => {
+    const [h] = computeHoldings({
+      transactions: [
+        sell('2024-01-01', 'BTC', '0.5', '1', { account: 'wal' }),
+        transfer('2024-01-01', 'BTC', '1', 'wal', { account: 'ex' }),
+        buy('2024-01-01', 'BTC', '1', '1', { account: 'ex' }),
+      ],
+      assets,
+      asOf: '2024-01-01',
+      prices: createPriceLookup([]),
+      fx,
+    });
+    expect(h!.accounts.map((a) => [a.accountId, a.quantity.toString()])).toEqual([['wal', '0.5']]);
+  });
+
+  it('a transfer of more than the sending account holds throws', () => {
+    // pooled total is 2, but acc1 only has 1
+    const txs = [
+      buy('2024-01-01', 'A', '1', '10', { account: 'acc1' }),
+      buy('2024-01-01', 'A', '1', '10', { account: 'acc2' }),
+      transfer('2024-01-02', 'A', '1.5', 'acc2', { id: 't1', account: 'acc1' }),
+    ];
+    const run = () =>
+      computeHoldings({ transactions: txs, assets, asOf: '2024-06-30', prices, fx });
+    expect(run).toThrow(InsufficientHoldingsError);
+    expect(run).toThrow(/Transfer of 1.5 units exceeds the 1 held of asset A in account acc1/);
+  });
+
+  it('an account that sold everything it held drops out of the split', () => {
+    const [h] = computeHoldings({
+      transactions: [
+        buy('2024-01-01', 'A', '5', '10', { account: 'acc1' }),
+        buy('2024-01-02', 'A', '5', '10', { account: 'acc2' }),
+        sell('2024-03-01', 'A', '5', '12', { account: 'acc2' }),
+      ],
+      assets,
+      asOf: '2024-06-30',
+      prices: createPriceLookup([]),
+      fx,
+    });
+    expect(h!.accounts).toEqual([{ accountId: 'acc1', quantity: d('5'), marketValueEur: null }]);
   });
 
   it('uses the price currency, not the trading currency, for conversion', () => {
