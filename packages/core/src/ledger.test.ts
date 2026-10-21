@@ -51,6 +51,19 @@ describe('validateTransaction', () => {
     expect(() => validateTransaction({ ...ok, ...patch })).toThrow(message);
   });
 
+  it('withholding tax: dividends and interest only, between 0 and the amount', () => {
+    const div = dividend('2024-01-01', '10');
+    expect(() => validateTransaction({ ...div, withholdingTax: d('10') })).not.toThrow();
+    expect(() =>
+      validateTransaction({ ...interest('2024-01-01', '10'), withholdingTax: d('2.8') }),
+    ).not.toThrow();
+    expect(() => validateTransaction({ ...div, withholdingTax: d('10.01') })).toThrow(/exceeds/);
+    expect(() => validateTransaction({ ...div, withholdingTax: d('-1') })).toThrow(/>= 0/);
+    expect(() =>
+      validateTransaction({ ...buy('2024-01-01', 'A', '1', '1'), withholdingTax: d('1') }),
+    ).toThrow(/only allowed on dividends and interest/);
+  });
+
   it('rejects malformed cash rows', () => {
     const div = dividend('2024-01-01', '5', { id: 'div-1' });
     expect(() => validateTransaction({ ...div, amount: null })).toThrow(/amount > 0/);
@@ -92,6 +105,9 @@ describe('cash', () => {
     expectDec(cashEffectEur(dividend('2024-01-01', '10', f)), '9');
     expectDec(cashEffectEur(interest('2024-01-01', '10', f)), '9');
     expectDec(cashEffectEur(fee('2024-01-01', '10', f)), '-11');
+    // 10 - 2.8 withheld - 1 fee
+    expectDec(cashEffectEur(dividend('2024-01-01', '10', { ...f, withholding: '2.8' })), '6.2');
+    expectDec(cashEffectEur(interest('2024-01-01', '10', { ...f, withholding: '2.8' })), '6.2');
     // (10 USD - 1 USD) * 0.5
     expectDec(
       cashEffectEur(dividend('2024-01-01', '10', { ...f, currency: 'USD', fx: '0.5' })),

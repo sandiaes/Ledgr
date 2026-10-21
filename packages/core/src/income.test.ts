@@ -32,6 +32,19 @@ describe('incomeTotals', () => {
     expectDec(incomeTotals(transactions, { asOf: '2023-12-31' }).grossEur, '30');
   });
 
+  it('withholding tax: gross stays gross, net is what was received', () => {
+    // 100 USD dividend at fx 0.9, 15 USD withheld, 1 USD fee:
+    // gross 90, withheld 13.5, fees 0.9, net 90 - 13.5 - 0.9 = 75.6
+    const t = incomeTotals([
+      dividend('2024-01-01', '100', { currency: 'USD', fx: '0.9', withholding: '15', fees: '1' }),
+    ]);
+    expectDec(t.grossEur, '90');
+    expectDec(t.withholdingTaxEur, '13.5');
+    expectDec(t.feesEur, '0.9');
+    expectDec(t.netEur, '75.6');
+    expectDec(incomeTotals(transactions).withholdingTaxEur, '0');
+  });
+
   it('dividends only', () => {
     const t = incomeTotals([dividend('2024-01-01', '7')]);
     expectDec(t.dividendsEur, '7');
@@ -90,6 +103,16 @@ describe('incomeByYear', () => {
     const avg = d('183000').div(365);
     expectDec(y!.averageCostBasisEur, avg);
     expectDec(y!.yieldOnCost, d('10').div(avg));
+  });
+
+  it('yield on cost uses gross income, before withholding', () => {
+    // cost 1000 all of 2023; dividend 30 with 8.4 withheld -> yield 30 / 1000
+    const [y] = incomeByYear(
+      [buy('2023-01-01', 'A', '1', '1000'), dividend('2023-06-01', '30', { withholding: '8.4' })],
+      { asOf: '2023-12-31' },
+    );
+    expectDec(y!.yieldOnCost, '0.03');
+    expectDec(y!.netEur, '21.6');
   });
 
   it('dividends only: no cost basis -> yield null', () => {

@@ -28,6 +28,7 @@ export interface Extra {
   currency?: string;
   fx?: string;
   caSubscriptionId?: string;
+  withholding?: string;
 }
 
 let seq = 0;
@@ -42,6 +43,7 @@ function base(type: TransactionType, date: string, extra: Extra) {
     currency: extra.currency ?? 'EUR',
     fxRateToEur: d(extra.fx ?? '1'),
     caSubscriptionId: extra.caSubscriptionId ?? null,
+    withholdingTax: extra.withholding ? d(extra.withholding) : null,
   };
 }
 

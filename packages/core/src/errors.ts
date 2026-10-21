@@ -11,19 +11,18 @@ export class LedgerError extends Error {
   }
 }
 
-/** A sell or redemption for more units than are held. */
+/** A sell or redemption for more units than are held (across all accounts). */
 export class InsufficientHoldingsError extends LedgerError {
   override name = 'InsufficientHoldingsError';
   constructor(
     transactionId: string,
-    readonly accountId: string,
     readonly assetId: string,
     readonly requested: Decimal,
     readonly available: Decimal,
   ) {
     super(
       `Disposal of ${requested.toString()} units exceeds the ${available.toString()} held ` +
-        `of asset ${assetId} in account ${accountId}`,
+        `of asset ${assetId}`,
       transactionId,
     );
   }

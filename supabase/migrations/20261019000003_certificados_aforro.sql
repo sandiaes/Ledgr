@@ -55,7 +55,7 @@ create table public.ca_subscriptions (
   user_id               uuid not null default auth.uid() references auth.users (id) on delete cascade,
   series_id             uuid not null,
   transaction_id        uuid not null,
-  -- Manual override: value (EUR, gross of tax as shown by AforroNet) as of a date.
+  -- Manual override: the value AforroNet shows (EUR, net of withholding) as of a date.
   -- Accrual starts from here instead of from the subscription when present.
   manual_value          numeric(38, 18) check (manual_value >= 0),
   manual_value_date     date,

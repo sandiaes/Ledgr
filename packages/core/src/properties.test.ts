@@ -36,11 +36,13 @@ const opArb = fc.record({
 });
 
 /**
- * A random but valid ledger: sells never exceed what is held (simulated in processing
- * order: by day, acquisitions first), then shuffled so input order is arbitrary.
+ * A random but valid ledger: sells never exceed what is held across all accounts (lots are
+ * pooled; simulated in processing order: by day, acquisitions first). A sell may come from
+ * an account holding fewer units than it sells. Shuffled so input order is arbitrary.
  */
 const ledgerArb = fc.tuple(fc.array(opArb, { maxLength: 60 }), fc.integer()).map(([ops, seed]) => {
-  const held = new Map<string, Decimal>();
+  const held = new Map<string, Decimal>(); // pooled, by asset
+  const perAccount = new Map<string, Decimal>(); // by `${account}/${asset}`
   const ordered = [...ops].sort(
     (a, b) => a.day - b.day || Number(a.kind === 'sell') - Number(b.kind === 'sell'),
   );
@@ -58,11 +60,13 @@ const ledgerArb = fc.tuple(fc.array(opArb, { maxLength: 60 }), fc.integer()).map
     };
     const price = new Decimal(op.price).div(100).toString();
     const key = `${account}/${asset.id}`;
-    const position = held.get(key) ?? ZERO;
+    const position = held.get(asset.id) ?? ZERO;
+    const inAccount = perAccount.get(key) ?? ZERO;
     if (op.kind === 'buy') {
       const qty = new Decimal(op.qty).div(10_000);
       txs.push(buy(date, asset.id, qty.toString(), price, extra));
-      held.set(key, position.plus(qty));
+      held.set(asset.id, position.plus(qty));
+      perAccount.set(key, inAccount.plus(qty));
     } else if (op.kind === 'sell') {
       const qty =
         op.sellBp === 10_000
@@ -70,9 +74,15 @@ const ledgerArb = fc.tuple(fc.array(opArb, { maxLength: 60 }), fc.integer()).map
           : position.times(op.sellBp).div(10_000).toDecimalPlaces(8, Decimal.ROUND_DOWN);
       if (qty.isZero()) continue;
       txs.push(sell(date, asset.id, qty.toString(), price, extra));
-      held.set(key, position.minus(qty));
+      held.set(asset.id, position.minus(qty));
+      perAccount.set(key, inAccount.minus(qty));
     } else if (op.kind === 'dividend') {
-      if (op.price > 0) txs.push(dividend(date, price, { ...extra, asset: asset.id }));
+      if (op.price > 0) {
+        const withholding = new Decimal(op.price).times(op.sellBp % 3500).div(1_000_000);
+        txs.push(
+          dividend(date, price, { ...extra, asset: asset.id, withholding: withholding.toString() }),
+        );
+      }
     } else if (op.kind === 'deposit') {
       if (op.price > 0) txs.push(deposit(date, price, { account }));
     } else if (op.price > 0) {
@@ -86,7 +96,7 @@ const ledgerArb = fc.tuple(fc.array(opArb, { maxLength: 60 }), fc.integer()).map
     const j = s % (i + 1);
     [txs[i], txs[j]] = [txs[j]!, txs[i]!];
   }
-  return { txs, held };
+  return { txs, held, perAccount };
 });
 
 const ASOF = addDays(START, 59);
@@ -104,9 +114,9 @@ const sumBy = <T>(xs: readonly T[], f: (x: T) => Decimal) =>
   xs.reduce((s, x) => s.plus(f(x)), ZERO);
 
 describe('properties', () => {
-  it('sum of open lot quantities equals the holdings quantity, per account and asset', () => {
+  it('sum of open lot quantities equals the holdings quantity; accounts split it', () => {
     fc.assert(
-      fc.property(ledgerArb, ({ txs, held }) => {
+      fc.property(ledgerArb, ({ txs, held, perAccount }) => {
         const { openLots } = runFifo(txs);
         const holdings = computeHoldings({
           transactions: txs,
@@ -115,12 +125,19 @@ describe('properties', () => {
           prices,
           fx: fxLookup,
         });
-        for (const [key, qty] of held) {
-          const [account, asset] = key.split('/');
-          const lots = openLots.filter((l) => l.accountId === account && l.assetId === asset);
+        for (const [asset, qty] of held) {
+          const lots = openLots.filter((l) => l.assetId === asset);
           expect(sumBy(lots, (l) => l.quantity).toString()).toBe(qty.toString());
-          const h = holdings.find((x) => x.accountId === account && x.assetId === asset);
+          const h = holdings.find((x) => x.assetId === asset);
           expect((h?.quantity ?? ZERO).toString()).toBe(qty.toString());
+          if (!h) continue;
+          // Per-account units are each account's own net trades and add up to the total.
+          const expected = [...perAccount]
+            .filter(([k, q]) => k.endsWith(`/${asset}`) && !q.isZero())
+            .map(([k, q]) => [k.split('/')[0], q.toString()])
+            .sort();
+          expect(h.accounts.map((a) => [a.accountId, a.quantity.toString()])).toEqual(expected);
+          expect(sumBy(h.accounts, (a) => a.quantity).toString()).toBe(qty.toString());
         }
         expect(openLots.every((l) => l.quantity.gt(0))).toBe(true);
       }),
@@ -180,10 +197,10 @@ describe('properties', () => {
   it('selling more than held always throws', () => {
     fc.assert(
       fc.property(ledgerArb, fc.integer({ min: 1, max: 10 ** 8 }), ({ txs, held }, extra) => {
-        const [key, qty] = [...held.entries()][0] ?? ['acc1/A', ZERO];
-        const [account, asset] = key.split('/') as [string, string];
+        // Exceeds the pooled total, sold from whichever account.
+        const [asset, qty] = [...held.entries()][0] ?? ['A', ZERO];
         const over = qty.plus(new Decimal(extra).div(10 ** 8));
-        const oversell = sell(ASOF, asset, over.toString(), '1', { account });
+        const oversell = sell(ASOF, asset, over.toString(), '1', { account: 'acc2' });
         expect(() => runFifo([...txs, oversell])).toThrow(InsufficientHoldingsError);
       }),
     );

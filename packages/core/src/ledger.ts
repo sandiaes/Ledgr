@@ -49,6 +49,13 @@ export function validateTransaction(tx: Transaction): void {
   if (tx.caSubscriptionId && tx.type !== 'redemption') {
     fail('caSubscriptionId is only allowed on redemptions');
   }
+  if (tx.withholdingTax) {
+    if (tx.type !== 'dividend' && tx.type !== 'interest') {
+      fail('withholdingTax is only allowed on dividends and interest');
+    }
+    if (tx.withholdingTax.isNegative()) fail('withholdingTax must be >= 0');
+    if (tx.amount && tx.withholdingTax.gt(tx.amount)) fail('withholdingTax exceeds amount');
+  }
 }
 
 function phase(type: TransactionType): number {
@@ -101,16 +108,26 @@ export function feesEur(tx: Transaction): Decimal {
   return toEur(tx, tx.fees);
 }
 
-/** Amount (gross of fees) in EUR for non-trade rows. */
+/** Amount (gross of fees and withholding) in EUR for non-trade rows. */
 export function amountEur(tx: Transaction): Decimal {
   return toEur(tx, tx.amount ?? ZERO);
+}
+
+/** Tax withheld at source on a dividend or interest row, in EUR (0 if none recorded). */
+export function withholdingTaxEur(tx: Transaction): Decimal {
+  return toEur(tx, tx.withholdingTax ?? ZERO);
+}
+
+/** Cash tracking is only meaningful once deposits are recorded. */
+export function hasDeposits(transactions: readonly Transaction[]): boolean {
+  return transactions.some((t) => t.type === 'deposit');
 }
 
 /**
  * Effect of a row on the cash balance, in EUR at the trade-time rate.
  *   deposit +amount - fees        withdrawal -amount - fees
  *   buy/subscription -cost        sell/redemption +proceeds
- *   dividend/interest +amount - fees
+ *   dividend/interest +amount - withholdingTax - fees
  *   fee -amount - fees
  */
 export function cashEffectEur(tx: Transaction): Decimal {
@@ -122,16 +139,20 @@ export function cashEffectEur(tx: Transaction): Decimal {
     case 'redemption':
       return disposalProceedsEur(tx);
     case 'deposit':
+      return toEur(tx, (tx.amount ?? ZERO).minus(tx.fees));
     case 'dividend':
     case 'interest':
-      return toEur(tx, (tx.amount ?? ZERO).minus(tx.fees));
+      return toEur(tx, (tx.amount ?? ZERO).minus(tx.withholdingTax ?? ZERO).minus(tx.fees));
     case 'withdrawal':
     case 'fee':
       return toEur(tx, (tx.amount ?? ZERO).plus(tx.fees)).neg();
   }
 }
 
-/** Cash balance in EUR as of `asOf` (inclusive). */
+/**
+ * Cash balance in EUR as of `asOf` (inclusive). Only meaningful when deposits are recorded
+ * (see hasDeposits); otherwise it is just minus the net amount invested.
+ */
 export function cashBalanceEur(transactions: readonly Transaction[], asOf?: IsoDate): Decimal {
   let cash = ZERO;
   for (const tx of prepareLedger(transactions, asOf)) cash = cash.plus(cashEffectEur(tx));

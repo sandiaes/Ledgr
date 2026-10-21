@@ -13,6 +13,7 @@ import type { Transaction } from './types';
 /** An open (or partly consumed) acquisition. Lot id = the acquiring transaction's id. */
 export interface Lot {
   lotId: string;
+  /** Account the lot was acquired in. Lots are pooled, so it may be sold from another. */
   accountId: string;
   assetId: string;
   acquiredOn: IsoDate;
@@ -34,10 +35,14 @@ export interface LotMatch {
   gainEur: Decimal;
 }
 
-/** One sell or redemption with the lots it consumed. */
+/**
+ * One sell or redemption with the lots it consumed. `gainEur` is a performance metric
+ * (pooled FIFO over this ledger), not a tax figure.
+ */
 export interface Disposal {
   transactionId: string;
   type: 'sell' | 'redemption';
+  /** Account the disposal happened in. */
   accountId: string;
   assetId: string;
   date: IsoDate;
@@ -74,10 +79,12 @@ interface MutableLot {
   costEur: Decimal;
 }
 
-const keyOf = (accountId: string, assetId: string) => `${accountId}\u0000${assetId}`;
-
 /**
- * FIFO lot matching per (account, asset).
+ * FIFO lot matching per asset, pooled across all accounts: a sale in any account consumes
+ * the oldest open lot of that asset, wherever it was bought.
+ *
+ * The realized gains it produces are a performance metric, not tax figures: tax reports
+ * come from broker report exports, not from this ledger.
  *
  * Partial consumption takes cost pro rata by quantity; remaining cost is computed by
  * subtraction, so consumed + remaining always equals the original cost exactly.
@@ -104,7 +111,7 @@ export function runFifo(
 
   for (const tx of ledger) {
     if (!tx.assetId || !tx.quantity) continue;
-    const key = keyOf(tx.accountId, tx.assetId);
+    const key = tx.assetId;
 
     if (isAcquisition(tx.type)) {
       const cost = acquisitionCostEur(tx);
@@ -141,7 +148,6 @@ export function runFifo(
 }
 
 function dispose(tx: Transaction, queue: MutableLot[], caLot: Map<string, string>): Disposal {
-  const accountId = tx.accountId;
   const assetId = tx.assetId as string;
   const requested = tx.quantity as Decimal;
 
@@ -154,7 +160,7 @@ function dispose(tx: Transaction, queue: MutableLot[], caLot: Map<string, string
 
   const available = candidates.reduce((s, lot) => s.plus(lot.quantity), ZERO);
   if (requested.gt(available)) {
-    throw new InsufficientHoldingsError(tx.id, accountId, assetId, requested, available);
+    throw new InsufficientHoldingsError(tx.id, assetId, requested, available);
   }
 
   const proceeds = disposalProceedsEur(tx);
@@ -187,7 +193,7 @@ function dispose(tx: Transaction, queue: MutableLot[], caLot: Map<string, string
   return {
     transactionId: tx.id,
     type: tx.type as 'sell' | 'redemption',
-    accountId,
+    accountId: tx.accountId,
     assetId,
     date: tx.tradeDate,
     quantity: requested,

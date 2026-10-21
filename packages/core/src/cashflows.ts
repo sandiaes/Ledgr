@@ -1,6 +1,6 @@
 import type { IsoDate } from './dates';
 import { ZERO, type Decimal } from './decimal';
-import { amountEur, feesEur, grossNative, prepareLedger, toEur } from './ledger';
+import { amountEur, feesEur, grossNative, prepareLedger, toEur, withholdingTaxEur } from './ledger';
 import type { Transaction } from './types';
 import type { CashFlow } from './xirr';
 
@@ -44,7 +44,8 @@ export function investmentCashFlows(
         break;
       case 'dividend':
       case 'interest':
-        amount = amountEur(tx).minus(fee);
+        // Withholding is not a fee, so it stays deducted even with excludeFees.
+        amount = amountEur(tx).minus(withholdingTaxEur(tx)).minus(fee);
         break;
       case 'fee':
         if (!excludeFees) amount = amountEur(tx).plus(fee).neg();
@@ -61,7 +62,8 @@ export function investmentCashFlows(
 
 /**
  * Flows across the portfolio boundary: deposits out, withdrawals in, and the total value
- * (positions + cash) on asOf in. Only meaningful if every deposit/withdrawal is recorded.
+ * (positions + cash) on asOf in. Only meaningful if every deposit/withdrawal is recorded
+ * (the same condition under which snapshots track cash).
  */
 export function externalCashFlows(
   transactions: readonly Transaction[],

@@ -17,7 +17,11 @@ export interface CaSeries {
   withholdingTaxRate: Decimal;
 }
 
-/** Mirrors public.ca_subscriptions. `manualValue` is EUR for the units held on that date. */
+/**
+ * Mirrors public.ca_subscriptions. `manualValue` is what AforroNet shows on
+ * `manualValueDate`, net (after the withholding on every capitalisation so far), in EUR,
+ * for the units still held on that date.
+ */
 export interface CaSubscription {
   id: string;
   seriesId: string;
@@ -97,7 +101,8 @@ export class CaRateUnavailableError extends Error {
  * - Withholding tax is deducted at each capitalisation and only the net is capitalised.
  * - No accrual after termMonths.
  * - A manual override (if dated on or before asOf) replaces everything up to its date;
- *   periods ending after it then accrue as normal.
+ *   periods ending after it then accrue as normal. It is a net value, consistent with
+ *   the net capitalisation above.
  * - No intermediate rounding.
  */
 export function createRuleBasedCaValuer(options: {

@@ -1,6 +1,7 @@
 # Ledgr
 
 Personal investment tracker (single user, EUR). See [CLAUDE.md](./CLAUDE.md) for project rules.
+Calculation assumptions and their verification status: [docs/assumptions.md](./docs/assumptions.md).
 
 ## Structure
 

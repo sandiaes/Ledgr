@@ -30,6 +30,8 @@ export interface Asset {
  *   buy, sell, subscription, redemption : assetId, quantity > 0, unitPrice >= 0, amount null
  *   dividend, interest, deposit, withdrawal, fee : amount > 0, quantity/unitPrice null
  *   fees >= 0, always charged on top (added to cost, deducted from proceeds/income).
+ *   dividend, interest: `amount` is gross; optional `withholdingTax` (0..amount) was
+ *   withheld at source, so the cash received is amount - withholdingTax - fees.
  */
 export interface Transaction {
   id: string;
@@ -45,6 +47,8 @@ export interface Transaction {
   fxRateToEur: Decimal;
   /** Redemptions only: the certificado subscription being redeemed (else FIFO). */
   caSubscriptionId?: string | null;
+  /** Dividends and interest only: tax withheld at source, in `currency`. Recorded, never computed. */
+  withholdingTax?: Decimal | null;
 }
 
 /** A close price in `currency` (which may differ from the asset's trading currency). */

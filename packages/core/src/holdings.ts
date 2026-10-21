@@ -3,6 +3,7 @@ import type { IsoDate } from './dates';
 import { ZERO, type Decimal } from './decimal';
 import { LedgerError } from './errors';
 import { runFifo, type Lot } from './fifo';
+import { isAcquisition, isDisposal, prepareLedger } from './ledger';
 import type { Asset, AssetType, FxLookup, PriceLookup, PriceQuote, Transaction } from './types';
 
 export interface HoldingsInput {
@@ -23,8 +24,20 @@ export type HoldingValuation =
     }
   | { kind: 'missing'; reason: 'price' | 'fx' };
 
-export interface Holding {
+/** Units of a holding sitting in one account. */
+export interface HoldingAccount {
   accountId: string;
+  /** That account's own acquisitions minus its own disposals. */
+  quantity: Decimal;
+  /** The holding's market value pro rata to `quantity`; null if the holding is unvalued. */
+  marketValueEur: Decimal | null;
+}
+
+/**
+ * One open position per asset. Cost basis comes from FIFO lots pooled across accounts, so
+ * it is only defined per asset; `accounts` says where the units are.
+ */
+export interface Holding {
   assetId: string;
   assetType: AssetType;
   /** The asset's trading currency. */
@@ -38,19 +51,19 @@ export interface Holding {
   unrealizedGainEur: Decimal | null;
   valuation: HoldingValuation;
   lots: Lot[];
+  /** Accounts with a non-zero quantity, by account id. */
+  accounts: HoldingAccount[];
 }
 
-/** Open positions per (account, asset) as of `asOf`. Closed positions are omitted. */
+/** Open positions per asset as of `asOf`. Closed positions are omitted. */
 export function computeHoldings(input: HoldingsInput): Holding[] {
   const { transactions, asOf, ca } = input;
   const assets = new Map(input.assets.map((a) => [a.id, a]));
   const { openLots } = runFifo(transactions, { asOf, caSubscriptions: ca?.subscriptions });
 
   const groups = new Map<string, Lot[]>();
-  for (const lot of openLots) {
-    const key = `${lot.accountId}\u0000${lot.assetId}`;
-    groups.set(key, [...(groups.get(key) ?? []), lot]);
-  }
+  for (const lot of openLots) groups.set(lot.assetId, [...(groups.get(lot.assetId) ?? []), lot]);
+  const perAccount = accountQuantities(transactions, asOf);
 
   const caValue = ca ? certificadoValuer(transactions, asOf, ca) : null;
   const holdings: Holding[] = [];
@@ -84,8 +97,16 @@ export function computeHoldings(input: HoldingsInput): Holding[] {
       }
     }
 
+    const accounts = [...(perAccount.get(asset.id) ?? new Map<string, Decimal>())]
+      .filter(([, q]) => !q.isZero())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([accountId, q]) => ({
+        accountId,
+        quantity: q,
+        marketValueEur: marketValueEur ? marketValueEur.times(q).div(quantity) : null,
+      }));
+
     holdings.push({
-      accountId: first.accountId,
       assetId: asset.id,
       assetType: asset.assetType,
       currency: asset.tradingCurrency,
@@ -96,12 +117,26 @@ export function computeHoldings(input: HoldingsInput): Holding[] {
       unrealizedGainEur: marketValueEur ? marketValueEur.minus(costBasisEur) : null,
       valuation,
       lots,
+      accounts,
     });
   }
 
-  return holdings.sort(
-    (a, b) => a.accountId.localeCompare(b.accountId) || a.assetId.localeCompare(b.assetId),
-  );
+  return holdings.sort((a, b) => a.assetId.localeCompare(b.assetId));
+}
+
+/** assetId -> accountId -> units acquired minus units disposed in that account. */
+function accountQuantities(transactions: readonly Transaction[], asOf: IsoDate) {
+  const result = new Map<string, Map<string, Decimal>>();
+  for (const tx of prepareLedger(transactions, asOf)) {
+    if (!tx.assetId || !tx.quantity) continue;
+    const sign = isAcquisition(tx.type) ? 1 : isDisposal(tx.type) ? -1 : 0;
+    if (sign === 0) continue;
+    const byAccount = result.get(tx.assetId) ?? new Map<string, Decimal>();
+    const q = byAccount.get(tx.accountId) ?? ZERO;
+    byAccount.set(tx.accountId, sign > 0 ? q.plus(tx.quantity) : q.minus(tx.quantity));
+    result.set(tx.assetId, byAccount);
+  }
+  return result;
 }
 
 /**

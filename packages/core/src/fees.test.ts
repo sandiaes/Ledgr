@@ -36,6 +36,12 @@ describe('feeSummary', () => {
     expectDec(s.totalEur, '13.3');
   });
 
+  it('withholding tax is not a fee', () => {
+    const s = feeSummary([dividend('2024-01-01', '10', { withholding: '2.8', fees: '0.5' })]);
+    expectDec(s.incomeEur, '0.5');
+    expectDec(s.totalEur, '0.5');
+  });
+
   it('respects asOf', () => {
     const txs = [fee('2024-01-01', '1'), fee('2024-02-01', '1')];
     expectDec(feeSummary(txs, '2024-01-31').totalEur, '1');

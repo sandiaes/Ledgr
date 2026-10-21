@@ -17,7 +17,7 @@ export interface FeeSummary {
   totalEur: Decimal;
 }
 
-/** All fees paid, EUR at each row's trade-time fx rate. */
+/** All fees paid, EUR at each row's trade-time fx rate. Withholding tax is not a fee. */
 export function feeSummary(transactions: readonly Transaction[], asOf?: IsoDate): FeeSummary {
   let tradingEur = ZERO;
   let incomeEur = ZERO;

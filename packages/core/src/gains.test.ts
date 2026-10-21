@@ -97,6 +97,14 @@ describe('gainsSummary', () => {
     expectDec(s.totalReturnEur, '14');
   });
 
+  it('income net of withholding tax', () => {
+    // 20 - 5.6 withheld - 1 fee = 13.4
+    const txs = [dividend('2024-01-01', '20', { withholding: '5.6', fees: '1' })];
+    const s = gainsSummary({ transactions: txs, holdings: [], asOf });
+    expectDec(s.incomeNetEur, '13.4');
+    expectDec(s.totalReturnEur, '13.4');
+  });
+
   it('refuses to summarise with unvalued holdings', () => {
     const h = computeHoldings({
       transactions,

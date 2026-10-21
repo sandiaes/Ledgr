@@ -189,6 +189,14 @@ describe('cash flow builders', () => {
     expect(flows.map((f) => f.amount.toString())).toEqual(['-1000', '20', '550', '600']);
   });
 
+  it('investmentCashFlows: dividends net of withholding, with or without fees', () => {
+    const div = [dividend('2023-06-01', '20', { asset: 'A', fees: '2', withholding: '5' })];
+    const opts = { asOf: '2024-01-01', terminalValueEur: d('0') };
+    // 20 - 5 - 2 = 13; without fees 20 - 5 = 15 (withholding is not a fee)
+    expectDec(investmentCashFlows(div, opts)[0]!.amount, '13');
+    expectDec(investmentCashFlows(div, { ...opts, excludeFees: true })[0]!.amount, '15');
+  });
+
   it('externalCashFlows: deposits out, withdrawals in, total value last', () => {
     const flows = externalCashFlows(txs, { asOf: '2024-01-01', terminalValueEur: d('2100') });
     expect(flows.map((f) => [f.date, f.amount.toString()])).toEqual([
