@@ -1,4 +1,5 @@
 import { assertIsoDate, type IsoDate } from './dates';
+import type { CaFactor, CaFactorLookup } from './certificados';
 import { ONE, type Decimal } from './decimal';
 import type { FxLookup, PriceLookup, PriceQuote } from './types';
 
@@ -66,4 +67,21 @@ export function createFxLookup(rows: readonly FxRow[]): FxLookup {
     if (currency === 'EUR') return ONE;
     return onOrBefore(byCurrency.get(currency) ?? [], date)?.rateToEur ?? null;
   };
+}
+
+/**
+ * In-memory lookup over public.ca_factors rows: the latest factor of a subscription whose
+ * month is on or before the date. Months must be the 1st of a month, factors > 0, and
+ * there is at most one factor per subscription and month.
+ */
+export function createCaFactorLookup(factors: readonly CaFactor[]): CaFactorLookup {
+  for (const f of factors) {
+    assertIsoDate(f.month);
+    if (!f.month.endsWith('-01')) throw new RangeError(`CA factor month ${f.month} is not a 1st`);
+    if (!f.factor.gt(0)) throw new RangeError(`CA factor for ${f.month} must be > 0`);
+  }
+  const rows = factors.map((f) => ({ date: f.month, row: f }));
+  const bySubscription = index(rows, (r) => r.row.subscriptionId);
+  return (subscriptionId, date) =>
+    onOrBefore(bySubscription.get(subscriptionId) ?? [], date)?.row ?? null;
 }

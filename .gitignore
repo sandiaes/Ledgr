@@ -12,3 +12,6 @@ coverage/
 supabase/.env
 supabase/.branches/
 supabase/.temp/
+
+# Real import data and reports: never commit
+import-data/

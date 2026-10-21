@@ -63,15 +63,16 @@ anyone with your password can then read and write it. Owner isolation stays in p
 2. Do what you need. To get MFA back you still have to remove the old factor and
    enroll a new one (Scenario 1, steps 2 and 4): while the old verified factor exists,
    the app asks for its code instead of offering enrollment.
-3. **Turn MFA back on:** SQL Editor → paste and run the contents of
-   `supabase/migrations/20261020000001_require_aal2.sql`.
-   (It errors with "already exists" if the policies are still there, which is harmless.)
+3. **Turn MFA back on:** SQL Editor → paste and run
+   `supabase/recovery/enable_aal2.sql`. It recreates the policy on every table (the
+   aal2 migration alone does not cover tables added by later migrations) and is safe
+   to run more than once.
 4. Verify: run `supabase/tests/rls_aal2.sql` in the SQL Editor. It must end with
    `aal2 enforcement: ALL CHECKS PASSED`.
 
 > Running SQL in the editor does not touch the CLI's migration history, so
-> `supabase db push` still considers the aal2 migration applied. That is why step 3
-> re-runs it by hand.
+> `supabase db push` still considers the aal2 migrations applied. That is why step 3
+> restores the policies by hand.
 
 ## Scenario 3: lost access to the Supabase account too
 

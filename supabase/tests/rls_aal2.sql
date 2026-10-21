@@ -10,6 +10,9 @@ begin;
 
 insert into auth.users (id, email, aud, role) values
   ('cccccccc-0000-4000-8000-00000000000c', 'rls-aal@example.test', 'authenticated', 'authenticated');
+-- Import batches are written only with the service-role key; here as postgres.
+insert into public.import_batches (user_id, source, transactions_file_sha256) values
+  ('cccccccc-0000-4000-8000-00000000000c', 'test', repeat('c', 64));
 
 set local role authenticated;
 
@@ -29,8 +32,11 @@ insert into public.transactions
    'c0000000-0000-4000-8000-000000000002', 'subscription', '2024-03-01', 1000, 1, 'EUR', 1, 'original');
 insert into public.ca_series (id, code, name, subscription_start, term_months) values
   ('c0000000-0000-4000-8000-000000000004', 'F', 'Série F', '2023-06-05', 180);
-insert into public.ca_subscriptions (series_id, transaction_id) values
-  ('c0000000-0000-4000-8000-000000000004', 'c0000000-0000-4000-8000-000000000003');
+insert into public.ca_subscriptions (id, series_id, transaction_id) values
+  ('c0000000-0000-4000-8000-000000000005', 'c0000000-0000-4000-8000-000000000004',
+   'c0000000-0000-4000-8000-000000000003');
+insert into public.ca_factors (subscription_id, month, factor, source) values
+  ('c0000000-0000-4000-8000-000000000005', '2026-10-01', 1.01, 'test');
 insert into public.prices (asset_id, price_date, close, currency, source) values
   ('c0000000-0000-4000-8000-000000000002', '2026-01-02', 1.01, 'EUR', 'manual');
 insert into public.fx_rates (currency, rate_date, rate_to_eur, source) values
@@ -49,6 +55,8 @@ begin
   assert (select count(*) from public.transactions) = 1,        'aal2 cannot read transactions';
   assert (select count(*) from public.ca_series) = 1,           'aal2 cannot read ca_series';
   assert (select count(*) from public.ca_subscriptions) = 1,    'aal2 cannot read ca_subscriptions';
+  assert (select count(*) from public.ca_factors) = 1,          'aal2 cannot read ca_factors';
+  assert (select count(*) from public.import_batches) = 1,      'aal2 cannot read import_batches';
   assert (select count(*) from public.prices) = 1,              'aal2 cannot read prices';
   assert (select count(*) from public.fx_rates) = 1,            'aal2 cannot read fx_rates';
   assert (select count(*) from public.portfolio_snapshots) = 1, 'aal2 cannot read snapshots';
@@ -76,6 +84,8 @@ begin
   assert (select count(*) from public.transactions) = 0,        'aal1 can read transactions';
   assert (select count(*) from public.ca_series) = 0,           'aal1 can read ca_series';
   assert (select count(*) from public.ca_subscriptions) = 0,    'aal1 can read ca_subscriptions';
+  assert (select count(*) from public.ca_factors) = 0,          'aal1 can read ca_factors';
+  assert (select count(*) from public.import_batches) = 0,      'aal1 can read import_batches';
   assert (select count(*) from public.prices) = 0,              'aal1 can read prices';
   assert (select count(*) from public.fx_rates) = 0,            'aal1 can read fx_rates';
   assert (select count(*) from public.portfolio_snapshots) = 0, 'aal1 can read snapshots';
@@ -110,6 +120,10 @@ begin
          values ('Z', 'x', '2026-01-01', 12)$q$,
     $q$insert into public.fx_rates (currency, rate_date, rate_to_eur, source)
          values ('GBP', '2026-01-02', 1.17, 'x')$q$,
+    $q$insert into public.ca_factors (subscription_id, month, factor, source)
+         values ('c0000000-0000-4000-8000-000000000005', '2026-11-01', 1.02, 'x')$q$,
+    $q$insert into public.import_batches (source, transactions_file_sha256)
+         values ('x', repeat('d', 64))$q$,
     $q$insert into public.portfolio_snapshots
          (snapshot_date, total_value_eur, total_cost_basis_eur, net_contributions_eur, cash_eur,
           stock_value_eur, etf_value_eur, crypto_value_eur, certificado_aforro_value_eur)
@@ -143,6 +157,7 @@ begin
   assert (select count(*) from public.prices) = 1,                   'aal1 deleted a price';
   assert (select count(*) from public.fx_rates) = 1,                 'aal1 changed fx_rates';
   assert (select count(*) from public.portfolio_snapshots) = 1,      'aal1 changed snapshots';
+  assert (select count(*) from public.ca_factors) = 1,               'aal1 inserted a ca_factor';
 end $$;
 
 -- 7. Every table in public carries a restrictive aal2 policy (guards future tables).

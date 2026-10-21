@@ -101,6 +101,30 @@ describe('runFifo', () => {
     expect(openLots.map((l) => l.lotId)).toEqual(['b-new']);
   });
 
+  it('within one date, lots are consumed in input (file) order', () => {
+    // Month-level imports put every row on the 1st, so input order is the only order.
+    // Input: buy 10 @ 1, sell 10, buy 10 @ 2, sell 5. Sequentially, the first sell takes
+    // the @1 lot (cost 10) and the second takes half of the @2 lot (cost 10), leaving
+    // 5 @ 2. Acquisitions-first within the day (#2) gives the same matches.
+    const rows = [
+      buy('2021-02-01', 'A', '10', '1', { id: 'r1' }),
+      sell('2021-02-01', 'A', '10', '5', { id: 'r2' }),
+      buy('2021-02-01', 'A', '10', '2', { id: 'r3' }),
+      sell('2021-02-01', 'A', '5', '6', { id: 'r4' }),
+    ];
+    const { openLots, disposals } = runFifo(rows);
+    expect(disposals.map((x) => x.matches.map((m) => m.lotId))).toEqual([['r1'], ['r3']]);
+    expectDec(disposals[0]!.costEur, '10');
+    expectDec(disposals[1]!.costEur, '10');
+    expect(openLots.map((l) => [l.lotId, l.quantity.toString()])).toEqual([['r3', '5']]);
+
+    // Swapping the two buys in the input changes which lot is first in, so input order
+    // is what decides: the first sell now takes the @2 lot.
+    const swapped = runFifo([rows[2]!, rows[1]!, rows[0]!, rows[3]!]);
+    expect(swapped.disposals[0]!.matches.map((m) => m.lotId)).toEqual(['r3']);
+    expectDec(swapped.disposals[0]!.costEur, '20');
+  });
+
   it('fractional crypto down to the satoshi', () => {
     // b1 0.05 BTC @ 40000 + fee 2  -> 2000 + 2 = 2002
     // b2 0.02 BTC @ 50000 + fee 1  -> 1000 + 1 = 1001

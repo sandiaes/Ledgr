@@ -25,6 +25,7 @@ describe('public API', () => {
       'buildSnapshot',
       'createPriceLookup',
       'createFxLookup',
+      'createCaFactorLookup',
       'cashBalanceEur',
     ]) {
       expect(core, name).toHaveProperty(name);

@@ -1,4 +1,4 @@
-import type { CaContext, CaSubscription } from './certificados';
+import type { CaContext } from './certificados';
 import type { IsoDate } from './dates';
 import { ZERO, type Decimal } from './decimal';
 import { InsufficientHoldingsError, LedgerError } from './errors';
@@ -12,17 +12,28 @@ export interface HoldingsInput {
   asOf: IsoDate;
   prices: PriceLookup;
   fx: FxLookup;
-  /** Needed to value certificados by accrual; without it they fall back to `prices`. */
+  /** Needed to value certificados by factor; without it they fall back to `prices`. */
   ca?: CaContext;
 }
 
 export type HoldingValuation =
   | { kind: 'price'; price: PriceQuote; fxRateToEur: Decimal }
-  | {
-      kind: 'certificado';
-      lots: { lotId: string; unitValue: Decimal; source: 'rules' | 'manual' }[];
-    }
+  | { kind: 'certificado'; lots: CertificadoLotValuation[] }
   | { kind: 'missing'; reason: 'price' | 'fx' };
+
+/**
+ * How one certificado lot was valued:
+ *   factor        its latest official factor on or before asOf (the default)
+ *   subscription  no factor yet: the EUR paid per unit at subscription
+ *   accrual       the optional rule-based model, from `factorMonth` when set
+ */
+export interface CertificadoLotValuation {
+  lotId: string;
+  unitValue: Decimal;
+  source: 'factor' | 'subscription' | 'accrual';
+  /** Month of the factor used (as value or as accrual anchor), or null. */
+  factorMonth: IsoDate | null;
+}
 
 /** Units of a holding sitting in one account. */
 export interface HoldingAccount {
@@ -159,54 +170,74 @@ function accountQuantities(transactions: readonly Transaction[], asOf: IsoDate) 
 
 /**
  * Returns a function valuing a certificado holding's lots, or null for a holding whose lots
- * are not all linked to a ca_subscriptions row and series.
+ * are not all linked to a ca_subscriptions row (those fall back to the price lookup).
  */
 function certificadoValuer(transactions: readonly Transaction[], asOf: IsoDate, ca: CaContext) {
   const txById = new Map(transactions.map((t) => [t.id, t]));
-  const seriesById = new Map(ca.series.map((s) => [s.id, s]));
   const subByTx = new Map(ca.subscriptions.map((s) => [s.transactionId, s]));
-  const lotsOnDate = new Map<IsoDate, Lot[]>();
-
-  const unitsOn = (sub: CaSubscription, date: IsoDate): Decimal => {
-    let lots = lotsOnDate.get(date);
-    if (!lots) {
-      lots = runFifo(transactions, { asOf: date, caSubscriptions: ca.subscriptions }).openLots;
-      lotsOnDate.set(date, lots);
-    }
-    return lots.find((l) => l.lotId === sub.transactionId)?.quantity ?? ZERO;
-  };
+  const seriesById = new Map((ca.accrual?.series ?? []).map((s) => [s.id, s]));
 
   return (lots: Lot[]) => {
-    const valued: { lotId: string; unitValue: Decimal; source: 'rules' | 'manual' }[] = [];
+    const valued: CertificadoLotValuation[] = [];
     let total = ZERO;
     for (const lot of lots) {
       const sub = subByTx.get(lot.lotId);
-      const series = sub && seriesById.get(sub.seriesId);
       const tx = txById.get(lot.lotId);
-      if (!sub || !series || !tx?.unitPrice) return null;
+      if (!sub || !tx?.unitPrice) return null;
 
-      let manual: { date: IsoDate; unitValue: Decimal } | null = null;
-      if (sub.manualValue && sub.manualValueDate && sub.manualValueDate <= asOf) {
-        const units = unitsOn(sub, sub.manualValueDate);
-        if (units.isZero()) {
-          throw new LedgerError(
-            `Manual value for CA subscription ${sub.id} is dated ${sub.manualValueDate}, ` +
-              'when it had no units outstanding',
-          );
-        }
-        manual = { date: sub.manualValueDate, unitValue: sub.manualValue.div(units) };
+      const factor = ca.factors(sub.id, asOf);
+      // A factor may be dated earlier in the subscription's own month, never before it.
+      if (factor && factor.month < firstOfMonth(lot.acquiredOn)) {
+        throw new LedgerError(
+          `CA factor for ${factor.month} is before subscription ${sub.id} on ${lot.acquiredOn}`,
+          tx.id,
+        );
       }
+      const subscriptionUnitValue = tx.unitPrice.times(tx.fxRateToEur);
+      const series = ca.accrual && seriesById.get(sub.seriesId);
 
-      const result = ca.valuer.valueUnit({
-        series,
-        subscriptionDate: lot.acquiredOn,
-        subscriptionUnitValue: tx.unitPrice.times(tx.fxRateToEur),
-        asOf,
-        manual,
-      });
-      valued.push({ lotId: lot.lotId, unitValue: result.unitValue, source: result.source });
-      total = total.plus(lot.quantity.times(result.unitValue));
+      let entry: CertificadoLotValuation;
+      if (ca.accrual && series) {
+        const result = ca.accrual.valuer.valueUnit({
+          series,
+          subscriptionDate: lot.acquiredOn,
+          subscriptionUnitValue,
+          asOf,
+          anchor: factor
+            ? {
+                date: factor.month < lot.acquiredOn ? lot.acquiredOn : factor.month,
+                unitValue: factor.factor,
+              }
+            : null,
+        });
+        entry = {
+          lotId: lot.lotId,
+          unitValue: result.unitValue,
+          source: 'accrual',
+          factorMonth: factor?.month ?? null,
+        };
+      } else if (factor) {
+        entry = {
+          lotId: lot.lotId,
+          unitValue: factor.factor,
+          source: 'factor',
+          factorMonth: factor.month,
+        };
+      } else {
+        entry = {
+          lotId: lot.lotId,
+          unitValue: subscriptionUnitValue,
+          source: 'subscription',
+          factorMonth: null,
+        };
+      }
+      valued.push(entry);
+      total = total.plus(lot.quantity.times(entry.unitValue));
     }
     return { lots: valued, total };
   };
+}
+
+function firstOfMonth(date: IsoDate): IsoDate {
+  return `${date.slice(0, 7)}-01`;
 }

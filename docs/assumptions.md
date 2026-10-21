@@ -25,7 +25,7 @@ Paths are relative to `packages/core/src/` unless stated.
 | 11  | CA withholding              | unverified         |
 | 12  | CA rounding                 | unverified         |
 | 13  | CA term and minimum holding | unverified         |
-| 14  | CA manual value             | unverified         |
+| 14  | CA factors (default value)  | unverified         |
 | 15  | CA test parameters          | unverified         |
 | 16  | XIRR convention             | unverified         |
 | 17  | TWR convention              | unverified         |
@@ -64,8 +64,14 @@ The schema has no time of day. Within one date, acquisitions are processed befor
 rows, and disposals last, so a same-day buy and sell works whatever order the rows arrive
 in. Otherwise input order is kept.
 
+Month-level dates (imported rows, all on the 1st) rely on input order: the caller must pass
+rows of one date in their original order (for imports, file order, kept through an
+explicitly increasing `created_at`). Moving acquisitions first does not change which lots
+a disposal consumes, as long as no disposal in that order exceeds the units held.
+
 - Status: unverified
-- Implemented in: `ledger.ts` (`prepareLedger`, `phase`).
+- Implemented in: `ledger.ts` (`prepareLedger`, `phase`); test `fifo.test.ts` ("within one
+  date, lots are consumed in input (file) order").
 
 ### 3. Fees in cost and proceeds
 
@@ -123,6 +129,9 @@ holding-period exemption, no loss carry-forward. None will be added.
 
 ## Certificados de aforro
 
+By default a certificado is valued by official factors (#14). #8–#13 describe the
+**optional** rule-based accrual model, used only when a caller opts in (`CaContext.accrual`).
+
 ### 8. Capitalisation periods
 
 Interest is credited every `capitalisation_months` (3), with periods counted from the
@@ -173,18 +182,26 @@ Accrual stops after `term_months`. `min_holding_months` does not affect the valu
 - Status: unverified
 - Implemented in: `certificados.ts` (`createRuleBasedCaValuer`).
 
-### 14. Manual value
+### 14. Factors (default valuation)
 
-`manual_value` is **what AforroNet shows, net** (after the withholding on every
-capitalisation so far), in EUR, for the units still held on `manual_value_date`. It
-includes every capitalisation on or before that date; later periods accrue from it by the
-rules. Per-unit value = manual_value ÷ units held on that date. It is ignored when valuing
-dates before it.
+Changed 2026-10-21: replaces the manual value. A factor (`ca_factors`) is the official
+value of **one unit** of a subscription, in EUR, net (as AforroNet shows it), in force from
+its `month` (stored as the 1st) on. Value of a subscription on a date = units still held ×
+its latest factor whose month is on or before that date. Every monthly factor is its own
+row, one per (subscription, month), never updated.
+
+Before a subscription's first factor, a unit is worth what was paid for it at subscription
+(unit price × fx, normally 1). A factor may be dated earlier in the subscription's own
+month (month-level dates), never before that month.
+
+With the optional accrual model on, the latest factor is the starting point: it includes
+every capitalisation on or before its month, and later periods accrue from it by the rules
+(#8–#13). A series without rules (`term_months` null) is still valued by factors.
 
 - Status: unverified
-- Implemented in: `certificados.ts` (`CaSubscription`, `createRuleBasedCaValuer`),
-  `holdings.ts` (`certificadoValuer`); column comment in
-  `supabase/migrations/20261021000001_withholding_tax_and_optional_cash.sql`.
+- Implemented in: `certificados.ts` (`CaFactor`, `CaContext`, `createRuleBasedCaValuer`
+  anchor), `lookups.ts` (`createCaFactorLookup`), `holdings.ts` (`certificadoValuer`);
+  `supabase/migrations/20261021000004_ca_factors.sql`.
 
 ### 15. Test parameters
 
@@ -193,7 +210,7 @@ illustrative, shaped like a Série E, not official values. Real values belong in
 `ca_series` rows.
 
 - Status: unverified
-- Implemented in: `certificados.test.ts`, `snapshot.test.ts`.
+- Implemented in: `certificados.test.ts`.
 
 ## Returns and reporting conventions
 
