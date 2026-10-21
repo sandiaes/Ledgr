@@ -10,6 +10,7 @@ import {
   expectDec,
   fee,
   sell,
+  transfer,
   withdraw,
 } from './test-utils';
 import { xirr, type CashFlow, type XirrResult } from './xirr';
@@ -195,6 +196,19 @@ describe('cash flow builders', () => {
     // 20 - 5 - 2 = 13; without fees 20 - 5 = 15 (withholding is not a fee)
     expectDec(investmentCashFlows(div, opts)[0]!.amount, '13');
     expectDec(investmentCashFlows(div, { ...opts, excludeFees: true })[0]!.amount, '15');
+  });
+
+  it('investmentCashFlows: a transfer adds only its fee as an outflow', () => {
+    const txs = [
+      transfer('2023-03-01', 'A', '1', 'acc2', { fees: '2' }),
+      transfer('2023-04-01', 'A', '1', 'acc2'),
+    ];
+    const opts = { asOf: '2024-01-01', terminalValueEur: d('10') };
+    expect(investmentCashFlows(txs, opts).map((f) => [f.date, f.amount.toString()])).toEqual([
+      ['2023-03-01', '-2'],
+      ['2024-01-01', '10'],
+    ]);
+    expect(investmentCashFlows(txs, { ...opts, excludeFees: true })).toHaveLength(1);
   });
 
   it('externalCashFlows: deposits out, withdrawals in, total value last', () => {

@@ -9,7 +9,7 @@ import { gainsSummary, netContributions } from './gains';
 import { computeHoldings } from './holdings';
 import { acquisitionCostEur, cashBalanceEur, isAcquisition } from './ledger';
 import { createFxLookup, createPriceLookup } from './lookups';
-import { buy, d, deposit, dividend, expectClose, fee, sell } from './test-utils';
+import { buy, d, deposit, dividend, expectClose, fee, sell, transfer } from './test-utils';
 import { twr } from './twr';
 import type { Asset, Transaction } from './types';
 import { xirr } from './xirr';
@@ -27,7 +27,7 @@ const opArb = fc.record({
   day: fc.integer({ min: 0, max: 59 }),
   account: fc.integer({ min: 0, max: 1 }),
   asset: fc.integer({ min: 0, max: 2 }),
-  kind: fc.constantFrom('buy', 'buy', 'sell', 'dividend', 'deposit', 'fee'),
+  kind: fc.constantFrom('buy', 'buy', 'sell', 'transfer', 'dividend', 'deposit', 'fee'),
   qty: fc.integer({ min: 1, max: 10_000_000 }), // / 10^4 -> 0.0001 .. 1000 units
   sellBp: fc.integer({ min: 1, max: 10_000 }), // share of the position sold, basis points
   price: fc.integer({ min: 0, max: 1_000_000 }), // cents
@@ -76,6 +76,15 @@ const ledgerArb = fc.tuple(fc.array(opArb, { maxLength: 60 }), fc.integer()).map
       txs.push(sell(date, asset.id, qty.toString(), price, extra));
       held.set(asset.id, position.minus(qty));
       perAccount.set(key, inAccount.minus(qty));
+    } else if (op.kind === 'transfer') {
+      // Move part of what this account holds to the other one.
+      if (!inAccount.gt(0)) continue;
+      const qty = inAccount.times(op.sellBp).div(10_000).toDecimalPlaces(8, Decimal.ROUND_DOWN);
+      if (qty.isZero()) continue;
+      const to = ACCOUNTS[1 - op.account]!;
+      txs.push(transfer(date, asset.id, qty.toString(), to, extra));
+      perAccount.set(key, inAccount.minus(qty));
+      perAccount.set(`${to}/${asset.id}`, (perAccount.get(`${to}/${asset.id}`) ?? ZERO).plus(qty));
     } else if (op.kind === 'dividend') {
       if (op.price > 0) {
         const withholding = new Decimal(op.price).times(op.sellBp % 3500).div(1_000_000);

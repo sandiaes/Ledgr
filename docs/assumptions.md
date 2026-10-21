@@ -1,6 +1,6 @@
 # Calculation assumptions
 
-Assumptions made by `packages/core`, approved as **provisional** on 2026-10-21. Each one
+Assumptions made by `packages/core`, approved as **provisional** on 2026-10-21 (#1–#20). Each one
 stays `unverified` until it has been checked against an official source (or the owner's
 own records), and is then updated here with the source.
 
@@ -32,6 +32,7 @@ Paths are relative to `packages/core/src/` unless stated.
 | 18  | Yield on cost               | unverified         |
 | 19  | Cash                        | unverified         |
 | 20  | Price and FX lookup         | unverified         |
+| 21  | Transfers between accounts  | unverified         |
 
 "Out of scope (tax)" means: **out of scope: tax reports will come from importing broker
 report exports, not from this ledger.** These items describe how the performance numbers
@@ -47,10 +48,10 @@ than the total held across all accounts is an error. The resulting realized gain
 performance metric, not a tax figure.
 
 Because cost basis is pooled, it exists per asset only. Each holding also lists the units
-per account (that account's own acquisitions minus its own disposals) and the market value
-pro rata to those units; allocation by account uses this split. Transfers between accounts
-are not a transaction type, so an account that sells units it never bought shows a
-negative quantity.
+per account (that account's acquisitions minus its disposals, plus transfers in minus
+transfers out; see #21) and the market value pro rata to those units; allocation by
+account uses this split. An account that sells units it never received (an unrecorded
+transfer) shows a negative quantity.
 
 - Status: out of scope: tax reports will come from importing broker report exports, not
   from this ledger.
@@ -239,3 +240,26 @@ Prices and FX rates use the latest value on or before the date, with no age limi
 
 - Status: unverified
 - Implemented in: `lookups.ts` (`createPriceLookup`, `createFxLookup`).
+
+### 21. Transfers between accounts
+
+Added 2026-10-21. A `transfer` row moves `quantity` units of an asset from `account_id` to
+`transfer_to_account_id`. It is not a sale: no proceeds, no gain, and lots and cost basis
+are unchanged (lots are pooled, #1). It only changes the per-account split. A transfer may
+not move more units than the sending account holds at that point (sales are still checked
+against the pooled total only). Within a day, transfers come after acquisitions and before
+disposals (#2).
+
+`fees` on a transfer is a cash fee in `currency`: it reduces cash, counts as an other cost
+in total return and as an outflow in investment cash flows, and is reported as its own fee
+category. It is never added to the cost basis. Fees paid in units of the asset (e.g. a
+crypto network fee) are not modelled: if you record the units received, the lost units
+stay counted in the sending account and in the pooled total. Only asset transfers exist;
+cash moved between brokers is not a transfer row.
+
+- Status: unverified
+- Implemented in: `types.ts` (`Transaction.transferToAccountId`), `ledger.ts`
+  (`validateTransaction`, `phase`, `cashEffectEur`), `holdings.ts` (`accountQuantities`),
+  `fees.ts` (`feeSummary`, `transferEur`), `gains.ts` (`otherCostsEur`), `cashflows.ts`
+  (`investmentCashFlows`); `supabase/migrations/20261021000002_transfer_type.sql` and
+  `20261021000003_transfer_columns.sql`.

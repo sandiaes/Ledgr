@@ -35,7 +35,15 @@ export function validateTransaction(tx: Transaction): void {
   if (tx.fees.isNegative()) fail('Fees must be >= 0');
   if (!tx.fxRateToEur.isPositive() || tx.fxRateToEur.isZero()) fail('fxRateToEur must be > 0');
   if (tx.currency === 'EUR' && !tx.fxRateToEur.eq(1)) fail('EUR rows must have fxRateToEur = 1');
-  if (isTrade(tx.type)) {
+  if (tx.type === 'transfer') {
+    if (!tx.assetId) fail('transfer requires an asset');
+    if (!tx.quantity || !tx.quantity.gt(0)) fail('transfer requires quantity > 0');
+    if (tx.unitPrice !== null || tx.amount !== null) {
+      fail('transfer must not have unitPrice or amount');
+    }
+    if (!tx.transferToAccountId) fail('transfer requires transferToAccountId');
+    if (tx.transferToAccountId === tx.accountId) fail('transfer must go to another account');
+  } else if (isTrade(tx.type)) {
     if (!tx.assetId) fail(`${tx.type} requires an asset`);
     if (!tx.quantity || !tx.quantity.gt(0)) fail(`${tx.type} requires quantity > 0`);
     if (!tx.unitPrice || tx.unitPrice.isNegative()) fail(`${tx.type} requires unitPrice >= 0`);
@@ -45,6 +53,9 @@ export function validateTransaction(tx: Transaction): void {
     if (tx.quantity !== null || tx.unitPrice !== null) {
       fail(`${tx.type} must not have quantity or unitPrice`);
     }
+  }
+  if (tx.transferToAccountId && tx.type !== 'transfer') {
+    fail('transferToAccountId is only allowed on transfers');
   }
   if (tx.caSubscriptionId && tx.type !== 'redemption') {
     fail('caSubscriptionId is only allowed on redemptions');
@@ -59,8 +70,8 @@ export function validateTransaction(tx: Transaction): void {
 }
 
 function phase(type: TransactionType): number {
-  // Within one day: acquisitions, then everything else, then disposals, so a same-day
-  // buy + sell works whatever order the rows arrive in.
+  // Within one day: acquisitions, then everything else (transfers included), then
+  // disposals, so a same-day buy, transfer and sell works whatever order the rows arrive in.
   if (isAcquisition(type)) return 0;
   if (isDisposal(type)) return 2;
   return 1;
@@ -128,7 +139,7 @@ export function hasDeposits(transactions: readonly Transaction[]): boolean {
  *   deposit +amount - fees        withdrawal -amount - fees
  *   buy/subscription -cost        sell/redemption +proceeds
  *   dividend/interest +amount - withholdingTax - fees
- *   fee -amount - fees
+ *   fee -amount - fees            transfer -fees (units move, cash does not)
  */
 export function cashEffectEur(tx: Transaction): Decimal {
   switch (tx.type) {
@@ -146,6 +157,8 @@ export function cashEffectEur(tx: Transaction): Decimal {
     case 'withdrawal':
     case 'fee':
       return toEur(tx, (tx.amount ?? ZERO).plus(tx.fees)).neg();
+    case 'transfer':
+      return toEur(tx, tx.fees).neg();
   }
 }
 

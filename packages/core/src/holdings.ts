@@ -1,7 +1,7 @@
 import type { CaContext, CaSubscription } from './certificados';
 import type { IsoDate } from './dates';
 import { ZERO, type Decimal } from './decimal';
-import { LedgerError } from './errors';
+import { InsufficientHoldingsError, LedgerError } from './errors';
 import { runFifo, type Lot } from './fifo';
 import { isAcquisition, isDisposal, prepareLedger } from './ledger';
 import type { Asset, AssetType, FxLookup, PriceLookup, PriceQuote, Transaction } from './types';
@@ -27,7 +27,7 @@ export type HoldingValuation =
 /** Units of a holding sitting in one account. */
 export interface HoldingAccount {
   accountId: string;
-  /** That account's own acquisitions minus its own disposals. */
+  /** That account's acquisitions minus its disposals, plus transfers in minus transfers out. */
   quantity: Decimal;
   /** The holding's market value pro rata to `quantity`; null if the holding is unvalued. */
   marketValueEur: Decimal | null;
@@ -124,17 +124,35 @@ export function computeHoldings(input: HoldingsInput): Holding[] {
   return holdings.sort((a, b) => a.assetId.localeCompare(b.assetId));
 }
 
-/** assetId -> accountId -> units acquired minus units disposed in that account. */
+/**
+ * assetId -> accountId -> units acquired, minus units disposed, plus/minus units
+ * transferred in/out. A transfer may not move more than the sending account holds.
+ */
 function accountQuantities(transactions: readonly Transaction[], asOf: IsoDate) {
   const result = new Map<string, Map<string, Decimal>>();
   for (const tx of prepareLedger(transactions, asOf)) {
     if (!tx.assetId || !tx.quantity) continue;
-    const sign = isAcquisition(tx.type) ? 1 : isDisposal(tx.type) ? -1 : 0;
-    if (sign === 0) continue;
     const byAccount = result.get(tx.assetId) ?? new Map<string, Decimal>();
-    const q = byAccount.get(tx.accountId) ?? ZERO;
-    byAccount.set(tx.accountId, sign > 0 ? q.plus(tx.quantity) : q.minus(tx.quantity));
     result.set(tx.assetId, byAccount);
+    const add = (accountId: string, delta: Decimal) =>
+      byAccount.set(accountId, (byAccount.get(accountId) ?? ZERO).plus(delta));
+
+    if (isAcquisition(tx.type)) add(tx.accountId, tx.quantity);
+    else if (isDisposal(tx.type)) add(tx.accountId, tx.quantity.neg());
+    else if (tx.type === 'transfer') {
+      const available = byAccount.get(tx.accountId) ?? ZERO;
+      if (tx.quantity.gt(available)) {
+        throw new InsufficientHoldingsError(
+          tx.id,
+          tx.assetId,
+          tx.quantity,
+          available,
+          tx.accountId,
+        );
+      }
+      add(tx.accountId, tx.quantity.neg());
+      add(tx.transferToAccountId as string, tx.quantity);
+    }
   }
   return result;
 }

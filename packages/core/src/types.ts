@@ -14,7 +14,8 @@ export type TransactionType =
   | 'withdrawal'
   | 'interest'
   | 'subscription'
-  | 'redemption';
+  | 'redemption'
+  | 'transfer';
 
 export interface Asset {
   id: string;
@@ -32,6 +33,8 @@ export interface Asset {
  *   fees >= 0, always charged on top (added to cost, deducted from proceeds/income).
  *   dividend, interest: `amount` is gross; optional `withholdingTax` (0..amount) was
  *   withheld at source, so the cash received is amount - withholdingTax - fees.
+ *   transfer : moves `quantity` > 0 units of `assetId` from `accountId` to
+ *   `transferToAccountId`; unitPrice and amount null; `fees` is a cash fee in `currency`.
  */
 export interface Transaction {
   id: string;
@@ -49,6 +52,8 @@ export interface Transaction {
   caSubscriptionId?: string | null;
   /** Dividends and interest only: tax withheld at source, in `currency`. Recorded, never computed. */
   withholdingTax?: Decimal | null;
+  /** Transfers only: the account receiving the units. */
+  transferToAccountId?: string | null;
 }
 
 /** A close price in `currency` (which may differ from the asset's trading currency). */

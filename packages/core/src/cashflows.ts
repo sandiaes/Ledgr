@@ -16,8 +16,8 @@ export interface InvestmentFlowOptions {
 
 /**
  * Flows across the boundary of the positions themselves, so it works whether or not
- * deposits are recorded: buys/subscriptions out, sells/redemptions/income in, fee rows out,
- * and the terminal value in. Deposits and withdrawals are ignored.
+ * deposits are recorded: buys/subscriptions out, sells/redemptions/income in, fee rows and
+ * transfer fees out, and the terminal value in. Deposits and withdrawals are ignored.
  */
 export function investmentCashFlows(
   transactions: readonly Transaction[],
@@ -49,6 +49,10 @@ export function investmentCashFlows(
         break;
       case 'fee':
         if (!excludeFees) amount = amountEur(tx).plus(fee).neg();
+        break;
+      case 'transfer':
+        // Units stay in the portfolio; only a transfer fee leaves it.
+        if (!fee.isZero()) amount = fee.neg();
         break;
       case 'deposit':
       case 'withdrawal':

@@ -12,6 +12,7 @@ import {
   redeem,
   sell,
   subscribe,
+  transfer,
   withdraw,
 } from './test-utils';
 import type { Transaction } from './types';
@@ -30,6 +31,7 @@ describe('validateTransaction', () => {
       deposit('2024-01-01', '1'),
       withdraw('2024-01-01', '1'),
       fee('2024-01-01', '1'),
+      transfer('2024-01-01', 'A', '1', 'acc2', { fees: '1' }),
     ]) {
       expect(() => validateTransaction(tx)).not.toThrow();
     }
@@ -64,6 +66,23 @@ describe('validateTransaction', () => {
     ).toThrow(/only allowed on dividends and interest/);
   });
 
+  it('rejects malformed transfers', () => {
+    const t = transfer('2024-01-01', 'A', '1', 'acc2');
+    expect(() => validateTransaction({ ...t, assetId: null })).toThrow(/requires an asset/);
+    expect(() => validateTransaction({ ...t, quantity: d('0') })).toThrow(/quantity > 0/);
+    expect(() => validateTransaction({ ...t, unitPrice: d('1') })).toThrow(/unitPrice or amount/);
+    expect(() => validateTransaction({ ...t, amount: d('1') })).toThrow(/unitPrice or amount/);
+    expect(() => validateTransaction({ ...t, transferToAccountId: null })).toThrow(
+      /requires transferToAccountId/,
+    );
+    expect(() => validateTransaction({ ...t, transferToAccountId: 'acc1' })).toThrow(
+      /another account/,
+    );
+    expect(() =>
+      validateTransaction({ ...buy('2024-01-01', 'A', '1', '1'), transferToAccountId: 'acc2' }),
+    ).toThrow(/only allowed on transfers/);
+  });
+
   it('rejects malformed cash rows', () => {
     const div = dividend('2024-01-01', '5', { id: 'div-1' });
     expect(() => validateTransaction({ ...div, amount: null })).toThrow(/amount > 0/);
@@ -78,12 +97,13 @@ describe('prepareLedger', () => {
   it('sorts by date, then acquisitions < other < disposals, then input order', () => {
     const rows = [
       sell('2024-01-02', 'A', '1', '1', { id: 's' }),
+      transfer('2024-01-02', 'A', '1', 'acc2', { id: 'tr' }),
       dividend('2024-01-02', '1', { id: 'div' }),
       buy('2024-01-02', 'A', '1', '1', { id: 'b2' }),
       buy('2024-01-01', 'A', '1', '1', { id: 'b1' }),
       buy('2024-01-02', 'A', '1', '1', { id: 'b3' }),
     ];
-    expect(prepareLedger(rows).map((t) => t.id)).toEqual(['b1', 'b2', 'b3', 'div', 's']);
+    expect(prepareLedger(rows).map((t) => t.id)).toEqual(['b1', 'b2', 'b3', 'tr', 'div', 's']);
     expect(prepareLedger(rows, '2024-01-01').map((t) => t.id)).toEqual(['b1']);
   });
 
@@ -105,6 +125,8 @@ describe('cash', () => {
     expectDec(cashEffectEur(dividend('2024-01-01', '10', f)), '9');
     expectDec(cashEffectEur(interest('2024-01-01', '10', f)), '9');
     expectDec(cashEffectEur(fee('2024-01-01', '10', f)), '-11');
+    // a transfer moves units, not cash; only its fee leaves
+    expectDec(cashEffectEur(transfer('2024-01-01', 'A', '5', 'acc2', f)), '-1');
     // 10 - 2.8 withheld - 1 fee
     expectDec(cashEffectEur(dividend('2024-01-01', '10', { ...f, withholding: '2.8' })), '6.2');
     expectDec(cashEffectEur(interest('2024-01-01', '10', { ...f, withholding: '2.8' })), '6.2');

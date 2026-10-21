@@ -38,7 +38,7 @@ export interface GainsSummary {
   totalGainEur: Decimal;
   /** Dividends + interest, net of withholding tax and fees on those rows. */
   incomeNetEur: Decimal;
-  /** Standalone fee rows plus fees on deposits/withdrawals. */
+  /** Standalone fee rows plus fees on deposits, withdrawals and transfers. */
   otherCostsEur: Decimal;
   /**
    * totalGain + incomeNet - otherCosts. Equals holdings value + cash - net contributions
@@ -71,7 +71,7 @@ export function gainsSummary(input: {
         .minus(feesEur(tx));
     } else if (tx.type === 'fee') {
       otherCostsEur = otherCostsEur.plus(amountEur(tx)).plus(feesEur(tx));
-    } else if (tx.type === 'deposit' || tx.type === 'withdrawal') {
+    } else if (tx.type === 'deposit' || tx.type === 'withdrawal' || tx.type === 'transfer') {
       otherCostsEur = otherCostsEur.plus(feesEur(tx));
     }
   }

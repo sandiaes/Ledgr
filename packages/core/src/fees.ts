@@ -14,6 +14,8 @@ export interface FeeSummary {
   cashEur: Decimal;
   /** Standalone `fee` rows (amount + fees). */
   standaloneEur: Decimal;
+  /** Fees on transfers between accounts. */
+  transferEur: Decimal;
   totalEur: Decimal;
 }
 
@@ -23,11 +25,13 @@ export function feeSummary(transactions: readonly Transaction[], asOf?: IsoDate)
   let incomeEur = ZERO;
   let cashEur = ZERO;
   let standaloneEur = ZERO;
+  let transferEur = ZERO;
   for (const tx of prepareLedger(transactions, asOf)) {
     const fee = feesEur(tx);
     if (isTrade(tx.type)) tradingEur = tradingEur.plus(fee);
     else if (tx.type === 'dividend' || tx.type === 'interest') incomeEur = incomeEur.plus(fee);
     else if (tx.type === 'deposit' || tx.type === 'withdrawal') cashEur = cashEur.plus(fee);
+    else if (tx.type === 'transfer') transferEur = transferEur.plus(fee);
     else standaloneEur = standaloneEur.plus(amountEur(tx)).plus(fee);
   }
   return {
@@ -35,7 +39,8 @@ export function feeSummary(transactions: readonly Transaction[], asOf?: IsoDate)
     incomeEur,
     cashEur,
     standaloneEur,
-    totalEur: tradingEur.plus(incomeEur).plus(cashEur).plus(standaloneEur),
+    transferEur,
+    totalEur: tradingEur.plus(incomeEur).plus(cashEur).plus(standaloneEur).plus(transferEur),
   };
 }
 

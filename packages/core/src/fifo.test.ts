@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { InsufficientHoldingsError, LedgerError } from './errors';
 import { runFifo } from './fifo';
-import { buy, expectDec, redeem, sell, subscribe } from './test-utils';
+import { buy, expectDec, redeem, sell, subscribe, transfer } from './test-utils';
 
 describe('runFifo', () => {
   it('partial sell of a single lot, fees in cost and proceeds', () => {
@@ -179,6 +179,17 @@ describe('runFifo', () => {
     expectDec(disposals[1]!.costEur, '19');
     expect(openLots.map((l) => [l.lotId, l.accountId, l.quantity.toString()])).toEqual([
       ['b2', 'acc2', '3'],
+    ]);
+  });
+
+  it('a transfer is not a sale: no disposal, lots and cost unchanged', () => {
+    const { openLots, disposals } = runFifo([
+      buy('2024-01-01', 'A', '10', '5', { id: 'b1', account: 'acc1' }),
+      transfer('2024-01-02', 'A', '4', 'acc2', { fees: '1' }),
+    ]);
+    expect(disposals).toEqual([]);
+    expect(openLots.map((l) => [l.lotId, l.quantity.toString(), l.costEur.toString()])).toEqual([
+      ['b1', '10', '50'],
     ]);
   });
 

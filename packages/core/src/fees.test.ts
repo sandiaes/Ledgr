@@ -11,6 +11,7 @@ import {
   redeem,
   sell,
   subscribe,
+  transfer,
   withdraw,
 } from './test-utils';
 
@@ -34,6 +35,17 @@ describe('feeSummary', () => {
     expectDec(s.cashEur, '3');
     expectDec(s.standaloneEur, '4.1');
     expectDec(s.totalEur, '13.3');
+  });
+
+  it('transfer fees have their own category', () => {
+    // 2 EUR + 3 USD * 0.5 = 3.5
+    const s = feeSummary([
+      transfer('2024-01-01', 'A', '1', 'acc2', { fees: '2' }),
+      transfer('2024-01-02', 'A', '1', 'acc2', { fees: '3', currency: 'USD', fx: '0.5' }),
+    ]);
+    expectDec(s.transferEur, '3.5');
+    expectDec(s.standaloneEur, '0');
+    expectDec(s.totalEur, '3.5');
   });
 
   it('withholding tax is not a fee', () => {
