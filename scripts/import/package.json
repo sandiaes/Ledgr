@@ -1,0 +1,14 @@
+{
+  "name": "@ledgr/import",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "One-off importer for the spreadsheet CSV exports. Runs locally only.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ledgr/core": "workspace:*",
+    "@supabase/supabase-js": "^2.118.0"
+  }
+}

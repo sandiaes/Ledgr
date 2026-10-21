@@ -21,5 +21,10 @@ export default tseslint.config(
       'no-console': 'error', // never log financial data
     },
   },
+  {
+    // The importer's single console channel: counts, settings and totals only.
+    files: ['scripts/import/src/console.ts'],
+    rules: { 'no-console': 'off' },
+  },
   prettier,
 );

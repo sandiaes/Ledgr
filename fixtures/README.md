@@ -9,6 +9,8 @@ Do not use them for real calculations.
   (Month, Type, Transact Type, Ticker/Type, Units, Order Price, Order Value, Broker)
 - `sample_ca.csv`: certificados de aforro table, one row per subscription month
   (Type = series, Order Date, Units, Ratio)
+- `asset_mapping.csv`: the importer's asset mapping template, pre-filled from these fixtures
+  (asset types, EUR); copy it to `import-data/` and complete it (see `docs/import.md`)
 
 ## What was changed
 

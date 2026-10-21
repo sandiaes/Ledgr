@@ -9,6 +9,7 @@ Calculation assumptions and their verification status: [docs/assumptions.md](./d
 - `apps/desktop` – React + Vite
 - `packages/core` – pure TypeScript calculation library (decimal.js)
 - `supabase/` – migrations and edge functions
+- `scripts/import` – one-off spreadsheet importer, local only ([docs/import.md](./docs/import.md))
 
 ## Setup
 
@@ -27,6 +28,7 @@ cp .env.example .env   # fill in URL + anon key only
 | `pnpm test`          | Vitest                        |
 | `pnpm check`         | all of the above, as CI would |
 | `pnpm test:coverage` | Vitest + v8 coverage (core)   |
+| `pnpm importer`      | spreadsheet import (see docs) |
 
 ## Desktop: sign in and TOTP enrollment
 

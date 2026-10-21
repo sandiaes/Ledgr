@@ -33,6 +33,7 @@ Paths are relative to `packages/core/src/` unless stated.
 | 19  | Cash                        | unverified         |
 | 20  | Price and FX lookup         | unverified         |
 | 21  | Transfers between accounts  | unverified         |
+| 22  | Spreadsheet import          | unverified         |
 
 "Out of scope (tax)" means: **out of scope: tax reports will come from importing broker
 report exports, not from this ledger.** These items describe how the performance numbers
@@ -280,3 +281,35 @@ cash moved between brokers is not a transfer row.
   `fees.ts` (`feeSummary`, `transferEur`), `gains.ts` (`otherCostsEur`), `cashflows.ts`
   (`investmentCashFlows`); `supabase/migrations/20261021000002_transfer_type.sql` and
   `20261021000003_transfer_columns.sql`.
+
+## Import
+
+### 22. Spreadsheet import
+
+Added 2026-10-21. How `scripts/import` turns the Excel tables into ledger rows (steps in
+`docs/import.md`):
+
+- **Dates** are month-level: stored as the 1st with `trade_date_precision = 'month'`; a cell
+  with another day is mapped to the 1st (with a warning). Within a date, rows keep the
+  file's order through an explicitly increasing `created_at` (#2).
+- **Amounts**: `quantity` = |Units| (sells are negative in the Excel, the sign must match
+  Transact Type), `unit_price` = Order Price, currency EUR at `fx_rate_to_eur` 1, fees 0.
+  Order Value is a check only: |Order Value − Units × Order Price| may not exceed half a
+  unit of Order Value's last written decimal plus |Units| × half a unit of Order Price's
+  (Units are taken as exact).
+- **Holdings check**: a sell may not exceed what its broker's account holds at that point
+  (earlier months, then file order). This is validation only; FIFO stays pooled (#1).
+- **Accounts**: one per broker (Degiro, IBKR, Kraken, Aforro), reused by name.
+- **Certificados**: CA rows are grouped by (series, month) into one subscription at 1 EUR
+  per unit; the CA table's Units must equal the group total, and its Ratio is stored as the
+  subscription's factor for `--ratio-month` (#14). CA sells are not imported yet.
+- **Idempotency**: `import_row_hash` = sha256 of month, transact type, ticker, units,
+  price, value and broker (numbers canonical, text case-normalized; the Type column is
+  left out because the mapping file resolves it) plus the occurrence among identical rows.
+  A CA subscription's hash is its (series, month). Identical rows are rejected unless
+  their key is listed in `allowed-duplicates.txt`. Empty rows are skipped.
+
+- Status: unverified
+- Implemented in: `scripts/import/src/plan.ts` (`planImport`), `hash.ts`, `inputs.ts`,
+  `numbers.ts`, `dates.ts`; `supabase/migrations/20261021000005_import_bookkeeping.sql` and
+  `20261021000006_import_functions.sql`.
