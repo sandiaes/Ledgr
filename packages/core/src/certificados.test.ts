@@ -4,14 +4,15 @@ import {
   createRuleBasedCaValuer,
   defaultCaRateRule,
   type CaContext,
+  type CaFactor,
   type CaSeries,
   type CaSubscription,
   type CaValuer,
 } from './certificados';
 import { LedgerError } from './errors';
 import { computeHoldings } from './holdings';
-import { createFxLookup, createPriceLookup } from './lookups';
-import { buy, d, expectClose, expectDec, redeem, subscribe } from './test-utils';
+import { createCaFactorLookup, createFxLookup, createPriceLookup } from './lookups';
+import { buy, d, expectDec, redeem, subscribe } from './test-utils';
 import type { Asset } from './types';
 
 // ILLUSTRATIVE parameters for the tests (shaped like a Série E), not official values.
@@ -39,14 +40,14 @@ const constantRate = (rate: string) => createRuleBasedCaValuer({ referenceRate: 
 const unit = (
   valuer: CaValuer,
   asOf: string,
-  opts: { s?: CaSeries; from?: string; manual?: { date: string; unitValue: string } } = {},
+  opts: { s?: CaSeries; from?: string; anchor?: { date: string; unitValue: string } } = {},
 ) =>
   valuer.valueUnit({
     series: opts.s ?? series,
     subscriptionDate: opts.from ?? '2023-01-15',
     subscriptionUnitValue: d('1'),
     asOf,
-    manual: opts.manual ? { date: opts.manual.date, unitValue: d(opts.manual.unitValue) } : null,
+    anchor: opts.anchor ? { date: opts.anchor.date, unitValue: d(opts.anchor.unitValue) } : null,
   });
 
 // With euribor 2%: base = 3%; quarterly gross = 3% * 3/12 = 0.75%; net = 0.75% * 0.72 = 0.54%
@@ -121,28 +122,28 @@ describe('rule-based certificado valuer', () => {
     expectDec(unit(v, '2023-04-15', { s }).unitValue, '1.0075');
   });
 
-  it('manual override: continue accruing from the override date', () => {
-    // override 1.01/unit on 2023-06-01; next capitalisation 2023-07-15 -> 1.01 * 1.0054
-    const manual = { date: '2023-06-01', unitValue: '1.01' };
-    const r = unit(v, '2023-07-15', { manual });
-    expect(r.source).toBe('manual');
+  it('anchor: continue accruing from the anchor date', () => {
+    // anchor 1.01/unit on 2023-06-01; next capitalisation 2023-07-15 -> 1.01 * 1.0054
+    const anchor = { date: '2023-06-01', unitValue: '1.01' };
+    const r = unit(v, '2023-07-15', { anchor });
+    expect(r.source).toBe('anchor');
     expectDec(r.unitValue, d('1.01').times(Q1));
-    expectDec(unit(v, '2023-06-01', { manual }).unitValue, '1.01');
+    expectDec(unit(v, '2023-06-01', { anchor }).unitValue, '1.01');
   });
 
-  it('an override on a capitalisation date already includes that period', () => {
-    const r = unit(v, '2023-07-15', { manual: { date: '2023-07-15', unitValue: '1.02' } });
+  it('an anchor on a capitalisation date already includes that period', () => {
+    const r = unit(v, '2023-07-15', { anchor: { date: '2023-07-15', unitValue: '1.02' } });
     expectDec(r.unitValue, '1.02');
   });
 
-  it('ignores an override dated after asOf (history uses rules)', () => {
-    const r = unit(v, '2023-05-01', { manual: { date: '2023-06-01', unitValue: '1.01' } });
+  it('ignores an anchor dated after asOf (history uses rules)', () => {
+    const r = unit(v, '2023-05-01', { anchor: { date: '2023-06-01', unitValue: '1.01' } });
     expect(r.source).toBe('rules');
     expectDec(r.unitValue, Q1);
   });
 
-  it('rejects an override before the subscription', () => {
-    expect(() => unit(v, '2023-06-01', { manual: { date: '2022-12-01', unitValue: '1' } })).toThrow(
+  it('rejects an anchor before the subscription', () => {
+    expect(() => unit(v, '2023-06-01', { anchor: { date: '2022-12-01', unitValue: '1' } })).toThrow(
       /before the subscription/,
     );
   });
@@ -184,96 +185,102 @@ describe('certificados in holdings', () => {
     { id: 'CA', assetType: 'certificado_aforro', tradingCurrency: 'EUR' },
     { id: 'A', assetType: 'stock', tradingCurrency: 'EUR' },
   ];
-  const sub = (patch: Partial<CaSubscription> = {}): CaSubscription => ({
-    id: 'ca1',
-    seriesId: 'E',
-    transactionId: 's1',
-    manualValue: null,
-    manualValueDate: null,
-    ...patch,
-  });
+  const subs: CaSubscription[] = [{ id: 'ca1', seriesId: 'E', transactionId: 's1' }];
   const transactions = [
     subscribe('2023-01-15', 'CA', '1000', '1', { id: 's1' }),
     redeem('2023-08-01', 'CA', '400', '1.01', { caSubscriptionId: 'ca1' }),
   ];
+  const factorRows: CaFactor[] = [
+    { subscriptionId: 'ca1', month: '2023-06-01', factor: d('1.004') },
+    { subscriptionId: 'ca1', month: '2023-12-01', factor: d('1.012') },
+  ];
   const noPrices = createPriceLookup([]);
   const fx = createFxLookup([]);
-  const context = (subs: CaSubscription[], valuer: CaValuer = constantRate('0.02')): CaContext => ({
-    valuer,
-    series: [series],
+  const context = (patch: Partial<CaContext> = {}): CaContext => ({
     subscriptions: subs,
+    factors: createCaFactorLookup(factorRows),
+    ...patch,
   });
+  const holding = (asOf: string, ca: CaContext, txs = transactions) =>
+    computeHoldings({ transactions: txs, assets, asOf, prices: noPrices, fx, ca })[0]!;
 
-  it('values the remaining units by accrual after a partial redemption', () => {
-    // 600 units left; 4 capitalisations to 2024-01-15 -> 600 * 1.0054^4; cost 600
-    const [h] = computeHoldings({
-      transactions,
-      assets,
-      asOf: '2024-01-15',
-      prices: noPrices,
-      fx,
-      ca: context([sub()]),
+  it('values the units still held at the latest factor on or before the date', () => {
+    // 600 units left after the partial redemption; cost 600
+    const h = holding('2024-01-15', context());
+    expectDec(h.quantity, '600');
+    expectDec(h.costBasisEur, '600');
+    expectDec(h.marketValueEur, '607.2'); // 600 x 1.012 (factor for 2023-12)
+    expect(h.valuation).toEqual({
+      kind: 'certificado',
+      lots: [{ lotId: 's1', unitValue: d('1.012'), source: 'factor', factorMonth: '2023-12-01' }],
     });
-    expectDec(h!.quantity, '600');
-    expectDec(h!.costBasisEur, '600');
-    expectDec(h!.marketValueEur, Q1.pow(4).times(600));
-    expect(h!.valuation.kind).toBe('certificado');
+    expectDec(holding('2023-11-30', context()).marketValueEur, '602.4'); // 600 x 1.004
+    expectDec(holding('2023-12-01', context()).marketValueEur, '607.2');
   });
 
-  it('manual override is per unit outstanding on its date', () => {
-    // 610 EUR for the 600 units held on 2023-12-01 -> 610/600 per unit
-    // next capitalisation 2024-01-15: 600 * 610/600 * 1.0054 = 610 * 1.0054 = 613.294
-    const [h] = computeHoldings({
-      transactions,
-      assets,
-      asOf: '2024-01-15',
-      prices: noPrices,
-      fx,
-      ca: context([sub({ manualValue: d('610'), manualValueDate: '2023-12-01' })]),
+  it('before the first factor, a unit is worth what was paid at subscription', () => {
+    // 2023-05-31: all 1000 units held, no factor yet -> 1000 x 1
+    const h = holding('2023-05-31', context());
+    expectDec(h.marketValueEur, '1000');
+    if (h.valuation.kind !== 'certificado') throw new Error('expected certificado valuation');
+    expect(h.valuation.lots[0]).toMatchObject({ source: 'subscription', factorMonth: null });
+  });
+
+  it('each subscription uses its own factors', () => {
+    const txs = [...transactions, subscribe('2023-03-10', 'CA', '100', '1', { id: 's2' })];
+    const ca = context({
+      subscriptions: [...subs, { id: 'ca2', seriesId: 'E', transactionId: 's2' }],
+      factors: createCaFactorLookup([
+        ...factorRows,
+        { subscriptionId: 'ca2', month: '2023-12-01', factor: d('1.009') },
+      ]),
     });
-    // 610/600 repeats, so the result is exact only to the 50-significant-digit precision
-    expectClose(h!.marketValueEur, '613.294', '1e-40');
-    if (h!.valuation.kind !== 'certificado') throw new Error('expected certificado valuation');
-    expect(h!.valuation.lots[0]!.source).toBe('manual');
+    // 600 x 1.012 + 100 x 1.009 = 607.2 + 100.9
+    expectDec(holding('2024-01-15', ca, txs).marketValueEur, '708.1');
   });
 
-  it('rejects an override dated when no units were outstanding', () => {
-    expect(() =>
-      computeHoldings({
-        transactions: [...transactions, subscribe('2023-02-01', 'CA', '1', '1', { id: 's2' })],
-        assets,
-        asOf: '2024-01-15',
-        prices: noPrices,
-        fx,
-        ca: context([
-          sub(),
-          sub({
-            id: 'ca2',
-            transactionId: 's2',
-            manualValue: d('1'),
-            manualValueDate: '2023-01-20',
-          }),
-        ]),
-      }),
-    ).toThrow(LedgerError);
+  it('accepts a factor earlier in the subscription month, rejects one before it', () => {
+    const early = (month: string) =>
+      context({
+        factors: createCaFactorLookup([{ subscriptionId: 'ca1', month, factor: d('1') }]),
+      });
+    expectDec(holding('2023-02-01', early('2023-01-01')).marketValueEur, '1000');
+    expect(() => holding('2023-02-01', early('2022-12-01'))).toThrow(LedgerError);
   });
 
-  it('a whole different valuer can be plugged in', () => {
+  it('accrual is opt-in and accrues forward from the latest factor', () => {
+    const accrual = { valuer: constantRate('0.02'), series: [series] };
+    // Factor 1.012 for 2023-12; next capitalisation 2024-01-15 -> 1.012 x 1.0054, 600 units
+    const h = holding('2024-01-15', context({ accrual }));
+    expectDec(h.marketValueEur, d('1.012').times(Q1).times(600));
+    expect(h.valuation).toMatchObject({
+      lots: [{ source: 'accrual', factorMonth: '2023-12-01' }],
+    });
+    // Without factors it accrues from the subscription: 4 capitalisations
+    const fromStart = holding(
+      '2024-01-15',
+      context({ accrual, factors: createCaFactorLookup([]) }),
+    );
+    expectDec(fromStart.marketValueEur, Q1.pow(4).times(600));
+  });
+
+  it('with accrual on, a lot whose series has no rules is still valued by factor', () => {
+    const h = holding(
+      '2024-01-15',
+      context({ accrual: { valuer: constantRate('0.02'), series: [] } }),
+    );
+    expectDec(h.marketValueEur, '607.2');
+  });
+
+  it('a whole different accrual model can be plugged in', () => {
     const fixed: CaValuer = {
       valueUnit: () => ({ unitValue: d('2'), source: 'rules', lastCapitalisation: null }),
     };
-    const [h] = computeHoldings({
-      transactions,
-      assets,
-      asOf: '2024-01-15',
-      prices: noPrices,
-      fx,
-      ca: context([sub()], fixed),
-    });
-    expectDec(h!.marketValueEur, '1200');
+    const h = holding('2024-01-15', context({ accrual: { valuer: fixed, series: [series] } }));
+    expectDec(h.marketValueEur, '1200');
   });
 
-  it('falls back to the price lookup when a lot is not linked to a series', () => {
+  it('falls back to the price lookup when a lot is not linked to a subscription', () => {
     const prices = createPriceLookup([
       { assetId: 'CA', date: '2024-01-01', close: d('1.03'), currency: 'EUR' },
     ]);
@@ -283,7 +290,7 @@ describe('certificados in holdings', () => {
       asOf: '2024-01-15',
       prices,
       fx,
-      ca: context([]),
+      ca: context({ subscriptions: [] }),
     });
     expectDec(h!.marketValueEur, '103');
     expect(h!.valuation.kind).toBe('price');
@@ -298,7 +305,7 @@ describe('certificados in holdings', () => {
         { assetId: 'A', date: '2024-01-15', close: d('12'), currency: 'EUR' },
       ]),
       fx,
-      ca: context([]),
+      ca: context(),
     });
     expectDec(h!.marketValueEur, '12');
   });

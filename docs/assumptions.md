@@ -25,7 +25,7 @@ Paths are relative to `packages/core/src/` unless stated.
 | 11  | CA withholding              | unverified         |
 | 12  | CA rounding                 | unverified         |
 | 13  | CA term and minimum holding | unverified         |
-| 14  | CA manual value             | unverified         |
+| 14  | CA factors (default value)  | unverified         |
 | 15  | CA test parameters          | unverified         |
 | 16  | XIRR convention             | unverified         |
 | 17  | TWR convention              | unverified         |
@@ -33,6 +33,7 @@ Paths are relative to `packages/core/src/` unless stated.
 | 19  | Cash                        | unverified         |
 | 20  | Price and FX lookup         | unverified         |
 | 21  | Transfers between accounts  | unverified         |
+| 22  | Spreadsheet import          | unverified         |
 
 "Out of scope (tax)" means: **out of scope: tax reports will come from importing broker
 report exports, not from this ledger.** These items describe how the performance numbers
@@ -64,8 +65,14 @@ The schema has no time of day. Within one date, acquisitions are processed befor
 rows, and disposals last, so a same-day buy and sell works whatever order the rows arrive
 in. Otherwise input order is kept.
 
+Month-level dates (imported rows, all on the 1st) rely on input order: the caller must pass
+rows of one date in their original order (for imports, file order, kept through an
+explicitly increasing `created_at`). Moving acquisitions first does not change which lots
+a disposal consumes, as long as no disposal in that order exceeds the units held.
+
 - Status: unverified
-- Implemented in: `ledger.ts` (`prepareLedger`, `phase`).
+- Implemented in: `ledger.ts` (`prepareLedger`, `phase`); test `fifo.test.ts` ("within one
+  date, lots are consumed in input (file) order").
 
 ### 3. Fees in cost and proceeds
 
@@ -123,6 +130,9 @@ holding-period exemption, no loss carry-forward. None will be added.
 
 ## Certificados de aforro
 
+By default a certificado is valued by official factors (#14). #8–#13 describe the
+**optional** rule-based accrual model, used only when a caller opts in (`CaContext.accrual`).
+
 ### 8. Capitalisation periods
 
 Interest is credited every `capitalisation_months` (3), with periods counted from the
@@ -173,18 +183,26 @@ Accrual stops after `term_months`. `min_holding_months` does not affect the valu
 - Status: unverified
 - Implemented in: `certificados.ts` (`createRuleBasedCaValuer`).
 
-### 14. Manual value
+### 14. Factors (default valuation)
 
-`manual_value` is **what AforroNet shows, net** (after the withholding on every
-capitalisation so far), in EUR, for the units still held on `manual_value_date`. It
-includes every capitalisation on or before that date; later periods accrue from it by the
-rules. Per-unit value = manual_value ÷ units held on that date. It is ignored when valuing
-dates before it.
+Changed 2026-10-21: replaces the manual value. A factor (`ca_factors`) is the official
+value of **one unit** of a subscription, in EUR, net (as AforroNet shows it), in force from
+its `month` (stored as the 1st) on. Value of a subscription on a date = units still held ×
+its latest factor whose month is on or before that date. Every monthly factor is its own
+row, one per (subscription, month), never updated.
+
+Before a subscription's first factor, a unit is worth what was paid for it at subscription
+(unit price × fx, normally 1). A factor may be dated earlier in the subscription's own
+month (month-level dates), never before that month.
+
+With the optional accrual model on, the latest factor is the starting point: it includes
+every capitalisation on or before its month, and later periods accrue from it by the rules
+(#8–#13). A series without rules (`term_months` null) is still valued by factors.
 
 - Status: unverified
-- Implemented in: `certificados.ts` (`CaSubscription`, `createRuleBasedCaValuer`),
-  `holdings.ts` (`certificadoValuer`); column comment in
-  `supabase/migrations/20261021000001_withholding_tax_and_optional_cash.sql`.
+- Implemented in: `certificados.ts` (`CaFactor`, `CaContext`, `createRuleBasedCaValuer`
+  anchor), `lookups.ts` (`createCaFactorLookup`), `holdings.ts` (`certificadoValuer`);
+  `supabase/migrations/20261021000004_ca_factors.sql`.
 
 ### 15. Test parameters
 
@@ -193,7 +211,7 @@ illustrative, shaped like a Série E, not official values. Real values belong in
 `ca_series` rows.
 
 - Status: unverified
-- Implemented in: `certificados.test.ts`, `snapshot.test.ts`.
+- Implemented in: `certificados.test.ts`.
 
 ## Returns and reporting conventions
 
@@ -263,3 +281,35 @@ cash moved between brokers is not a transfer row.
   `fees.ts` (`feeSummary`, `transferEur`), `gains.ts` (`otherCostsEur`), `cashflows.ts`
   (`investmentCashFlows`); `supabase/migrations/20261021000002_transfer_type.sql` and
   `20261021000003_transfer_columns.sql`.
+
+## Import
+
+### 22. Spreadsheet import
+
+Added 2026-10-21. How `scripts/import` turns the Excel tables into ledger rows (steps in
+`docs/import.md`):
+
+- **Dates** are month-level: stored as the 1st with `trade_date_precision = 'month'`; a cell
+  with another day is mapped to the 1st (with a warning). Within a date, rows keep the
+  file's order through an explicitly increasing `created_at` (#2).
+- **Amounts**: `quantity` = |Units| (sells are negative in the Excel, the sign must match
+  Transact Type), `unit_price` = Order Price, currency EUR at `fx_rate_to_eur` 1, fees 0.
+  Order Value is a check only: |Order Value − Units × Order Price| may not exceed half a
+  unit of Order Value's last written decimal plus |Units| × half a unit of Order Price's
+  (Units are taken as exact).
+- **Holdings check**: a sell may not exceed what its broker's account holds at that point
+  (earlier months, then file order). This is validation only; FIFO stays pooled (#1).
+- **Accounts**: one per broker (Degiro, IBKR, Kraken, Aforro), reused by name.
+- **Certificados**: CA rows are grouped by (series, month) into one subscription at 1 EUR
+  per unit; the CA table's Units must equal the group total, and its Ratio is stored as the
+  subscription's factor for `--ratio-month` (#14). CA sells are not imported yet.
+- **Idempotency**: `import_row_hash` = sha256 of month, transact type, ticker, units,
+  price, value and broker (numbers canonical, text case-normalized; the Type column is
+  left out because the mapping file resolves it) plus the occurrence among identical rows.
+  A CA subscription's hash is its (series, month). Identical rows are rejected unless
+  their key is listed in `allowed-duplicates.txt`. Empty rows are skipped.
+
+- Status: unverified
+- Implemented in: `scripts/import/src/plan.ts` (`planImport`), `hash.ts`, `inputs.ts`,
+  `numbers.ts`, `dates.ts`; `supabase/migrations/20261021000005_import_bookkeeping.sql` and
+  `20261021000006_import_functions.sql`.

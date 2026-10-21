@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createRuleBasedCaValuer, type CaSeries } from './certificados';
 import { MissingValuationError } from './errors';
-import { createFxLookup, createPriceLookup } from './lookups';
+import { createCaFactorLookup, createFxLookup, createPriceLookup } from './lookups';
 import { buildSnapshot, type SnapshotInput } from './snapshot';
 import { buy, d, deposit, dividend, expectDec, subscribe } from './test-utils';
 import type { Asset } from './types';
@@ -12,21 +11,6 @@ const assets: Asset[] = [
   { id: 'BTC', assetType: 'crypto', tradingCurrency: 'EUR' },
   { id: 'CA', assetType: 'certificado_aforro', tradingCurrency: 'EUR' },
 ];
-
-// Illustrative series: euribor 2% + 1% = 3%, quarterly, 28% withholding (see certificados.test)
-const series: CaSeries = {
-  id: 'E1',
-  code: 'E',
-  termMonths: 120,
-  capitalisationMonths: 3,
-  minHoldingMonths: 3,
-  referenceRate: 'euribor_3m',
-  baseSpread: d('0.01'),
-  rateFloor: d('0'),
-  rateCap: d('0.035'),
-  loyaltyPremiums: [],
-  withholdingTaxRate: d('0.28'),
-};
 
 const input: SnapshotInput = {
   date: '2024-04-15',
@@ -50,11 +34,11 @@ const input: SnapshotInput = {
     { currency: 'USD', date: '2024-04-12', rateToEur: d('0.92') },
   ]),
   ca: {
-    valuer: createRuleBasedCaValuer({ referenceRate: () => d('0.02') }),
-    series: [series],
-    subscriptions: [
-      { id: 'c1', seriesId: 'E1', transactionId: 'sub1', manualValue: null, manualValueDate: null },
-    ],
+    subscriptions: [{ id: 'c1', seriesId: 'E1', transactionId: 'sub1' }],
+    factors: createCaFactorLookup([
+      { subscriptionId: 'c1', month: '2024-04-01', factor: d('1.0054') },
+      { subscriptionId: 'c1', month: '2024-05-01', factor: d('1.0099') }, // after the date
+    ]),
   },
 };
 
@@ -63,7 +47,7 @@ describe('buildSnapshot', () => {
     // stock   A    10 * 110                         = 1100
     // etf     E    10 * 55 USD * 0.92               =  506
     // crypto  BTC  0.01 * 60000                     =  600
-    // CA      1000 * (1 + 0.03 * 3/12 * 0.72)       = 1005.4   (first capitalisation 04-15)
+    // CA      1000 * 1.0054 (factor for 2024-04)     = 1005.4
     // cash    5000 - 1001 - 450 - 500 - 1000 + 10   = 2059
     // total   1100 + 506 + 600 + 1005.4 + 2059      = 5270.4
     // cost    1001 + 450 + 500 + 1000               = 2951
