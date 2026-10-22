@@ -22,8 +22,8 @@ export default tseslint.config(
     },
   },
   {
-    // The importer's single console channel: counts, settings and totals only.
-    files: ['scripts/import/src/console.ts'],
+    // The scripts' single console channels: counts, settings and totals only.
+    files: ['scripts/import/src/console.ts', 'scripts/prices/src/console.ts'],
     rules: { 'no-console': 'off' },
   },
   prettier,

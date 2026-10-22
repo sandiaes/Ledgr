@@ -11,6 +11,8 @@ export * from './holdings';
 export * from './income';
 export * from './ledger';
 export * from './lookups';
+export * from './prices';
+export * from './sanity';
 export * from './snapshot';
 export * from './twr';
 export * from './types';

@@ -10,5 +10,8 @@
   "dependencies": {
     "@ledgr/core": "workspace:*",
     "@supabase/supabase-js": "^2.118.0"
+  },
+  "exports": {
+    "./env": "./src/env.ts"
   }
 }

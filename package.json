@@ -14,12 +14,15 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
-    "importer": "tsx scripts/import/src/main.ts"
+    "importer": "tsx scripts/import/src/main.ts",
+    "prices": "tsx scripts/prices/src/main.ts",
+    "functions:build": "esbuild packages/market/src/edge.ts --bundle --format=esm --platform=neutral --main-fields=module,main --target=es2022 --legal-comments=none --outfile=supabase/functions/_shared/ledgr-jobs.js"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@types/node": "^22.20.5",
     "@vitest/coverage-v8": "2.1.9",
+    "esbuild": "0.25.10",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
     "globals": "^15.14.0",

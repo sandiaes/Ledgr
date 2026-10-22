@@ -3,7 +3,16 @@ import { ZERO, type Decimal } from './decimal';
 import { MissingValuationError } from './errors';
 import { runFifo } from './fifo';
 import type { Holding } from './holdings';
-import { amountEur, feesEur, prepareLedger, withholdingTaxEur } from './ledger';
+import {
+  acquisitionCostEur,
+  amountEur,
+  disposalProceedsEur,
+  feesEur,
+  isAcquisition,
+  isDisposal,
+  prepareLedger,
+  withholdingTaxEur,
+} from './ledger';
 import type { Transaction } from './types';
 
 export interface NetContributions {
@@ -24,6 +33,20 @@ export function netContributions(
     if (tx.type === 'withdrawal') withdrawalsEur = withdrawalsEur.plus(amountEur(tx));
   }
   return { depositsEur, withdrawalsEur, netEur: depositsEur.minus(withdrawalsEur) };
+}
+
+/**
+ * Net invested up to and including `asOf`: what buys and subscriptions cost (fees in) minus
+ * what sells and redemptions returned (fees out), EUR at each row's trade-time rate.
+ * Deposits, withdrawals, income, fee rows and transfers are not counted (assumption #24).
+ */
+export function netInvestedEur(transactions: readonly Transaction[], asOf?: IsoDate): Decimal {
+  let net = ZERO;
+  for (const tx of prepareLedger(transactions, asOf)) {
+    if (isAcquisition(tx.type)) net = net.plus(acquisitionCostEur(tx));
+    else if (isDisposal(tx.type)) net = net.minus(disposalProceedsEur(tx));
+  }
+  return net;
 }
 
 export interface GainsSummary {

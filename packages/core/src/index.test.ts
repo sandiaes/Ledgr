@@ -27,6 +27,12 @@ describe('public API', () => {
       'createFxLookup',
       'createCaFactorLookup',
       'cashBalanceEur',
+      'netInvestedEur',
+      'splitAdjustPrices',
+      'createTradePriceLookup',
+      'holdingPeriods',
+      'rateToEurFromEcbQuote',
+      'sanityReport',
     ]) {
       expect(core, name).toHaveProperty(name);
     }

@@ -1,0 +1,16 @@
+{
+  "name": "@ledgr/prices-script",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local symbol resolution, price/FX/snapshot backfill and sanity report. Runs on your computer only.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ledgr/core": "workspace:*",
+    "@ledgr/import": "workspace:*",
+    "@ledgr/market": "workspace:*",
+    "@supabase/supabase-js": "^2.118.0"
+  }
+}

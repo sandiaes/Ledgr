@@ -1,6 +1,7 @@
 # Calculation assumptions
 
-Assumptions made by `packages/core`, approved as **provisional** on 2026-10-21 (#1–#20). Each one
+Assumptions made by `packages/core`, approved as **provisional** on 2026-10-21 (#1–#20) and
+2026-10-22 (#23–#27, prices and snapshots). Each one
 stays `unverified` until it has been checked against an official source (or the owner's
 own records), and is then updated here with the source.
 
@@ -34,6 +35,11 @@ Paths are relative to `packages/core/src/` unless stated.
 | 20  | Price and FX lookup         | unverified         |
 | 21  | Transfers between accounts  | unverified         |
 | 22  | Spreadsheet import          | unverified         |
+| 23  | Splits: post-split units    | unverified         |
+| 24  | Net invested                | unverified         |
+| 25  | Staleness, missing prices   | unverified         |
+| 26  | Listing currency and FX     | unverified         |
+| 27  | Daily snapshot conventions  | unverified         |
 
 "Out of scope (tax)" means: **out of scope: tax reports will come from importing broker
 report exports, not from this ledger.** These items describe how the performance numbers
@@ -254,7 +260,8 @@ is not revalued.
 
 ### 20. Price and FX lookup
 
-Prices and FX rates use the latest value on or before the date, with no age limit.
+Prices and FX rates use the latest value on or before the date, with no age limit. Changed
+2026-10-22: the value is still used however old it is, but snapshots flag it (#25).
 
 - Status: unverified
 - Implemented in: `lookups.ts` (`createPriceLookup`, `createFxLookup`).
@@ -292,6 +299,10 @@ Added 2026-10-21. How `scripts/import` turns the Excel tables into ledger rows (
 - **Dates** are month-level: stored as the 1st with `trade_date_precision = 'month'`; a cell
   with another day is mapped to the 1st (with a warning). Within a date, rows keep the
   file's order through an explicitly increasing `created_at` (#2).
+- **Listing currency** (changed 2026-10-22): the mapping's `currency` is the asset's listing
+  currency (`assets.trading_currency`): USD for XNAS/XNYS/XASE, EUR for XETR, crypto and
+  certificados; a value that does not match the exchange is rejected. Orders stay EUR at
+  fx 1 (#26).
 - **Amounts**: `quantity` = |Units| (sells are negative in the Excel, the sign must match
   Transact Type), `unit_price` = Order Price, currency EUR at `fx_rate_to_eur` 1, fees 0.
   Order Value is a check only: |Order Value − Units × Order Price| may not exceed half a
@@ -313,3 +324,85 @@ Added 2026-10-21. How `scripts/import` turns the Excel tables into ledger rows (
 - Implemented in: `scripts/import/src/plan.ts` (`planImport`), `hash.ts`, `inputs.ts`,
   `numbers.ts`, `dates.ts`; `supabase/migrations/20261021000005_import_bookkeeping.sql` and
   `20261021000006_import_functions.sql`.
+
+## Prices and snapshots
+
+Added 2026-10-22 with the daily price, FX and snapshot jobs (`packages/market`,
+`scripts/prices`, `supabase/functions`; runbook in `docs/prices.md`).
+
+### 23. Splits: the ledger records post-split units
+
+Stock splits are not ledger rows. The ledger's units and unit prices are expressed in
+today's share count (the spreadsheet restated pre-split purchases). `prices.close` is the
+raw close as quoted that day, and `prices.split_factor` holds the provider's ratio on a
+split's effective date (20 for 20:1, 0.01 for 1:100). Before valuing, each close is divided
+by the product of the asset's split factors dated after it, so every close is in today's
+share count; the split day's own close is already post-split. Closes are never adjusted for
+dividends (dividends belong in the ledger). A split that happens after the import needs the
+asset's earlier rows restated (or a future split row type); the daily run reports it.
+
+- Status: unverified
+- Implemented in: `prices.ts` (`splitAdjustPrices`); `market/src/providers/tiingo.ts`
+  (split factors); `supabase/migrations/20261022000002_prices_snapshot_flags_job_runs.sql`.
+
+### 24. Net invested
+
+A snapshot's `net_contributions_eur` is **net invested**: what buys and subscriptions cost
+(fees in) minus what sells and redemptions returned (fees out), in EUR at each row's
+trade-time rate, up to and including the date. Deposits, withdrawals, income, fee rows and
+transfers are not counted; deposits are not tracked. `netContributions` (deposits −
+withdrawals) is unchanged and still used by the cash and total-return formulas.
+
+- Status: unverified
+- Implemented in: `gains.ts` (`netInvestedEur`), `snapshot.ts` (`buildSnapshot`).
+
+### 25. Staleness and missing prices
+
+A close is **stale** when it is more than 3 calendar days older than the valuation date
+(configurable, `LEDGR_STALE_AFTER_DAYS`); a Friday close on Monday (3 days) is not stale.
+A stale close is still used. When an asset has no close at all on or before the date (no
+symbol, or history starting after the first buy), it is valued at its latest trade's unit
+price × that row's fx rate (in ledger order within a day) and always flagged stale, source
+`trade`. A missing FX rate is not filled in: that day's snapshot is skipped and reported.
+
+Certificados: value from the latest factor (#14), aged from the factor's month (its 1st);
+before the first factor, from the subscription price, aged from the subscription date. The
+CA value is flagged when that age exceeds 35 days (`LEDGR_CA_MAX_AGE_DAYS`). With several
+subscriptions, the oldest date counts, and the source is `factor`, `subscription` or
+`mixed`.
+
+- Status: unverified
+- Implemented in: `prices.ts` (`ageInDays`, `isStale`, `createTradePriceLookup`,
+  `DEFAULT_STALE_AFTER_DAYS`, `DEFAULT_CA_MAX_AGE_DAYS`), `snapshot.ts` (`buildSnapshot`,
+  `ValuationFlag`).
+
+### 26. Listing currency and FX
+
+`assets.trading_currency` is the listing currency, by exchange: USD for XNAS, XNYS and XASE,
+EUR for XETR; crypto quoted in EUR (BTCEUR) is EUR. A provider's close is stored in that
+currency (a close the provider states in another currency is refused). FX rates are the ECB
+euro reference rates, stored as EUR per unit = 1 ÷ the ECB quote, rounded half-even to 18
+decimals. On weekends and TARGET holidays the last published rate applies (#20). Rates are
+fetched from 14 days before 2021-01-01 (or the first trade, if earlier).
+
+- Status: unverified
+- Implemented in: `prices.ts` (`listingCurrencyForMic`, `rateToEurFromEcbQuote`);
+  `market/src/ecb.ts`, `market/src/jobs/fx.ts`;
+  `supabase/migrations/20261022000001_listing_currency.sql`.
+
+### 27. Daily snapshot conventions
+
+One snapshot per calendar day, weekends included, from the first trade date. A day's
+snapshot uses the ledger up to and including that day and the latest close and rate on or
+before it: US and Xetra closes of that trading day, and Coinbase's UTC daily candle (close
+at 24:00 UTC). Month-level imported trades count from the 1st of their month. Cash is not
+tracked (`trackCash: false`), so the total is the investments alone. Prices are fetched only
+for the days an asset was held (from 14 days before each holding period, so a close exists
+on day one, to the day it was sold). The daily run recomputes from the 1st of the previous
+month to yesterday, so a factor entered late is picked up. Rows are written rounded
+half-even to 18 decimals; identical inputs give identical rows.
+
+- Status: unverified
+- Implemented in: `snapshot.ts` (`buildSnapshot`), `prices.ts` (`holdingPeriods`,
+  `priceFetchRange`, `PRICE_LOOKBACK_DAYS`); `market/src/jobs/snapshots.ts`,
+  `market/src/jobs/prices.ts`, `market/src/db.ts` (`snapshotRow`).

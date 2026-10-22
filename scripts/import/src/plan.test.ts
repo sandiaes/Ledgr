@@ -143,6 +143,8 @@ describe('checks that block the import', () => {
       mapping: completeMappingText({
         VWCE: { isin: 'IE00BK5BQT81' }, // wrong check digit
         AAPL: { currency: 'USD' },
+        MU: { currency: 'GBP' },
+        SXR8: { exchange: 'XETR', currency: 'USD' },
         MSFT: { price_symbol: 'MSFT' },
         GME: { name: '' },
       }),
@@ -152,7 +154,9 @@ describe('checks that block the import', () => {
       .flatMap((r) => r.reasons.map((x) => x.text));
     expect(texts).toEqual(
       expect.arrayContaining([
-        expect.stringMatching(/AAPL: currency USD is not supported/),
+        expect.stringMatching(/AAPL: currency USD does not match exchange -/),
+        expect.stringMatching(/MU: currency GBP is not supported/),
+        expect.stringMatching(/SXR8: currency USD does not match exchange XETR/),
         expect.stringMatching(/GME: name is blank/),
         expect.stringMatching(/MSFT: price_symbol must be provider:symbol/),
         expect.stringMatching(/VWCE: isin is not a valid ISIN/),
@@ -161,6 +165,25 @@ describe('checks that block the import', () => {
     expect(isValidIsin('IE00BK5BQT80')).toBe(true);
     expect(isValidIsin('US0378331005')).toBe(true);
     expect(isValidIsin('IE00BK5BQT81')).toBe(false);
+  });
+
+  it('the mapping currency is the listing currency; orders stay EUR at fx 1', () => {
+    const p = plan({
+      mapping: completeMappingText({
+        AAPL: { exchange: 'XNAS', currency: 'USD' },
+        VWCE: { exchange: 'XETR', currency: 'EUR' },
+      }),
+    });
+    expect(p.rejects.filter((r) => r.file === 'mapping')).toEqual([]);
+    const currency = (t: string) => p.payload.assets.find((a) => a.ticker === t)?.trading_currency;
+    expect(currency('AAPL')).toBe('USD');
+    expect(currency('VWCE')).toBe('EUR');
+    const aapl = p.payload.assets.find((a) => a.ticker === 'AAPL')?.id;
+    const orders = p.payload.transactions.filter((t) => t.asset_id === aapl);
+    expect(orders.length).toBeGreaterThan(0);
+    expect(new Set(orders.map((t) => `${t.currency}@${t.fx_rate_to_eur}`))).toEqual(
+      new Set(['EUR@1']),
+    );
   });
 
   it('a mapped ISIN is stored, and a blank cell is not "none"', () => {

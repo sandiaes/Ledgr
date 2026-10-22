@@ -4,3 +4,4 @@ dist
 coverage
 pnpm-lock.yaml
 supabase/.branches
+supabase/functions/_shared/ledgr-jobs.js

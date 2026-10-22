@@ -60,7 +60,8 @@ describe('buildSnapshot', () => {
     expectDec(s.cashEur, '2059');
     expectDec(s.totalValueEur, '5270.4');
     expectDec(s.totalCostBasisEur, '2951');
-    expectDec(s.netContributionsEur, '5000');
+    // net invested: buys and subscriptions (fees in); the deposit is not counted
+    expectDec(s.netContributionsEur, '2951');
   });
 
   it('without deposits, cash is not tracked and not in the total', () => {
@@ -69,7 +70,7 @@ describe('buildSnapshot', () => {
     const s = buildSnapshot({ ...input, transactions: noDeposit });
     expect(s.cashEur).toBeNull();
     expectDec(s.totalValueEur, '3211.4');
-    expectDec(s.netContributionsEur, '0');
+    expectDec(s.netContributionsEur, '2951');
   });
 
   it('trackCash overrides the default either way', () => {
@@ -86,7 +87,20 @@ describe('buildSnapshot', () => {
 
   it('before any activity everything is zero', () => {
     const s = buildSnapshot({ ...input, date: '2023-12-31' });
-    for (const v of Object.values(s).filter((x) => typeof x !== 'string')) expectDec(v, '0');
+    for (const v of [
+      s.totalValueEur,
+      s.totalCostBasisEur,
+      s.netContributionsEur,
+      s.cashEur,
+      s.stockValueEur,
+      s.etfValueEur,
+      s.cryptoValueEur,
+      s.certificadoAforroValueEur,
+    ])
+      expectDec(v, '0');
+    expect(s.valuationFlags).toEqual([]);
+    expect(s.stale).toBe(false);
+    expect(s.caValueSource).toBeNull();
   });
 
   it('throws rather than writing a snapshot with a missing price', () => {
