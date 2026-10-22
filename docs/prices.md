@@ -336,8 +336,9 @@ git-ignored, so keep the files there.
    "Historical data" page on a finance site), set the period from before your first buy
    to today, and **scroll to the bottom** so every row has loaded.
 2. Select the table from the `Date` header to the last row, copy, paste into Notepad and
-   save as e.g. `prices-data/history/SXR8.txt`. (A CSV with `Date` and `Close` columns, ISO
-   dates, also works.)
+   save as e.g. `prices-data/history/SXR8.txt`. Also accepted: a CSV with `Date` and
+   `Close` columns (ISO dates), or a price-history CSV export with `Date` and `Price`
+   columns and dates like `10/22/2026` (Investing.com style).
 3. Dry run, then write (only dates not already stored are added; `--overwrite` replaces):
    ```bash
    pnpm prices import-history --asset SXR8 --file prices-data/history/SXR8.txt --currency EUR
@@ -346,7 +347,8 @@ git-ignored, so keep the files there.
 4. Recompute the snapshots from the first imported date (the command prints it):
    `pnpm prices backfill --only snapshots --from <date>`, then check `sanity.csv`.
 
-The `Close` column is used, never `Adj Close`; lines without a price (dividends, splits)
+The `Close` column (else `Price`) is used, never `Adj Close`; slash dates are read as
+month/day or day/month only when a day above 12 in the file shows which; lines without a price (dividends, splits)
 are skipped. A date that cannot be read, a date twice, a date after today or a currency
 other than the asset's listing currency rejects the whole file. Such data is not from an
 official API: compare a few closes with your broker before committing.

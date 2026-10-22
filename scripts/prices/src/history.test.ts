@@ -30,13 +30,39 @@ describe('parseHistory', () => {
     ]);
   });
 
+  it('reads an Investing.com-style export: Price column, quoted cells, month/day dates', () => {
+    const text = [
+      '\uFEFF"Date","Price","Open","High","Low","Vol.","Change %"',
+      '"10/22/2026","1,072.48","1,070.00","1,075.00","1,069.00","77.27K","-0.91%"',
+      '"10/21/2026","745.02","743.36","745.02","741.06","74.15K","0.50%"',
+      '"01/02/2020","287.68","287.52","289.19","287.01","25.89K","-0.05%"',
+    ].join('\n');
+    expect(parseHistory(text)).toEqual({
+      rows: [
+        { date: '2020-01-02', close: '287.68' },
+        { date: '2026-10-21', close: '745.02' },
+        { date: '2026-10-22', close: '1072.48' },
+      ],
+      skipped: 0,
+    });
+  });
+
+  it('reads day/month slash dates when the file proves it, and refuses when it cannot tell', () => {
+    expect(
+      parseHistory('Date,Close\n22/10/2026,1\n02/01/2020,2\n').rows.map((r) => r.date),
+    ).toEqual(['2020-01-02', '2026-10-22']);
+    expect(() => parseHistory('Date,Close\n02/01/2020,2\n03/01/2020,3\n')).toThrow(
+      /cannot be told apart/,
+    );
+  });
+
   it('uses Close, never Adj Close', () => {
     const rows = parseHistory('Date,Adj Close,Close\n2024-01-02,90,100\n').rows;
     expect(rows[0]?.close).toBe('100');
   });
 
   it('rejects what it cannot read instead of guessing', () => {
-    expect(() => parseHistory('Date,Close\n02/01/2024,100\n')).toThrow(/is not like/);
+    expect(() => parseHistory('Date,Close\n2024/01/02,100\n')).toThrow(/is not like/);
     expect(() => parseHistory('Date,Close\nFeb 30, 2024,100\n')).toThrow(HistoryFileError);
     expect(() => parseHistory('Day,Price\n2024-01-02,100\n')).toThrow(/"Date" and a "Close"/);
     expect(() => parseHistory('Date,Close\n2024-01-02,100\n2024-01-02,101\n')).toThrow(/twice/);
