@@ -4,6 +4,7 @@
 // certificate (NODE_EXTRA_CA_CERTS or --use-system-ca, see the runbook).
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRestDb, realSleep } from '@ledgr/market';
 import { createClient } from '@supabase/supabase-js';
@@ -15,6 +16,7 @@ const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 process.exitCode = await run(process.argv.slice(2), {
   envPath: `${repoRoot}scripts/prices/.env`,
   reportsRoot: `${repoRoot}prices-data/reports`,
+  resolveArg: (p) => resolve(process.cwd(), p),
   readText: (p) => readFile(p, 'utf8').catch(() => null),
   writeFile: (p, content) => writeFile(p, content, 'utf8'),
   mkdir: (p) => mkdir(p, { recursive: true }).then(() => undefined),

@@ -326,7 +326,30 @@ desktop app in a browser, add its origin to `LEDGR_ALLOWED_ORIGINS`.
 
 ---
 
-## Re-running a backfill
+## Importing older ETF history from a saved table
+
+Alpha Vantage's free key only gives the latest 100 trading days, so for the Xetra ETFs the
+older closes come from a table you save yourself, once per ETF. `prices-data/` is
+git-ignored, so keep the files there.
+
+1. In your browser, open the ETF's daily price history (for example the Xetra listing's
+   "Historical data" page on a finance site), set the period from before your first buy
+   to today, and **scroll to the bottom** so every row has loaded.
+2. Select the table from the `Date` header to the last row, copy, paste into Notepad and
+   save as e.g. `prices-data/history/SXR8.txt`. (A CSV with `Date` and `Close` columns, ISO
+   dates, also works.)
+3. Dry run, then write (only dates not already stored are added; `--overwrite` replaces):
+   ```bash
+   pnpm prices import-history --asset SXR8 --file prices-data/history/SXR8.txt --currency EUR
+   pnpm prices import-history --asset SXR8 --file prices-data/history/SXR8.txt --currency EUR --commit
+   ```
+4. Recompute the snapshots from the first imported date (the command prints it):
+   `pnpm prices backfill --only snapshots --from <date>`, then check `sanity.csv`.
+
+The `Close` column is used, never `Adj Close`; lines without a price (dividends, splits)
+are skipped. A date that cannot be read, a date twice, a date after today or a currency
+other than the asset's listing currency rejects the whole file. Such data is not from an
+official API: compare a few closes with your broker before committing.
 
 Safe at any time (upserts; snapshots are deterministic, so the same inputs give the same
 rows).
