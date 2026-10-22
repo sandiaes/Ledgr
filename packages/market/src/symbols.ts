@@ -36,6 +36,11 @@ const RULES_BY_MIC: Readonly<Record<string, ListingRule>> = {
   XETR: { provider: 'alphavantage', symbol: (t) => `${t}.DEX` },
 };
 
+/** Where OpenFIGI was asked to look (see openfigi.ts: US listings by the composite code). */
+function figiVenue(mic: string): string {
+  return RULES_BY_MIC[mic]?.provider === 'tiingo' ? 'a US exchange' : mic;
+}
+
 /** Crypto tickers like BTCEUR: Coinbase product BTC-EUR, quoted in EUR. */
 const CRYPTO_TICKER = /^([A-Z0-9]{2,10})(EUR|USD)$/;
 
@@ -129,12 +134,12 @@ export function decide(
   if (c.figi) {
     if (!figi || figi.tickers.length === 0) {
       return fail(
-        `OpenFIGI lists no security for ISIN ${c.figi.isin} on ${c.figi.mic}: check the ISIN and exchange`,
+        `OpenFIGI lists no security for ISIN ${c.figi.isin} on ${figiVenue(c.figi.mic)}: check the ISIN and exchange`,
       );
     }
     if (figi.tickers.length > 1) {
       return fail(
-        `OpenFIGI lists several tickers for the ISIN on ${c.figi.mic}: ${figi.tickers.join(', ')}`,
+        `OpenFIGI lists several tickers for the ISIN on ${figiVenue(c.figi.mic)}: ${figi.tickers.join(', ')}`,
       );
     }
     if (figi.tickers[0] !== ticker) {
