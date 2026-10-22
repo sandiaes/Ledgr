@@ -1,6 +1,7 @@
 // Alpha Vantage daily prices, used for Xetra listings (`<TICKER>.DEX`). Official API, key
-// required. Free tier: 25 requests/day and 5/minute. TIME_SERIES_DAILY is the raw
-// (unadjusted) series; the adjusted one is premium, so no split data comes from here.
+// required. Free tier: 25 requests/day and 5/minute, and only the latest 100 trading days
+// of TIME_SERIES_DAILY (the full history is premium). It is the raw (unadjusted) series;
+// the adjusted one is premium, so no split data comes from here.
 // Errors arrive as HTTP 200 with an "Error Message", "Note" or "Information" field.
 import { assertIsoDate, daysBetween, type IsoDate } from '@ledgr/core';
 import { decimalText, parseJsonExact, ProviderError, request, type HttpOptions } from '../http';
@@ -41,19 +42,26 @@ export function createAlphaVantage(
     minIntervalMs: 12_500,
 
     async fetchDaily(symbol, from, to) {
-      const compact = daysBetween(from, today()) <= COMPACT_CALENDAR_DAYS;
-      const body = await get({
-        function: 'TIME_SERIES_DAILY',
-        symbol,
-        outputsize: compact ? 'compact' : 'full',
-        datatype: 'json',
-      });
-      const series = body['Time Series (Daily)'];
-      if (!series || typeof series !== 'object')
+      const series = (outputsize: 'compact' | 'full') =>
+        get({ function: 'TIME_SERIES_DAILY', symbol, outputsize, datatype: 'json' });
+      let body: Record<string, unknown>;
+      if (daysBetween(from, today()) <= COMPACT_CALENDAR_DAYS) body = await series('compact');
+      else {
+        // The full history is a premium feature on the free key: take the latest 100
+        // trading days instead; older days are reported as missing by the caller.
+        try {
+          body = await series('full');
+        } catch (e) {
+          if (!(e instanceof ProviderError && e.code === 'premium_only')) throw e;
+          body = await series('compact');
+        }
+      }
+      const daily = body['Time Series (Daily)'];
+      if (!daily || typeof daily !== 'object')
         throw new ProviderError('alphavantage', 'bad_response');
       const bars: DailyBar[] = [];
       for (const [date, fields] of Object.entries(
-        series as Record<string, Record<string, unknown>>,
+        daily as Record<string, Record<string, unknown>>,
       )) {
         assertIsoDate(date);
         if (date < from || date > to) continue;

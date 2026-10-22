@@ -65,7 +65,12 @@ function seed() {
   return db;
 }
 
-function harness(db: MemoryDb, answer = REF, envText: string | null = ENV) {
+function harness(
+  db: MemoryDb,
+  answer = REF,
+  envText: string | null = ENV,
+  inputs = new Map<string, string>(),
+) {
   const out: string[] = [];
   const files = new Map<string, string>();
   const day = (iso: string) =>
@@ -98,7 +103,8 @@ function harness(db: MemoryDb, answer = REF, envText: string | null = ENV) {
   const deps: CliDeps = {
     envPath: '/repo/scripts/prices/.env',
     reportsRoot: '/repo/prices-data/reports',
-    readText: async (p) => (p.endsWith('.env') ? envText : null),
+    resolveArg: (p) => p,
+    readText: async (p) => (p.endsWith('.env') ? envText : (inputs.get(p) ?? null)),
     writeFile: async (p, c) => void files.set(p, c),
     mkdir: async () => {},
     openDb: () => db,
@@ -120,7 +126,7 @@ describe('parseArgs', () => {
       only: new Set(['fx', 'prices']),
     });
     expect(() => parseArgs([])).toThrow(/Give a command/);
-    expect(() => parseArgs(['backfill', '--commit'])).toThrow(/resolve only/);
+    expect(() => parseArgs(['backfill', '--commit'])).toThrow(/resolve and import-history only/);
     expect(() => parseArgs(['backfill', '--only', 'cash'])).toThrow(/--only/);
     expect(() => parseArgs(['backfill', '--from', '2024-1-1'])).toThrow(/YYYY-MM-DD/);
   });
@@ -188,5 +194,56 @@ describe('run', () => {
       status: 'ok',
       counts: { written: 1, unresolved: 0 },
     });
+  });
+
+  it('import-history: a dry run first, then writes only dates not stored yet', async () => {
+    const db = seed();
+    db.assets.push({
+      id: 'sxr8',
+      name: 'iShares Core S&P 500',
+      ticker: 'SXR8',
+      isin: 'IE00B5BMR087',
+      exchange: 'XETR',
+      assetType: 'etf',
+      tradingCurrency: 'EUR',
+      priceSource: 'alphavantage',
+      priceSourceId: 'SXR8.DEX',
+    });
+    db.prices.set('sxr8|2024-01-03', {
+      assetId: 'sxr8',
+      date: '2024-01-03',
+      close: dec('476.5'),
+      currency: 'EUR',
+      splitFactor: null,
+      source: 'alphavantage',
+    });
+    const file =
+      'Date\tClose\tAdj Close\nJan 3, 2024\t476.12\t476.12\nJan 2, 2024\t478.00\t478.00\n';
+    const h = harness(db, REF, ENV, new Map([['SXR8.txt', file]]));
+    const argv = ['import-history', '--asset', 'sxr8', '--file', 'SXR8.txt', '--currency', 'EUR'];
+
+    expect(await run(argv, h.deps)).toBe(0);
+    expect(h.out).toContain('Dry run: nothing written. Run again with --commit.');
+    expect(h.out[0]).toBe(
+      'SXR8: 2 closes from 2024-01-02 to 2024-01-03 (0 lines without a price skipped); 1 to write; 1 dates already stored are kept.',
+    );
+    expect(db.writes.prices).toBe(0);
+
+    expect(await run([...argv, '--commit'], h.deps)).toBe(0);
+    expect(db.prices.get('sxr8|2024-01-02')).toMatchObject({ source: 'import', currency: 'EUR' });
+    expect(db.prices.get('sxr8|2024-01-02')?.close.toString()).toBe('478');
+    expect(db.prices.get('sxr8|2024-01-03')?.source).toBe('alphavantage'); // kept
+    expect(h.out.join('\n')).not.toMatch(/478|476/); // no prices on the console
+  });
+
+  it('import-history refuses a currency that is not the listing currency, and unknown tickers', async () => {
+    const h = harness(seed(), REF, ENV, new Map([['f.csv', 'Date,Close\n2024-01-02,100\n']]));
+    const base = ['import-history', '--file', 'f.csv', '--commit'];
+    expect(await run([...base, '--asset', 'AAPL', '--currency', 'EUR'], h.deps)).toBe(1);
+    expect(h.out.at(-1)).toBe(
+      'AAPL is listed in USD, but --currency says EUR. Nothing was written.',
+    );
+    expect(await run([...base, '--asset', 'NOPE', '--currency', 'EUR'], h.deps)).toBe(1);
+    expect(h.out.at(-1)).toBe('No asset with ticker NOPE.');
   });
 });
