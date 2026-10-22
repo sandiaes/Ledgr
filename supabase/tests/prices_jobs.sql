@@ -18,13 +18,17 @@ insert into public.assets (id, user_id, name, asset_type, ticker, exchange, trad
 insert into public.job_runs (user_id, job, trigger, started_at, finished_at, status, counts, issues) values
   ('dddddddd-0000-4000-8000-00000000000d', 'prices', 'cron', now(), now(), 'ok', '{"rows": 3}', '[]');
 
--- 1. The listing-currency correction (same statement as the migration) fixes US listings only.
+-- 1. The listing-currency correction (the migration's statement) fixes US listings only.
+-- Limited to the test user: your own assets are never touched.
 update public.assets set trading_currency = 'USD'
-where exchange in ('XNAS', 'XNYS', 'XASE') and trading_currency = 'EUR' and deleted_at is null;
+where exchange in ('XNAS', 'XNYS', 'XASE') and trading_currency = 'EUR' and deleted_at is null
+  and user_id = 'dddddddd-0000-4000-8000-00000000000d';
 do $$
 begin
-  assert (select trading_currency from public.assets where ticker = 'AAPL') = 'USD', 'AAPL not USD';
-  assert (select trading_currency from public.assets where ticker = 'VWCE') = 'EUR', 'VWCE changed';
+  assert (select trading_currency from public.assets
+          where id = 'd0000000-0000-4000-8000-000000000001') = 'USD', 'AAPL not USD';
+  assert (select trading_currency from public.assets
+          where id = 'd0000000-0000-4000-8000-000000000002') = 'EUR', 'VWCE changed';
 end $$;
 
 -- 2. Column checks.
