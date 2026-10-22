@@ -138,3 +138,73 @@ describe('Coinbase', () => {
     ]);
   });
 });
+
+describe('live quotes', () => {
+  it('Tiingo IEX: one request for all tickers, tngoLast else last, New York trading day', async () => {
+    const body =
+      '[{"ticker":"AAPL","tngoLast":210.15,"last":210.1,"timestamp":"2026-10-21T11:00:05-04:00","lastSaleTimestamp":"2026-10-21T11:00:01-04:00"},' +
+      '{"ticker":"MSFT","tngoLast":null,"last":400.5,"timestamp":"2026-10-21T11:00:05-04:00"},' +
+      '{"ticker":"ZZZZ","tngoLast":1,"timestamp":"2026-10-21T11:00:05-04:00"}]';
+    const { fetch, calls } = fakeFetch([[/api\.tiingo\.com\/iex\//, () => jsonResponse(body)]]);
+    const quotes = await createTiingo({ fetch, sleep: noSleep }, 'K').fetchLatest(['AAPL', 'MSFT']);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toContain('tickers=aapl,msft');
+    expect(quotes).toEqual([
+      {
+        symbol: 'AAPL',
+        price: '210.15',
+        currency: null,
+        tradingDay: '2026-10-21',
+        quotedAt: '2026-10-21T11:00:01-04:00',
+      },
+      {
+        symbol: 'MSFT',
+        price: '400.5',
+        currency: null,
+        tradingDay: '2026-10-21',
+        quotedAt: '2026-10-21T11:00:05-04:00',
+      },
+    ]);
+  });
+
+  it('Coinbase ticker: price and UTC day, quoted in the product currency', async () => {
+    const { fetch } = fakeFetch([
+      [
+        /products\/BTC-EUR\/ticker/,
+        () => jsonResponse('{"price":"61234.56","time":"2026-10-21T23:59:00.123Z"}'),
+      ],
+    ]);
+    expect(await createCoinbase({ fetch, sleep: noSleep }).fetchLatest(['BTC-EUR'])).toEqual([
+      {
+        symbol: 'BTC-EUR',
+        price: '61234.56',
+        currency: 'EUR',
+        tradingDay: '2026-10-21',
+        quotedAt: '2026-10-21T23:59:00.123Z',
+      },
+    ]);
+  });
+
+  it('Alpha Vantage GLOBAL_QUOTE: price and latest trading day; an empty quote is skipped', async () => {
+    const { fetch } = fakeFetch([
+      [
+        /GLOBAL_QUOTE&symbol=SXR8\.DEX/,
+        () =>
+          jsonResponse({
+            'Global Quote': { '05. price': '571.2000', '07. latest trading day': '2026-10-21' },
+          }),
+      ],
+      [/GLOBAL_QUOTE&symbol=IS3R\.DEX/, () => jsonResponse({ 'Global Quote': {} })],
+    ]);
+    const av = createAlphaVantage({ fetch, sleep: noSleep }, 'K', () => '2026-10-21');
+    expect(await av.fetchLatest(['SXR8.DEX', 'IS3R.DEX'])).toEqual([
+      {
+        symbol: 'SXR8.DEX',
+        price: '571.2000',
+        currency: null,
+        tradingDay: '2026-10-21',
+        quotedAt: '2026-10-21T15:30:00Z',
+      },
+    ]);
+  });
+});

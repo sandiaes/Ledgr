@@ -1,6 +1,7 @@
-// JobsDb over Supabase's REST API (PostgREST) with the service-role key, using fetch only so
-// the same code runs in Node and in Edge Functions. The service role bypasses RLS, so every
-// request filters on user_id and every write sets it. Numerics are read as text (::text)
+// JobsDb over Supabase's REST API (PostgREST), using fetch only so the same code runs in
+// Node and in Edge Functions. Either with the service-role key (jobs, scripts: bypasses RLS)
+// or with a user's session token (value-now: RLS applies). Either way every request filters
+// on user_id and every write sets it. Numerics are read as text (::text)
 // and written as strings, never through JS floats. Errors carry the HTTP status and the
 // PostgREST error code only: a constraint message can quote row values.
 import { dec, type IsoDate, type StoredPriceRow, type Transaction } from '@ledgr/core';
@@ -31,8 +32,10 @@ export class RestDbError extends Error {
 export interface RestDbOptions {
   /** https://<ref>.supabase.co */
   url: string;
-  /** Service-role key: sb_secret_... or the legacy service_role JWT. */
-  serviceKey: string;
+  /** apikey header: the service-role key (sb_secret_... or legacy JWT), or the anon key. */
+  apiKey: string;
+  /** A user's access token for Authorization; the apikey itself when omitted. */
+  accessToken?: string;
   userId: string;
   fetch: Fetch;
 }
@@ -41,10 +44,10 @@ type Row = Record<string, unknown>;
 
 export function createRestDb(opts: RestDbOptions): JobsDb {
   const base = `${opts.url.replace(/\/+$/, '')}/rest/v1`;
-  // As supabase-js sends them: the gateway accepts a legacy JWT or an sb_secret_ key in both.
+  // As supabase-js sends them: the gateway accepts a legacy JWT or an sb_ key in both.
   const headers: Record<string, string> = {
-    apikey: opts.serviceKey,
-    Authorization: `Bearer ${opts.serviceKey}`,
+    apikey: opts.apiKey,
+    Authorization: `Bearer ${opts.accessToken ?? opts.apiKey}`,
     'Content-Type': 'application/json',
   };
   const user = `user_id=eq.${encodeURIComponent(opts.userId)}`;
@@ -266,6 +269,37 @@ export function createRestDb(opts: RestDbOptions): JobsDb {
       if (!res.ok) await fail('job_runs', res);
       await res.body?.cancel();
     },
+
+    async loadLiveQuotes() {
+      const rows = await select(
+        'live_quotes',
+        'select=asset_id,price::text,currency,trading_day,quoted_at,fetched_at,source&order=asset_id',
+      );
+      return rows.map((r) => ({
+        assetId: String(r.asset_id),
+        price: String(r.price),
+        currency: String(r.currency).trim(),
+        tradingDay: String(r.trading_day),
+        quotedAt: String(r.quoted_at),
+        fetchedAt: String(r.fetched_at),
+        source: String(r.source),
+      }));
+    },
+
+    upsertLiveQuotes: (rows) =>
+      upsert(
+        'live_quotes',
+        'asset_id',
+        rows.map((r) => ({
+          asset_id: r.assetId,
+          price: r.price,
+          currency: r.currency,
+          trading_day: r.tradingDay,
+          quoted_at: r.quotedAt,
+          fetched_at: r.fetchedAt,
+          source: r.source,
+        })),
+      ),
 
     async setPriceSymbol(assetId, source, symbol) {
       const res = await opts.fetch(`${base}/assets?${user}&id=eq.${encodeURIComponent(assetId)}`, {

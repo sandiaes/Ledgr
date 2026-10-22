@@ -5,7 +5,7 @@ import { createCoinbase } from './coinbase';
 import { createTiingo } from './tiingo';
 import type { PriceProvider } from './types';
 
-export type { DailyBar, PriceProvider, SymbolCheck } from './types';
+export type { DailyBar, LiveQuote, PriceProvider, SymbolCheck } from './types';
 
 export interface ProviderKeys {
   tiingo?: string;

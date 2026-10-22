@@ -102,7 +102,7 @@ describe('handleJob security', () => {
 describe('createRestDb', () => {
   const opts = (key: string, fetch: ReturnType<typeof fakeFetch>['fetch']) => ({
     url: 'https://abcdefghijklmnopqrst.supabase.co/',
-    serviceKey: key,
+    apiKey: key,
     userId: USER,
     fetch,
   });

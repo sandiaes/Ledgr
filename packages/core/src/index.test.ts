@@ -33,6 +33,7 @@ describe('public API', () => {
       'holdingPeriods',
       'rateToEurFromEcbQuote',
       'sanityReport',
+      'withLiveQuotes',
     ]) {
       expect(core, name).toHaveProperty(name);
     }

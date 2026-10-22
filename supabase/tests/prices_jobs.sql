@@ -1,8 +1,9 @@
--- Prices, snapshot flags and job_runs test (migrations 20261022000001 and 20261022000002).
+-- Prices, snapshot flags, job_runs and live_quotes test (migrations 20261022000001 to
+-- 20261022000003).
 --
 -- Run as the `postgres` role (Supabase SQL Editor, or `psql "$DB_URL" -f this-file`)
--- AFTER applying both migrations. Everything is ROLLED BACK at the end: no data is kept.
--- Any failed check raises an exception. Success prints 'prices and jobs: ALL CHECKS PASSED'.
+-- AFTER applying the three migrations. Everything is ROLLED BACK at the end: no data is kept.
+-- Any failed check raises an exception. Success prints 'prices, jobs and live quotes: ALL CHECKS PASSED'.
 
 begin;
 
@@ -98,12 +99,42 @@ begin
   assert msg = 'refused', 'owner could delete job_runs';
 end $$;
 
+-- live_quotes: value-now writes with the owner's session (aal2), so the owner may upsert.
+insert into public.live_quotes (asset_id, price, currency, trading_day, quoted_at, fetched_at, source)
+values ('d0000000-0000-4000-8000-000000000001', 210.15, 'USD', '2026-10-21', now(), now(), 'tiingo')
+on conflict (asset_id) do update set price = excluded.price, fetched_at = excluded.fetched_at;
+insert into public.live_quotes (asset_id, price, currency, trading_day, quoted_at, fetched_at, source)
+values ('d0000000-0000-4000-8000-000000000001', 211, 'USD', '2026-10-21', now(), now(), 'tiingo')
+on conflict (asset_id) do update set price = excluded.price, fetched_at = excluded.fetched_at;
+do $$
+declare msg text := 'no error';
+begin
+  assert (select count(*) from public.live_quotes) = 1, 'live_quotes upsert did not keep one row';
+  assert (select price from public.live_quotes) = 211, 'live_quotes upsert did not overwrite';
+  assert (select user_id from public.live_quotes) = 'dddddddd-0000-4000-8000-00000000000d',
+    'live_quotes user_id not defaulted to the caller';
+  begin
+    insert into public.live_quotes (asset_id, price, currency, trading_day, quoted_at, fetched_at, source)
+    values ('d0000000-0000-4000-8000-000000000002', 0, 'EUR', '2026-10-21', now(), now(), 'x');
+  exception when check_violation then msg := 'rejected';
+  end;
+  assert msg = 'rejected', 'live quote price 0 accepted';
+end $$;
+
 -- Password-only session of the same user: nothing.
 select set_config('request.jwt.claims',
   '{"sub":"dddddddd-0000-4000-8000-00000000000d","role":"authenticated","aal":"aal1"}', true);
 do $$
+declare msg text := 'no error';
 begin
   assert (select count(*) from public.job_runs) = 0, 'aal1 can read job_runs';
+  assert (select count(*) from public.live_quotes) = 0, 'aal1 can read live_quotes';
+  begin
+    insert into public.live_quotes (asset_id, price, currency, trading_day, quoted_at, fetched_at, source)
+    values ('d0000000-0000-4000-8000-000000000002', 1, 'EUR', '2026-10-21', now(), now(), 'x');
+  exception when insufficient_privilege then msg := 'refused';
+  end;
+  assert msg = 'refused', 'aal1 could write live_quotes';
 end $$;
 
 -- Another user (aal2): nothing.
@@ -114,6 +145,19 @@ begin
   assert (select count(*) from public.job_runs) = 0, 'B can read A''s job_runs';
   assert (select count(*) from public.prices) = 0, 'B can read A''s prices';
   assert (select count(*) from public.portfolio_snapshots) = 0, 'B can read A''s snapshots';
+  assert (select count(*) from public.live_quotes) = 0, 'B can read A''s live quotes';
+end $$;
+
+-- B cannot write a quote for A's asset (same-owner foreign key, RLS check).
+do $$
+declare msg text := 'no error';
+begin
+  begin
+    insert into public.live_quotes (asset_id, price, currency, trading_day, quoted_at, fetched_at, source)
+    values ('d0000000-0000-4000-8000-000000000002', 1, 'EUR', '2026-10-21', now(), now(), 'x');
+  exception when foreign_key_violation or insufficient_privilege then msg := 'refused';
+  end;
+  assert msg = 'refused', 'B wrote a quote for A''s asset';
 end $$;
 
 -- anon: no access at all.
@@ -140,6 +184,6 @@ begin
   assert missing is null, 'RLS disabled on: ' || coalesce(missing, '');
 end $$;
 
-select 'prices and jobs: ALL CHECKS PASSED' as result;
+select 'prices, jobs and live quotes: ALL CHECKS PASSED' as result;
 
 rollback;

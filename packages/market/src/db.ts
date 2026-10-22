@@ -1,5 +1,6 @@
 // What the jobs read and write. One instance is bound to one user: every read filters on
-// that user_id and every write sets it (the service role bypasses RLS).
+// that user_id and every write sets it (the service role bypasses RLS; value-now uses the
+// owner's own session, so RLS applies as well).
 import type {
   AssetType,
   CaFactor,
@@ -40,6 +41,17 @@ export interface FxUpsert {
   date: IsoDate;
   /** EUR per 1 unit of `currency`. */
   rateToEur: string;
+  source: string;
+}
+
+/** Mirrors a public.live_quotes row: the latest intraday quote of an asset. */
+export interface LiveQuoteRecord {
+  assetId: string;
+  price: string;
+  currency: string;
+  tradingDay: IsoDate;
+  quotedAt: string;
+  fetchedAt: string;
   source: string;
 }
 
@@ -89,6 +101,9 @@ export interface JobsDb {
   /** Insert or overwrite on (user_id, snapshot_date). */
   upsertSnapshots(rows: readonly PortfolioSnapshot[]): Promise<void>;
   recordRun(run: JobRunRecord): Promise<void>;
+  loadLiveQuotes(): Promise<LiveQuoteRecord[]>;
+  /** Insert or overwrite on asset_id. */
+  upsertLiveQuotes(rows: readonly LiveQuoteRecord[]): Promise<void>;
   /** Sets assets.price_source / price_source_id (symbol resolution, local script only). */
   setPriceSymbol(assetId: string, source: string, symbol: string): Promise<void>;
 }

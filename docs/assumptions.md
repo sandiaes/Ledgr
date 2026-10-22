@@ -1,7 +1,7 @@
 # Calculation assumptions
 
 Assumptions made by `packages/core`, approved as **provisional** on 2026-10-21 (#1–#20) and
-2026-10-22 (#23–#27, prices and snapshots). Each one
+2026-10-22 (#23–#28, prices, snapshots and value now). Each one
 stays `unverified` until it has been checked against an official source (or the owner's
 own records), and is then updated here with the source.
 
@@ -40,6 +40,7 @@ Paths are relative to `packages/core/src/` unless stated.
 | 25  | Staleness, missing prices   | unverified         |
 | 26  | Listing currency and FX     | unverified         |
 | 27  | Daily snapshot conventions  | unverified         |
+| 28  | Value now (intraday)        | unverified         |
 
 "Out of scope (tax)" means: **out of scope: tax reports will come from importing broker
 report exports, not from this ledger.** These items describe how the performance numbers
@@ -406,3 +407,22 @@ half-even to 18 decimals; identical inputs give identical rows.
 - Implemented in: `snapshot.ts` (`buildSnapshot`), `prices.ts` (`holdingPeriods`,
   `priceFetchRange`, `PRICE_LOOKBACK_DAYS`); `market/src/jobs/snapshots.ts`,
   `market/src/jobs/prices.ts`, `market/src/db.ts` (`snapshotRow`).
+
+### 28. Value now (intraday)
+
+The dashboard's current value uses the same rules as a daily snapshot (#23–#27) on the
+owner's local date (`Europe/Lisbon` by default), with the latest intraday quote of each
+held asset added to its daily closes: a quote counts for a trading day that has no daily
+close yet (the official close wins once fetched), and is used when it is the newest price;
+the trading day is the exchange's (New York for
+US listings, UTC for Coinbase, the provider's stated day for Xetra). A quote in a currency
+other than the listing currency is refused. FX is the latest ECB reference rate (no
+intraday FX). Quotes are cached per asset and refreshed at most every 5 minutes (Coinbase),
+15 minutes (Tiingo) or 3 hours (Alpha Vantage), only during regular trading hours plus 30
+minutes (holidays count as trading days), and once after the close to get the final price.
+Value now is never written to `portfolio_snapshots`.
+
+- Status: unverified
+- Implemented in: `prices.ts` (`withLiveQuotes`); `market/src/live.ts` (`needsRefresh`,
+  `runValueNow`), `market/src/value-now.ts`, providers' `fetchLatest`;
+  `supabase/migrations/20261022000003_live_quotes.sql`.

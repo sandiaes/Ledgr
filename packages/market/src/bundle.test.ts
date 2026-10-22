@@ -4,7 +4,7 @@ import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
 
 describe('Edge Function bundle', () => {
-  it('has no external imports and answers 401 without the cron secret', async () => {
+  it('has no external imports and answers 401 without credentials', async () => {
     const out = await build({
       entryPoints: [new URL('./edge.ts', import.meta.url).pathname],
       bundle: true,
@@ -25,5 +25,7 @@ describe('Edge Function bundle', () => {
       LEDGR_CRON_SECRET: 'x'.repeat(40),
     });
     expect(res.status).toBe(401);
+    const live = await mod.handleValueNow(new Request('https://fn.test', { method: 'POST' }), {});
+    expect(live.status).toBe(401);
   });
 });

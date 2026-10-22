@@ -69,6 +69,10 @@ function fakeProvider(price: (symbol: string, date: IsoDate) => string | null = 
     async checkSymbol() {
       return { found: true, exchange: null, currency: null };
     },
+    liveTtlMs: 0,
+    async fetchLatest() {
+      return [];
+    },
   };
   return {
     provider,

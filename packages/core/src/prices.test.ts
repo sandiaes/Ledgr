@@ -8,6 +8,7 @@ import {
   rateToEurFromEcbQuote,
   splitAdjustPrices,
   type StoredPriceRow,
+  withLiveQuotes,
 } from './prices';
 import { buy, d, deposit, expectDec, redeem, sell, subscribe, transfer } from './test-utils';
 
@@ -163,5 +164,32 @@ describe('priceFetchRange', () => {
     expect(
       priceFetchRange({ assetId: 'A', from: '2026-11-01', to: null }, '2026-10-01'),
     ).toBeNull();
+  });
+});
+
+describe('withLiveQuotes', () => {
+  it('adds quotes for days without a close; the close wins on its day; never future days', () => {
+    const close = (date: string, c: string) => ({
+      assetId: 'A',
+      date,
+      close: d(c),
+      currency: 'USD',
+    });
+    const out = withLiveQuotes(
+      [close('2024-04-11', '100'), close('2024-04-12', '101')],
+      [
+        close('2024-04-12', '101.5'),
+        { ...close('2024-04-15', '103'), assetId: 'B' },
+        close('2024-04-16', '999'),
+      ],
+      '2024-04-15',
+    );
+    const key = (r: { assetId: string; date: string; close: { toString(): string } }) =>
+      `${r.assetId}|${r.date}|${r.close.toString()}`;
+    expect(out.map(key).sort()).toEqual([
+      'A|2024-04-11|100',
+      'A|2024-04-12|101',
+      'B|2024-04-15|103',
+    ]);
   });
 });

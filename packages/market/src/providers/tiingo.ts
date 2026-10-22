@@ -1,12 +1,15 @@
 // Tiingo end-of-day prices for US listings (official API, key required).
 // Free tier: 50 requests/hour, 1,000/day, 500 symbols/month. Returns the raw close and a
 // splitFactor (1 except on a split's effective date). Prices are in USD for US listings;
-// Tiingo does not state a currency per close.
+// Tiingo does not state a currency per close. Live quotes come from its IEX endpoint
+// (one request for all tickers); if the plan does not include it, value-now falls back to
+// the last daily close.
 import { assertIsoDate, dec, type IsoDate } from '@ledgr/core';
 import { decimalText, parseJsonExact, ProviderError, request, type HttpOptions } from '../http';
-import type { DailyBar, PriceProvider, SymbolCheck } from './types';
+import type { DailyBar, LiveQuote, PriceProvider, SymbolCheck } from './types';
 
 const BASE = 'https://api.tiingo.com/tiingo/daily';
+const IEX = 'https://api.tiingo.com/iex/';
 
 export function createTiingo(http: HttpOptions, apiKey: string): PriceProvider {
   const headers = { Authorization: `Token ${apiKey}`, Accept: 'application/json' };
@@ -22,6 +25,17 @@ export function createTiingo(http: HttpOptions, apiKey: string): PriceProvider {
       const data = parseJsonExact(await res.text());
       if (!Array.isArray(data)) throw new ProviderError('tiingo', 'bad_response');
       return parseBars(data, from, to);
+    },
+
+    liveTtlMs: 15 * 60_000,
+
+    async fetchLatest(symbols) {
+      if (symbols.length === 0) return [];
+      const tickers = symbols.map((s) => encodeURIComponent(s.toLowerCase())).join(',');
+      const res = await request(http, 'tiingo', `${IEX}?tickers=${tickers}`, { headers });
+      const data = parseJsonExact(await res.text());
+      if (!Array.isArray(data)) throw new ProviderError('tiingo', 'bad_response');
+      return parseIex(data, symbols);
     },
 
     async checkSymbol(symbol): Promise<SymbolCheck> {
@@ -60,4 +74,23 @@ export function parseBars(data: readonly unknown[], from: IsoDate, to: IsoDate):
     });
   }
   return bars.sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+/** IEX top-of-book rows: tngoLast (Tiingo's last price), else last; times carry the NY offset. */
+export function parseIex(data: readonly unknown[], symbols: readonly string[]): LiveQuote[] {
+  const wanted = new Map(symbols.map((s) => [s.toUpperCase(), s]));
+  const quotes: LiveQuote[] = [];
+  for (const item of data) {
+    const row = item as Record<string, unknown>;
+    const symbol =
+      typeof row.ticker === 'string' ? wanted.get(row.ticker.toUpperCase()) : undefined;
+    const price = decimalText(row.tngoLast) ?? decimalText(row.last);
+    const time = [row.lastSaleTimestamp, row.timestamp].find((t) => typeof t === 'string') as
+      string | undefined;
+    if (!symbol || !price || !time || !dec(price).gt(0)) continue;
+    const tradingDay = time.slice(0, 10);
+    assertIsoDate(tradingDay);
+    quotes.push({ symbol, price, currency: null, tradingDay, quotedAt: time });
+  }
+  return quotes;
 }

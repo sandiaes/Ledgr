@@ -20,6 +20,18 @@ export interface SymbolCheck {
   currency: string | null;
 }
 
+/** The latest (intraday) price of a symbol. */
+export interface LiveQuote {
+  symbol: string;
+  price: string;
+  /** Currency the provider states; null when it does not state one. */
+  currency: string | null;
+  /** The trading day the quote belongs to, in the exchange's own calendar. */
+  tradingDay: IsoDate;
+  /** The provider's quote or trade time (ISO 8601). */
+  quotedAt: string;
+}
+
 /**
  * A daily price source. Swappable: assets.price_source names the provider id and
  * assets.price_source_id the symbol it knows the asset by.
@@ -32,4 +44,8 @@ export interface PriceProvider {
   fetchDaily(symbol: string, from: IsoDate, to: IsoDate): Promise<DailyBar[]>;
   /** Confirms a symbol exists, for symbol resolution. */
   checkSymbol(symbol: string): Promise<SymbolCheck>;
+  /** How long a live quote stays fresh before value-now asks again. */
+  readonly liveTtlMs: number;
+  /** Latest quotes; symbols the provider has no quote for are left out. */
+  fetchLatest(symbols: readonly string[]): Promise<LiveQuote[]>;
 }

@@ -13,6 +13,7 @@ repository folder. Nothing here needs admin rights or Docker.
 | `fx-daily` Edge Function       | Supabase, 05:15 UTC daily        | ECB rates up to today (re-reads the last 7 days)                                  |
 | `prices-daily` Edge Function   | Supabase, 05:25 UTC daily        | closes up to yesterday for what you hold (re-reads the last 5 days)               |
 | `snapshot-daily` Edge Function | Supabase, 05:40 UTC daily        | snapshots from the 1st of last month to yesterday                                 |
+| `value-now` Edge Function      | Supabase, when the app asks      | the portfolio valued with intraday quotes (see "Value now" below)                 |
 
 | Data                       | Provider                                     | Key      | Free limits                      |
 | -------------------------- | -------------------------------------------- | -------- | -------------------------------- |
@@ -73,6 +74,8 @@ Dashboard → SQL Editor, each file as its own query, in this order:
    not change.
 2. `supabase/migrations/20261022000002_prices_snapshot_flags_job_runs.sql` — split factor on
    prices, staleness flags on snapshots, and the `job_runs` table.
+3. `supabase/migrations/20261022000003_live_quotes.sql` — the `live_quotes` cache used by
+   value-now.
 
 Then run `supabase/tests/prices_jobs.sql` and the three earlier test files
 (`rls_isolation.sql`, `rls_aal2.sql`, `import_functions.sql`); each must end with
@@ -159,16 +162,19 @@ npx supabase login                # opens the browser; or export SUPABASE_ACCESS
 npx supabase functions deploy fx-daily       --project-ref <ref> --use-api --no-verify-jwt
 npx supabase functions deploy prices-daily   --project-ref <ref> --use-api --no-verify-jwt
 npx supabase functions deploy snapshot-daily --project-ref <ref> --use-api --no-verify-jwt
+npx supabase functions deploy value-now      --project-ref <ref> --use-api --no-verify-jwt
 ```
 
 `--use-api` bundles on Supabase's servers, so Docker is not needed. `--no-verify-jwt` is
 deliberate: the functions do not trust JWTs (the anon key is public); each one refuses any
 call without the `x-ledgr-cron-secret` header before reading or writing anything.
+`value-now` instead checks the caller's session with Supabase Auth itself (see "Value now").
 
 If the CLI is blocked, use Dashboard → Edge Functions → Deploy a new function → Via editor,
 name it `fx-daily`, and paste a single file made like this (then the same for the others
-with `'prices'` and `'snapshots'`), and in the function's settings turn JWT verification
-off:
+with `'prices'` and `'snapshots'`; for `value-now` the last line is
+`Deno.serve((req) => handleValueNow(req, Deno.env.toObject()));`), and in the function's
+settings turn JWT verification off:
 
 ```bash
 { cat supabase/functions/_shared/ledgr-jobs.js
@@ -177,15 +183,18 @@ off:
 
 **Secrets** — Dashboard → Edge Functions → Secrets → add:
 
-| Name                     | Value                                                                   |
-| ------------------------ | ----------------------------------------------------------------------- |
-| `LEDGR_USER_ID`          | your user's UID (Authentication → Users)                                |
-| `LEDGR_CRON_SECRET`      | a new random value, at least 32 characters (see below)                  |
-| `TIINGO_API_KEY`         | your Tiingo token                                                       |
-| `ALPHAVANTAGE_API_KEY`   | your Alpha Vantage key                                                  |
-| `LEDGR_STALE_AFTER_DAYS` | optional, default 3                                                     |
-| `LEDGR_CA_MAX_AGE_DAYS`  | optional, default 35                                                    |
-| `LEDGR_SERVICE_KEY`      | only if your project has the legacy keys disabled: an `sb_secret_…` key |
+| Name                     | Value                                                                                                                 |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `LEDGR_USER_ID`          | your user's UID (Authentication → Users)                                                                              |
+| `LEDGR_CRON_SECRET`      | a new random value, at least 32 characters (see below)                                                                |
+| `TIINGO_API_KEY`         | your Tiingo token                                                                                                     |
+| `ALPHAVANTAGE_API_KEY`   | your Alpha Vantage key                                                                                                |
+| `LEDGR_STALE_AFTER_DAYS` | optional, default 3                                                                                                   |
+| `LEDGR_CA_MAX_AGE_DAYS`  | optional, default 35                                                                                                  |
+| `LEDGR_SERVICE_KEY`      | only if your project has the legacy keys disabled: an `sb_secret_…` key                                               |
+| `LEDGR_ALLOWED_ORIGINS`  | value-now: browser origins of the desktop app, comma-separated (e.g. `http://localhost:5173`); not needed for Android |
+| `LEDGR_ANON_KEY`         | value-now, only if the legacy keys are disabled: your `sb_publishable_…` key                                          |
+| `LEDGR_TIME_ZONE`        | value-now, optional, default `Europe/Lisbon` (decides "today")                                                        |
 
 `SUPABASE_URL` and the service-role key are provided to functions by Supabase. Generate the
 cron secret on your computer and paste it straight into the Dashboard (and, in step 7, into
@@ -231,6 +240,83 @@ Check it: `select * from cron.job;`, then the next morning
 `select * from cron.job_run_details order by start_time desc limit 5;` and
 `select status_code, content from net._http_response order by created desc limit 5;`.
 Stop it with `supabase/cron/unschedule.sql`.
+
+---
+
+## Value now (intraday)
+
+The daily snapshots are the official history and use closing prices. For the dashboard,
+`value-now` values the portfolio **now**: when the app opens the dashboard it calls the
+function, which refreshes quotes that are due, values every holding in EUR with the same
+rules as the snapshots (packages/core), and returns the totals. It never writes snapshots.
+
+**Who can call it:** only you. The app sends your session (`supabase.functions.invoke`
+does this); the function asks Supabase Auth to validate it, then requires MFA (`aal2`) and
+your user id (`LEDGR_USER_ID`). It reads and writes with that same session, so RLS and the
+aal2 policies apply; the service-role key is not used.
+
+**When quotes are refreshed** (cached in `live_quotes`, so opening the app often costs
+nothing):
+
+| Asset      | Provider (endpoint)           | Refreshed at most every | Only while                                       |
+| ---------- | ----------------------------- | ----------------------- | ------------------------------------------------ |
+| BTC        | Coinbase ticker (no key)      | 5 minutes               | always (trades 24/7)                             |
+| US stocks  | Tiingo IEX (one call for all) | 15 minutes              | 14:30–21:30 Lisbon (NY 9:30–16:30), weekdays     |
+| Xetra ETFs | Alpha Vantage GLOBAL_QUOTE    | 3 hours                 | 08:00–17:00 Lisbon (Berlin 9:00–18:00), weekdays |
+
+Outside those hours a quote is fetched once more if the cached one predates the close, so
+you see the final closing price; then nothing until the next session. EUR conversion uses
+the latest ECB rate (published once a day, about 16:00 CET). Certificados use the factor,
+as always. Rough daily use: Alpha Vantage about 12 of its 25 calls (plus 3 for the daily
+job), Tiingo about 30.
+
+**Check intraday access after deploying.** I could not confirm whether Tiingo's free plan
+includes the IEX endpoint. If it does not, US stocks simply show the last daily close and
+the response lists an `http_error` (status 401/403) issue for them; the rest still works.
+Likewise, Alpha Vantage's free GLOBAL_QUOTE for Xetra may return the last close rather than
+an intraday price. The `assets` list in the response says which price each holding used.
+
+**Response** (amounts are strings in EUR; your own data, never logged):
+
+```json
+{
+  "computedAt": "2026-10-22T14:05:00.000Z",
+  "valuationDate": "2026-10-22",
+  "totalValueEur": "…",
+  "stockValueEur": "…",
+  "etfValueEur": "…",
+  "cryptoValueEur": "…",
+  "certificadoAforroValueEur": "…",
+  "costBasisEur": "…",
+  "netInvestedEur": "…",
+  "stale": false,
+  "caValueSource": "factor",
+  "caValueAsOf": "2026-10-01",
+  "caValueAgeDays": 21,
+  "caValueStale": false,
+  "assets": [
+    {
+      "assetId": "…",
+      "source": "live",
+      "asOf": "2026-10-22",
+      "quotedAt": "2026-10-22T10:04:58-04:00",
+      "ageDays": 0,
+      "stale": false
+    }
+  ],
+  "fxDates": { "USD": "2026-10-21" },
+  "refreshed": 2,
+  "issues": []
+}
+```
+
+`source` is `live` (intraday quote), `close` (a daily close), `trade` (no price at all:
+last trade price), or `factor` / `subscription` / `mixed` for certificados. Errors: 401 (no
+or invalid session), 403 `mfa_required` or `forbidden`, 503 `missing_fx` (no ECB rate yet:
+run the fx backfill), 500 `failed`.
+
+In the app: `const { data, error } = await supabase.functions.invoke('value-now')`. For the
+desktop app in a browser, add its origin to `LEDGR_ALLOWED_ORIGINS`.
 
 ---
 

@@ -8,7 +8,13 @@ import type {
   Transaction,
 } from '@ledgr/core';
 import { dec } from '@ledgr/core';
-import { snapshotRow, type AssetRecord, type JobRunRecord, type JobsDb } from '../db';
+import {
+  snapshotRow,
+  type AssetRecord,
+  type JobRunRecord,
+  type JobsDb,
+  type LiveQuoteRecord,
+} from '../db';
 
 export class MemoryDb implements JobsDb {
   assets: AssetRecord[] = [];
@@ -19,6 +25,7 @@ export class MemoryDb implements JobsDb {
   fx = new Map<string, FxRow & { source: string }>();
   snapshots = new Map<IsoDate, Record<string, unknown>>();
   runs: JobRunRecord[] = [];
+  live = new Map<string, LiveQuoteRecord>();
   writes = { prices: 0, fx: 0, snapshots: 0 };
 
   async loadAssets() {
@@ -90,6 +97,12 @@ export class MemoryDb implements JobsDb {
   }
   async recordRun(run: JobRunRecord) {
     this.runs.push(run);
+  }
+  async loadLiveQuotes() {
+    return [...this.live.values()].map((q) => ({ ...q }));
+  }
+  async upsertLiveQuotes(rows: readonly LiveQuoteRecord[]) {
+    for (const r of rows) this.live.set(r.assetId, { ...r });
   }
   async setPriceSymbol(assetId: string, source: string, symbol: string) {
     const a = this.assets.find((x) => x.id === assetId);

@@ -166,3 +166,22 @@ const LISTING_CURRENCY_BY_MIC: Readonly<Record<string, string>> = {
 export function listingCurrencyForMic(mic: string): string | null {
   return LISTING_CURRENCY_BY_MIC[mic] ?? null;
 }
+
+/**
+ * Daily closes with intraday quotes added: a quote counts only for a day that has no daily
+ * close yet (the official close, fetched the next morning, wins once it exists). Quotes
+ * dated after `asOf` are dropped. Rows are in today's share count, like split-adjusted
+ * closes (#23).
+ */
+export function withLiveQuotes(
+  closes: readonly PriceRow[],
+  quotes: readonly PriceRow[],
+  asOf: IsoDate,
+): PriceRow[] {
+  const byKey = new Map(closes.map((r) => [`${r.assetId}|${r.date}`, r]));
+  for (const q of quotes) {
+    const key = `${q.assetId}|${q.date}`;
+    if (q.date <= asOf && !byKey.has(key)) byKey.set(key, q);
+  }
+  return [...byKey.values()];
+}

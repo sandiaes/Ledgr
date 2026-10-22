@@ -3,7 +3,7 @@
 // price at 24:00 UTC. The quote currency is the product's second half (BTC-EUR -> EUR).
 import { addDays, assertIsoDate, type IsoDate } from '@ledgr/core';
 import { decimalText, parseJsonExact, ProviderError, request, type HttpOptions } from '../http';
-import type { DailyBar, PriceProvider, SymbolCheck } from './types';
+import type { DailyBar, LiveQuote, PriceProvider, SymbolCheck } from './types';
 
 const BASE = 'https://api.exchange.coinbase.com/products';
 const CHUNK_DAYS = 290;
@@ -30,6 +30,28 @@ export function createCoinbase(http: HttpOptions): PriceProvider {
         if (start !== to) await http.sleep(250);
       }
       return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+    },
+
+    liveTtlMs: 5 * 60_000,
+
+    async fetchLatest(symbols) {
+      const quotes: LiveQuote[] = [];
+      for (const symbol of symbols) {
+        const currency = quoteCurrency(symbol);
+        const url = `${BASE}/${encodeURIComponent(symbol)}/ticker`;
+        const res = await request(http, 'coinbase', url, { headers: HEADERS }, [404]);
+        if (res.status === 404) {
+          await res.body?.cancel();
+          continue;
+        }
+        const t = parseJsonExact(await res.text()) as { price?: unknown; time?: unknown };
+        const price = decimalText(t?.price);
+        if (!price || typeof t.time !== 'string')
+          throw new ProviderError('coinbase', 'bad_response');
+        const tradingDay = new Date(t.time).toISOString().slice(0, 10); // UTC day
+        quotes.push({ symbol, price, currency, tradingDay, quotedAt: t.time });
+      }
+      return quotes;
     },
 
     async checkSymbol(symbol): Promise<SymbolCheck> {

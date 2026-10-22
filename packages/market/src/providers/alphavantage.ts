@@ -4,7 +4,7 @@
 // Errors arrive as HTTP 200 with an "Error Message", "Note" or "Information" field.
 import { assertIsoDate, daysBetween, type IsoDate } from '@ledgr/core';
 import { decimalText, parseJsonExact, ProviderError, request, type HttpOptions } from '../http';
-import type { DailyBar, PriceProvider, SymbolCheck } from './types';
+import type { DailyBar, LiveQuote, PriceProvider, SymbolCheck } from './types';
 
 const BASE = 'https://www.alphavantage.co/query';
 
@@ -62,6 +62,30 @@ export function createAlphaVantage(
         bars.push({ date, close, currency: null, splitFactor: null });
       }
       return bars.sort((a, b) => (a.date < b.date ? -1 : 1));
+    },
+
+    // 25 calls a day: a few refreshes per Xetra session for a handful of ETFs.
+    liveTtlMs: 3 * 60 * 60_000,
+
+    async fetchLatest(symbols) {
+      const quotes: LiveQuote[] = [];
+      for (const symbol of symbols) {
+        const body = await get({ function: 'GLOBAL_QUOTE', symbol, datatype: 'json' });
+        const q = body['Global Quote'] as Record<string, unknown> | undefined;
+        const price = decimalText(q?.['05. price']);
+        const day = q?.['07. latest trading day'];
+        if (!price || typeof day !== 'string') continue; // {} for an unknown symbol
+        assertIsoDate(day);
+        // Only the trading day is given; its time is the Xetra close (17:30 Berlin).
+        quotes.push({
+          symbol,
+          price,
+          currency: null,
+          tradingDay: day,
+          quotedAt: `${day}T15:30:00Z`,
+        });
+      }
+      return quotes;
     },
 
     async checkSymbol(symbol): Promise<SymbolCheck> {

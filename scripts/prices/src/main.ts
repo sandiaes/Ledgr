@@ -21,7 +21,7 @@ process.exitCode = await run(process.argv.slice(2), {
   openDb: (env) =>
     createRestDb({
       url: env.url,
-      serviceKey: env.serviceRoleKey,
+      apiKey: env.serviceRoleKey,
       userId: env.userId,
       fetch: (u, i) => fetch(u, i),
     }),

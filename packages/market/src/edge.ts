@@ -19,6 +19,8 @@ import { runSnapshots } from './jobs/snapshots';
 import { createProviders } from './providers';
 import { createRestDb } from './rest-db';
 
+export { handleValueNow } from './value-now';
+
 export type EdgeJob = 'fx' | 'prices' | 'snapshots';
 
 export const CRON_SECRET_HEADER = 'x-ledgr-cron-secret';
@@ -120,7 +122,7 @@ export async function handleJob(
   const fetchFn = deps.fetch ?? ((input, init) => fetch(input, init));
   const http = { fetch: fetchFn, sleep: deps.sleep ?? realSleep };
   const ctx: JobContext = {
-    db: createRestDb({ url, serviceKey, userId: userId.toLowerCase(), fetch: fetchFn }),
+    db: createRestDb({ url, apiKey: serviceKey, userId: userId.toLowerCase(), fetch: fetchFn }),
     http,
     providers: createProviders(
       http,
