@@ -84,9 +84,14 @@ Then run `supabase/tests/prices_jobs.sql` and the three earlier test files
 For future imports, the mapping file's `currency` column is now the **listing currency**:
 USD for XNAS/XNYS/XASE, EUR for XETR, crypto and certificados (see `docs/import.md`).
 
-## 3. Create the script's .env
+## 3. Install and create the script's .env
+
+After pulling this branch, install once more: it adds two workspace packages
+(`packages/market`, `scripts/prices`), and without this step `pnpm prices` stops with
+`Cannot find package '@ledgr/market'`.
 
 ```bash
+pnpm install
 cp scripts/prices/.env.example scripts/prices/.env
 notepad scripts/prices/.env
 ```
