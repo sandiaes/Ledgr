@@ -6,9 +6,10 @@
 //   * a price-history export with "Date" and "Price" columns and dates like 10/22/2026
 //     (Investing.com style).
 // "Close" is used (else "Price"), never "Adj Close" (dividend-adjusted). Slash dates are
-// read as month/day or day/month only when the file itself proves which (a part above 12). Rows without a price
-// (dividend or split lines, "-") are skipped and counted. Nothing is guessed: an
-// unreadable date or price, or the same date twice, rejects the file.
+// read as month/day or day/month only when the file itself proves which (a part above
+// 12). Rows without a price (dividend or split lines, "-") are skipped and counted.
+// Nothing is guessed: an unreadable date or price, or the same date twice, rejects the
+// file.
 import { assertIsoDate, dec, type IsoDate } from '@ledgr/core';
 
 export class HistoryFileError extends Error {
