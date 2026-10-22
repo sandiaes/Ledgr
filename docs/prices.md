@@ -84,9 +84,14 @@ Then run `supabase/tests/prices_jobs.sql` and the three earlier test files
 For future imports, the mapping file's `currency` column is now the **listing currency**:
 USD for XNAS/XNYS/XASE, EUR for XETR, crypto and certificados (see `docs/import.md`).
 
-## 3. Create the script's .env
+## 3. Install and create the script's .env
+
+After pulling this branch, install once more: it adds two workspace packages
+(`packages/market`, `scripts/prices`), and without this step `pnpm prices` stops with
+`Cannot find package '@ledgr/market'`.
 
 ```bash
+pnpm install
 cp scripts/prices/.env.example scripts/prices/.env
 notepad scripts/prices/.env
 ```
@@ -101,8 +106,10 @@ notepad scripts/prices/.env
 pnpm prices resolve
 ```
 
-For every asset it asks OpenFIGI which ticker your ISIN has on your exchange (MIC), checks
-it equals the mapping's ticker, and asks the provider to confirm the symbol (Tiingo:
+For every asset it asks OpenFIGI which ticker your ISIN has on your exchange, checks
+it equals the mapping's ticker (US listings are looked up across the US exchanges together,
+because OpenFIGI files Nasdaq stocks under Nasdaq's segment codes rather than XNAS; Xetra by
+its MIC), and asks the provider to confirm the symbol (Tiingo:
 the ticker; Alpha Vantage: `<TICKER>.DEX`, which must be the exact match and quoted in EUR;
 BTCEUR: Coinbase `BTC-EUR`). Nothing is guessed. The console shows counts; the list is in
 `prices-data/reports/<time>-resolve/symbols.csv`:
@@ -111,8 +118,7 @@ BTCEUR: Coinbase `BTC-EUR`). Nothing is guessed. The console shows counts; the l
 - **unchanged** — already set to the same symbol.
 - **unresolved** — the `reason` column says why (ISIN/MIC missing, OpenFIGI lists no or a
   different ticker, provider does not know it, no API key). Fix the asset (Dashboard →
-  Table Editor → `assets`: `isin`, `exchange`) and run again. If a company changed its
-  listing (e.g. a move from NYSE to Nasdaq), correct the `exchange`.
+  Table Editor → `assets`: `isin`, `exchange`) and run again.
 - **skipped** — certificados.
 
 When the list is right:

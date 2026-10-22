@@ -133,11 +133,18 @@ describe('resolveSymbols', () => {
       [
         /openfigi/,
         (_u, init) => {
-          const jobs = JSON.parse(String(init?.body)) as { idValue: string; micCode: string }[];
-          expect(jobs.map((j) => j.micCode)).toEqual(['XNAS', 'XNYS', 'XETR', 'XNAS']);
+          const jobs = JSON.parse(String(init?.body)) as Record<string, string>[];
+          // US listings by the US composite code (Nasdaq is filed under segment MICs)
+          expect(jobs.map((j) => j.exchCode ?? `mic:${j.micCode}`)).toEqual([
+            'US',
+            'US',
+            'mic:XETR',
+            'US',
+          ]);
+          expect(jobs.every((j) => j.idType === 'ID_ISIN')).toBe(true);
           return jsonResponse([
             { data: [{ ticker: 'AAPL' }] },
-            { warning: 'No identifier found.' }, // WMT not listed on XNYS (any more)
+            { warning: 'No identifier found.' }, // an ISIN OpenFIGI does not know
             { data: [{ ticker: 'SXR8' }] },
             { data: [{ ticker: 'MSFT' }] },
           ]);
@@ -168,7 +175,7 @@ describe('resolveSymbols', () => {
       ['e', 'skipped', null],
       ['msft', 'unchanged', 'tiingo:MSFT'],
     ]);
-    expect(out[1]?.reason).toMatch(/no security for ISIN US9311421039 on XNYS/);
+    expect(out[1]?.reason).toMatch(/no security for ISIN US9311421039 on a US exchange/);
     expect(calls.filter((c) => c.url.includes('openfigi'))).toHaveLength(1);
   });
 
