@@ -258,6 +258,15 @@ export async function run(argv: readonly string[], deps: CliDeps): Promise<numbe
     }
     for (const r of runs)
       deps.print(`${r.job}: ${r.status}; ${describeCounts(r.counts)}; issues ${r.issues.length}`);
+    const limited = runs.some((r) =>
+      r.issues.some((i) => i.code === 'rate_limited' || i.status === 429),
+    );
+    if (limited) {
+      deps.print(
+        'A provider limit was reached (Tiingo: 50 calls an hour; Alpha Vantage: 25 a day). ' +
+          'Run the same command again later: price ranges already stored are skipped.',
+      );
+    }
   }
 
   const assets = await db.loadAssets();

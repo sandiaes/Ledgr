@@ -15,13 +15,13 @@ repository folder. Nothing here needs admin rights or Docker.
 | `snapshot-daily` Edge Function | Supabase, 05:40 UTC daily        | snapshots from the 1st of last month to yesterday                                 |
 | `value-now` Edge Function      | Supabase, when the app asks      | the portfolio valued with intraday quotes (see "Value now" below)                 |
 
-| Data                       | Provider                                     | Key      | Free limits                      |
-| -------------------------- | -------------------------------------------- | -------- | -------------------------------- |
-| US stocks (XNAS/XNYS/XASE) | Tiingo (official API)                        | yes      | 50 requests/hour, 1,000/day      |
-| Xetra ETFs (XETR)          | Alpha Vantage (official API), `<TICKER>.DEX` | yes      | 25 requests/day, 5/minute        |
-| BTC in EUR                 | Coinbase Exchange public candles (official)  | no       | generous; 300 days per request   |
-| EUR reference rates        | ECB data API (official)                      | no       | none in practice                 |
-| ISIN → ticker              | OpenFIGI (official, Bloomberg)               | optional | 25 requests/minute without a key |
+| Data                       | Provider                                     | Key      | Free limits                                                                           |
+| -------------------------- | -------------------------------------------- | -------- | ------------------------------------------------------------------------------------- |
+| US stocks (XNAS/XNYS/XASE) | Tiingo (official API)                        | yes      | 50 requests/hour, 1,000/day                                                           |
+| Xetra ETFs (XETR)          | Alpha Vantage (official API), `<TICKER>.DEX` | yes      | 25 requests/day, 5/minute; only the latest 100 trading days (full history is premium) |
+| BTC in EUR                 | Coinbase Exchange public candles (official)  | no       | generous; 300 days per request                                                        |
+| EUR reference rates        | ECB data API (official)                      | no       | none in practice                                                                      |
+| ISIN → ticker              | OpenFIGI (official, Bloomberg)               | optional | 25 requests/minute without a key                                                      |
 
 Certificados de aforro are never fetched: they are valued from `ca_factors` (see
 `docs/assumptions.md` #14 and #25).
@@ -368,19 +368,19 @@ Nothing fails hard: snapshots keep using the last known close and mark the asset
 1. Table Editor → `job_runs`, newest `prices` row: `status` (`partial` = some assets failed)
    and `issues`:
 
-   | Code                             | Meaning / action                                                                   |
-   | -------------------------------- | ---------------------------------------------------------------------------------- |
-   | `http_error` + `status` 401/403  | key wrong, revoked or plan changed: rotate the key                                 |
-   | `http_error` 429, `rate_limited` | limit reached; the next day's run catches up (it resumes from the newest close)    |
-   | `http_error` 5xx / 0             | provider or network down; usually resolves itself                                  |
-   | `unknown_symbol`                 | symbol delisted or renamed: run `pnpm prices resolve` again                        |
-   | `premium_only`, `bad_response`   | the provider changed its API or plan: see "switch provider" below                  |
-   | `currency_mismatch`              | provider quotes another currency than the listing; nothing stored; check the asset |
-   | `stale`                          | newest close older than the limit (holiday, or one of the above)                   |
-   | `split`                          | the provider reports a split: see "Splits" below                                   |
-   | `no_price_source`                | asset has no symbol (`manual`): resolve it                                         |
-   | `no_price_before_first_trade`    | history starts after your first buy (e.g. a SPAC); trade price used until then     |
-   | `missing_fx` (snapshots)         | no ECB rate yet for that day: run `pnpm prices backfill --only fx`                 |
+   | Code                             | Meaning / action                                                                                                                                                 |
+   | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `http_error` + `status` 401/403  | key wrong, revoked or plan changed: rotate the key                                                                                                               |
+   | `http_error` 429, `rate_limited` | limit reached; the next day's run catches up (it resumes from the newest close)                                                                                  |
+   | `http_error` 5xx / 0             | provider or network down; usually resolves itself                                                                                                                |
+   | `unknown_symbol`                 | symbol delisted or renamed: run `pnpm prices resolve` again                                                                                                      |
+   | `premium_only`, `bad_response`   | the provider changed its API or plan: see "switch provider" below (Alpha Vantage's full history is premium: the backfill then takes the latest 100 trading days) |
+   | `currency_mismatch`              | provider quotes another currency than the listing; nothing stored; check the asset                                                                               |
+   | `stale`                          | newest close older than the limit (holiday, or one of the above)                                                                                                 |
+   | `split`                          | the provider reports a split: see "Splits" below                                                                                                                 |
+   | `no_price_source`                | asset has no symbol (`manual`): resolve it                                                                                                                       |
+   | `no_price_before_first_trade`    | history starts after your first buy (e.g. a SPAC); trade price used until then                                                                                   |
+   | `missing_fx` (snapshots)         | no ECB rate yet for that day: run `pnpm prices backfill --only fx`                                                                                               |
 
 2. **Switch provider** (if one disappears or turns paid): add an adapter in
    `packages/market/src/providers/` implementing `PriceProvider` (`fetchDaily`,

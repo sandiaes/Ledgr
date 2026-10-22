@@ -68,6 +68,17 @@ describe('Alpha Vantage', () => {
     expect(calls[1]?.url).toContain('outputsize=full');
   });
 
+  it('falls back to the latest 100 days when the full history is premium', async () => {
+    const { fetch, calls } = fakeFetch([
+      [/outputsize=full/, () => jsonResponse({ Information: 'This is a premium endpoint.' })],
+      [/outputsize=compact/, () => jsonResponse(series)],
+    ]);
+    const av = createAlphaVantage({ fetch, sleep: noSleep }, 'K', () => '2024-01-10');
+    const bars = await av.fetchDaily('SXR8.DEX', '2021-01-01', '2024-01-05');
+    expect(bars.map((b) => b.date)).toEqual(['2023-12-29', '2024-01-02', '2024-01-03']);
+    expect(calls.map((c) => /outputsize=(\w+)/.exec(c.url)?.[1])).toEqual(['full', 'compact']);
+  });
+
   it('turns 200-with-a-message answers into provider errors', async () => {
     const answers = [
       { 'Error Message': 'Invalid API call.' },
