@@ -15,3 +15,7 @@ supabase/.temp/
 
 # Real import data and reports: never commit
 import-data/
+
+# Generated Edge Function bundle (pnpm functions:build) and price-script data/reports
+supabase/functions/_shared/ledgr-jobs.js
+prices-data/

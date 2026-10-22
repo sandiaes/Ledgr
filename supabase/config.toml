@@ -1,2 +1,19 @@
 # Supabase local config placeholder. Run `supabase init` to expand if/when needed.
 project_id = "ledgr"
+
+# The daily jobs authenticate with the x-ledgr-cron-secret header inside the handler, not
+# with a JWT (the anon key is public, so a JWT check would prove nothing). Deploy them with
+# --no-verify-jwt as well; see docs/prices.md.
+[functions.fx-daily]
+verify_jwt = false
+
+[functions.prices-daily]
+verify_jwt = false
+
+[functions.snapshot-daily]
+verify_jwt = false
+
+# Called by the app with the owner's session; the handler verifies it with Supabase Auth
+# (aal2 and LEDGR_USER_ID required) instead of the gateway.
+[functions.value-now]
+verify_jwt = false

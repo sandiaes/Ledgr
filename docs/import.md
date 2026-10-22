@@ -81,8 +81,8 @@ cp fixtures/asset_mapping.csv import-data/asset_mapping.csv
 ```
 
 One row per ticker: `ticker, asset_type, name, isin, exchange, currency, price_symbol,
-type_override`. `asset_type` and `currency` are pre-filled from the data. The importer
-refuses to run until every row it needs is complete:
+type_override`. `asset_type` is pre-filled from the data. The importer refuses to run until
+every row it needs is complete:
 
 - Every cell except `type_override` must be filled. Write `-` for "none, on purpose"
   (e.g. no ISIN for bitcoin). A blank cell is never read as "none".
@@ -90,8 +90,15 @@ refuses to run until every row it needs is complete:
   with two types, set `type_override` to the right one (SXR8 in your data: `etf`).
 - `isin`: copy it from your broker (Degiro shows it per product). Its check digit is
   verified. Never guess one; leave `-` if you do not know.
-- `currency`: `EUR`. Other currencies are refused: the spreadsheet has no FX rates.
-- `price_symbol`: `provider:symbol`, e.g. `yahoo:VWCE.DE`, or `-` for none yet.
+- `exchange`: the listing's MIC: `XNAS` (Nasdaq), `XNYS` (NYSE), `XASE` (NYSE American),
+  `XETR` (Xetra); `-` for crypto and certificados.
+- `currency`: the **listing currency**, which must match the exchange: `USD` for XNAS, XNYS
+  and XASE, `EUR` for XETR, crypto (BTCEUR) and certificados. Your orders are still
+  imported as EUR at fx 1 (the spreadsheet has no FX rates); this column only tells the
+  price fetcher what currency the market quotes.
+- `price_symbol`: `-` for now; `pnpm prices resolve` fills it from the ISIN and exchange
+  (see `docs/prices.md`). A value you write must be `provider:symbol`, e.g.
+  `tiingo:AAPL`.
 
 If your real file has tickers the fixture does not, the dry run lists them and writes
 `asset_mapping.missing.csv` in the report folder with the rows to add.

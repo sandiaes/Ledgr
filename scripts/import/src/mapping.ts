@@ -1,7 +1,7 @@
 // The asset mapping file: one row per ticker. Every cell except type_override must be
 // filled; '-' means "none, on purpose". Nothing in it is ever guessed by the importer.
-import type { AssetType } from '@ledgr/core';
-import { ASSET_TYPES, ORDER_CURRENCY } from './config';
+import { listingCurrencyForMic, type AssetType } from '@ledgr/core';
+import { ASSET_TYPES, LISTING_CURRENCIES } from './config';
 import type { MappingRecord } from './inputs';
 
 export interface AssetMapping {
@@ -14,6 +14,7 @@ export interface AssetMapping {
   name: string;
   isin: string | null;
   exchange: string | null;
+  /** Listing currency (what the price provider quotes); orders are still EUR at fx 1. */
   currency: string;
   priceSource: string;
   priceSourceId: string | null;
@@ -94,11 +95,20 @@ export function buildMapping(records: readonly MappingRecord[]): Map<string, Ass
     }
     const exchange = blank(r.exchange, 'exchange') ? null : r.exchange;
 
+    // The listing currency, which follows from the exchange. Orders stay EUR at fx 1.
     if (r.currency === '') problems.push('currency is blank');
-    else if (r.currency !== ORDER_CURRENCY) {
+    else if (!(LISTING_CURRENCIES as readonly string[]).includes(r.currency)) {
       problems.push(
-        `currency ${r.currency} is not supported: orders are imported as EUR at fx 1 (no FX rates)`,
+        `currency ${r.currency} is not supported: use the listing currency, ${LISTING_CURRENCIES.join(' or ')}`,
       );
+    } else {
+      // No exchange (crypto quoted in EUR, certificados): EUR.
+      const expected = exchange ? listingCurrencyForMic(exchange) : 'EUR';
+      if (expected && r.currency !== expected) {
+        problems.push(
+          `currency ${r.currency} does not match exchange ${exchange ?? '-'}: listings there quote in ${expected}`,
+        );
+      }
     }
 
     let priceSource = assetType === 'certificado_aforro' ? 'ca_factors' : 'manual';

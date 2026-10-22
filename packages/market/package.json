@@ -1,0 +1,15 @@
+{
+  "name": "@ledgr/market",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Price/FX providers, the daily jobs and the Edge Function handler. Runs in Node (local scripts) and Deno (bundled into supabase/functions). No Node APIs.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ledgr/core": "workspace:*"
+  }
+}

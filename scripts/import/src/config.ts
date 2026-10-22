@@ -30,6 +30,9 @@ export type TransactType = (typeof TRANSACT_TYPES)[number];
 /** Every order is EUR at fx 1: the spreadsheet has no currency or fx columns. */
 export const ORDER_CURRENCY = 'EUR';
 
+/** Listing currencies accepted in the mapping file (assets.trading_currency). */
+export const LISTING_CURRENCIES = ['EUR', 'USD'] as const;
+
 /** CA units are euros subscribed at 1 EUR per unit. */
 export const CA_UNIT_PRICE = '1';
 
