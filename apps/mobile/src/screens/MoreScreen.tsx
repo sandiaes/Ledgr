@@ -1,7 +1,8 @@
 import Constants from 'expo-constants';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useGate } from '../auth/AuthGate';
+import { useRootNavigation } from '../navigation';
 import { useServices, type SecurityLevel } from '../services';
 import { LOCK_TIMEOUTS, type LockTimeout } from '../settings/settings';
 import { useSettings } from '../settings/SettingsProvider';
@@ -27,9 +28,19 @@ const TIMEOUT_LABELS: Record<LockTimeout, string> = {
   15: '15 min',
 };
 
-/** Settings, sign out and the app version (the rest of More comes in slice 5c). */
+function Link(props: { label: string; onPress(): void }) {
+  return (
+    <Pressable onPress={props.onPress} accessibilityRole="link" style={styles.row}>
+      <Text style={[styles.label, styles.rowText]}>{props.label}</Text>
+      <Text style={styles.chevron}>›</Text>
+    </Pressable>
+  );
+}
+
+/** Portfolio screens, settings, sign out and the app version (the rest comes in slice 5c). */
 export function MoreScreen() {
   const { device, projectRef } = useServices();
+  const navigation = useRootNavigation();
   const { signOut } = useGate();
   const { settings, update } = useSettings();
   const [level, setLevel] = useState<SecurityLevel | null>(null);
@@ -44,6 +55,11 @@ export function MoreScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
+      <Card title="Portfolio">
+        <Link label="Allocation" onPress={() => navigation.navigate('Allocation')} />
+        <Link label="Performance" onPress={() => navigation.navigate('Performance')} />
+        <Link label="Closed positions" onPress={() => navigation.navigate('ClosedPositions')} />
+      </Card>
       <Card title="Security">
         <Row
           label="App lock"
@@ -104,5 +120,6 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   label: { fontSize: 15, color: colors.text },
   hint: { fontSize: 12, color: colors.muted, marginTop: 2, marginBottom: space.xs },
+  chevron: { fontSize: 20, color: colors.muted },
   footer: { textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: space.md },
 });

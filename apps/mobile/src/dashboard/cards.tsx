@@ -13,6 +13,8 @@ import { SERIES_RANGES } from '@ledgr/core';
 import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDate } from '../format';
+import { useRootNavigation } from '../navigation';
+import { typeLabel } from '../ui/labels';
 import { Money, Pct } from '../ui/Money';
 import { Banner, Card, Segmented } from '../ui/parts';
 import { colors, space } from '../ui/theme';
@@ -170,6 +172,7 @@ function Failed({ why }: { why: string }) {
 
 export function ReturnsCard({ returns }: { returns: readonly PeriodReturn[] }) {
   const [period, setPeriod] = useState<ReturnPeriod>('sinceStart');
+  const navigation = useRootNavigation();
   const r = returns.find((x) => x.period === period);
   return (
     <Card title="Returns">
@@ -191,6 +194,7 @@ export function ReturnsCard({ returns }: { returns: readonly PeriodReturn[] }) {
           ) : null}
         </>
       ) : null}
+      <More label="Monthly and yearly returns" onPress={() => navigation.navigate('Performance')} />
     </Card>
   );
 }
@@ -220,14 +224,17 @@ export function ChartCard({ view }: { view: DashboardView }) {
   );
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  stock: 'Stocks',
-  etf: 'ETFs',
-  crypto: 'Crypto',
-  certificado_aforro: 'Certificados',
-};
+/** A "see more" link at the bottom of a card. */
+function More(props: { label: string; onPress(): void }) {
+  return (
+    <Pressable onPress={props.onPress} accessibilityRole="link" style={styles.more}>
+      <Text style={styles.moreText}>{props.label} ›</Text>
+    </Pressable>
+  );
+}
 
 export function AllocationCard({ view }: { view: DashboardView }) {
+  const navigation = useRootNavigation();
   if (view.allocation.length === 0) return null;
   return (
     <Card title="Allocation by type">
@@ -237,13 +244,17 @@ export function AllocationCard({ view }: { view: DashboardView }) {
           {view.allocation.map((s) => (
             <View key={s.key} style={styles.legendRow}>
               <Text style={[styles.dot, { color: typeColor(s.key) }]}>●</Text>
-              <Text style={styles.legendLabel}>{TYPE_LABELS[s.key] ?? s.key}</Text>
+              <Text style={styles.legendLabel}>{typeLabel(s.key)}</Text>
               <Pct value={s.weight} style={styles.legendPct} />
               <Money value={s.valueEur} style={styles.small} />
             </View>
           ))}
         </View>
       </View>
+      <More
+        label="By broker, currency and asset"
+        onPress={() => navigation.navigate('Allocation')}
+      />
     </Card>
   );
 }
@@ -251,9 +262,15 @@ export function AllocationCard({ view }: { view: DashboardView }) {
 export function MoversCard({ view, assets }: { view: DashboardView; assets: AssetNames }) {
   const [span, setSpan] = useState<'day' | 'total'>('day');
   const [by, setBy] = useState<'eur' | 'pct'>('eur');
+  const navigation = useRootNavigation();
   const lists = view.movers[by][span];
   const row = (m: Mover) => (
-    <View key={m.assetId} style={styles.mover}>
+    <Pressable
+      key={m.assetId}
+      style={styles.mover}
+      onPress={() => navigation.navigate('PositionDetail', { assetId: m.assetId })}
+      accessibilityRole="button"
+    >
       <View style={styles.moverName}>
         <Text style={styles.ticker}>{label(assets, m.assetId)}</Text>
         <Text style={styles.small} numberOfLines={1}>
@@ -266,7 +283,7 @@ export function MoversCard({ view, assets }: { view: DashboardView; assets: Asse
       ) : (
         <Pct value={m.changePct} sign colored style={styles.moverPct} />
       )}
-    </View>
+    </Pressable>
   );
   const none = lists.up.length === 0 && lists.down.length === 0;
   return (
@@ -345,4 +362,6 @@ const styles = StyleSheet.create({
   moverName: { flex: 1 },
   ticker: { fontSize: 14, fontWeight: '600', color: colors.text },
   moverPct: { minWidth: 64, textAlign: 'right', fontSize: 13 },
+  more: { marginTop: space.sm, alignSelf: 'flex-end' },
+  moreText: { color: colors.accent, fontSize: 13 },
 });

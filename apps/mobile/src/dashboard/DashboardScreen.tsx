@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useDashboard } from '../data/useDashboard';
+import { useDashboard } from '../data/usePortfolio';
 import { formatDate, formatTime } from '../format';
 import { Money } from '../ui/Money';
 import { Banner, Card } from '../ui/parts';

@@ -53,6 +53,13 @@ describe('public API', () => {
       'reconcile',
       'buildDashboard',
       'thinSeries',
+      'rangeStart',
+      'positionDetail',
+      'assetTransactions',
+      'priceSeries',
+      'buildPositions',
+      'buildAllocation',
+      'buildPerformance',
       'twrSteps',
     ]) {
       expect(core, name).toHaveProperty(name);

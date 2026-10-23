@@ -37,6 +37,16 @@ export function Segmented<T extends string>(props: {
   );
 }
 
+/** A label on the left, figures on the right. */
+export function Line(props: { label: string; children: ReactNode; strong?: boolean }) {
+  return (
+    <View style={styles.line}>
+      <Text style={[styles.lineLabel, props.strong && styles.lineStrong]}>{props.label}</Text>
+      <View style={styles.lineFigures}>{props.children}</View>
+    </View>
+  );
+}
+
 export function Banner(props: { tone: 'warning' | 'error'; children: ReactNode }) {
   return (
     <View style={[styles.banner, props.tone === 'error' ? styles.bannerError : null]}>
@@ -105,4 +115,13 @@ export const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   buttonTextPlain: { color: colors.accent },
   disabled: { opacity: 0.5 },
+  line: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    paddingVertical: 3,
+  },
+  lineLabel: { color: colors.text, fontSize: 14, flexShrink: 1, marginRight: space.sm },
+  lineStrong: { fontWeight: '700' },
+  lineFigures: { flexDirection: 'row', gap: 4, alignItems: 'baseline', flexWrap: 'wrap' },
 });

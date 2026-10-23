@@ -49,6 +49,8 @@ Paths are relative to `packages/core/src/` unless stated.
 | 32  | Top positions and movers    | unverified         |
 | 33  | Closed positions            | unverified         |
 | 34  | Units that can be sold      | unverified         |
+| 35  | Positions and brokers       | unverified         |
+| 36  | Position price chart        | unverified         |
 
 "Out of scope (tax)" means: **out of scope: tax reports will come from importing broker
 report exports, not from this ledger.** These items describe how the performance numbers
@@ -550,3 +552,33 @@ final check is `runFifo` over the ledger with the new row.
 
 - Status: unverified
 - Implemented in: `validation.ts` (`unitsHeld`, `maxDisposable`).
+
+### 35. Positions and brokers
+
+A position is one asset over all accounts: units, cost basis (open lots), average cost =
+cost ÷ units, value, weight = value ÷ V(T), unrealized € and %, realized (every disposal of
+the asset, all accounts), income (dividends booked on it) and day change D_a (#29). Its
+split by broker has one line per account holding units or with a disposal of it; units,
+cost, value, unrealized and realized add up exactly to the position. A broker's rows are
+its own units of each position (no day change: it is per asset). A broker's figures are
+#1's per-account sums, and the brokers add up exactly, field by field, to the portfolio's
+value, cost, R, U, I, C and G; the app shows the brokers' total next to the cards and a
+warning if it ever differs. A certificado row shows its units, value and factor (the same
+for every held subscription, else per subscription in the detail) with the oldest factor
+month. Stale and "price pending" badges come from the snapshot valuation flags (#25).
+
+- Status: unverified
+- Implemented in: `positions.ts` (`positionDetail`, `assetTransactions`), `views.ts`
+  (`buildPositions`).
+
+### 36. Position price chart
+
+One asset's closes from its whole stored history, split-adjusted (#23), in its listing
+currency (rows in another currency are left out), with today's quote when today has no
+close (#28). A range starts at the latest close on or before its first day (1M, 3M, YTD,
+1Y as in #30's chart ranges; All at the first close), and the change shown is last close −
+first close and its %. Long ranges are thinned for drawing only.
+
+- Status: unverified
+- Implemented in: `positions.ts` (`priceSeries`), `returns.ts` (`rangeStart`), `series.ts`
+  (`thinSeries`).

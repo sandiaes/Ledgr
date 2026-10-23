@@ -280,7 +280,8 @@ exceeds 35 days**. Factor update screen: change vs last month = new − previous
 
 ## 10. Where each KPI is computed
 
-Built in slice 5a-core (2026-10-23); the apps call these and only format the result.
+Built in slices 5a-core and 5b (2026-10-23); the apps call these and only format the
+result.
 
 | KPI                                         | `packages/core` function (file)                               |
 | ------------------------------------------- | ------------------------------------------------------------- |
@@ -295,5 +296,8 @@ Built in slice 5a-core (2026-10-23); the apps call these and only format the res
 | Allocation, top 5 / 10 (§6)                 | `allocation`, `concentration` (`allocation.ts`)               |
 | Top positions, top movers (§6, §7)          | `topPositions`, `topMovers` (`movers.ts`)                     |
 | Closed positions (§8)                       | `closedPositions` (`closed.ts`)                               |
+| Position, split by broker, open lots (§8)   | `positionDetail` (`positions.ts`)                             |
+| Position price chart, asset transactions    | `priceSeries`, `assetTransactions` (`positions.ts`)           |
+| Positions, Allocation, Performance screens  | `buildPositions`, `buildAllocation`, `buildPerformance`       |
 | Units held, most that can be sold on a date | `unitsHeld`, `maxDisposable` (`validation.ts`)                |
 | Certificado subscription, factor age (§8)   | `certificadoSubscriptions` (`certificados.ts`)                |

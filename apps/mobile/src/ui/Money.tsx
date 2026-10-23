@@ -1,6 +1,6 @@
 import type { Decimal } from '@ledgr/core';
 import { Text, type StyleProp, type TextStyle } from 'react-native';
-import { formatEur, formatPct } from '../format';
+import { formatAmount, formatEur, formatPct, formatUnits } from '../format';
 import { useHideValues } from '../settings/SettingsProvider';
 import { colors } from './theme';
 
@@ -31,6 +31,39 @@ export function Money(props: {
   const color = props.colored && !hidden ? tone(props.value) : undefined;
   return (
     <Text style={[props.style, color ? { color } : null]} testID="money">
+      {text}
+    </Text>
+  );
+}
+
+/** A price, unit cost or factor in its currency: masked like every amount. */
+export function Amount(props: {
+  value: Decimal | null;
+  currency: string;
+  /** Decimals (default 2; certificado factors use 5). */
+  dp?: number;
+  sign?: boolean;
+  style?: StyleProp<TextStyle>;
+}) {
+  const [hidden] = useHideValues();
+  const text = hidden
+    ? MASK
+    : props.value === null
+      ? '—'
+      : formatAmount(props.value, props.currency, { dp: props.dp, sign: props.sign });
+  return (
+    <Text style={props.style} testID="money">
+      {text}
+    </Text>
+  );
+}
+
+/** A number of units (shares, coins, certificado units): masked like every amount. */
+export function Units(props: { value: Decimal | null; style?: StyleProp<TextStyle> }) {
+  const [hidden] = useHideValues();
+  const text = hidden ? MASK : props.value === null ? '—' : formatUnits(props.value);
+  return (
+    <Text style={props.style} testID="units">
       {text}
     </Text>
   );

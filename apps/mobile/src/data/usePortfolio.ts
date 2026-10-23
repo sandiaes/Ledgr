@@ -2,13 +2,14 @@ import {
   buildDashboard,
   holdingPeriods,
   localDate,
-  type Dashboard,
   type IsoDate,
+  type PortfolioInput,
+  type StoredPriceRow,
 } from '@ledgr/core';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { errorCode } from '../auth/errors';
-import { useServices, type Ledger } from '../services';
+import { useServices, type Ledger, type Market } from '../services';
 
 export const TIME_ZONE = 'Europe/Lisbon';
 const MINUTE = 60_000;
@@ -22,24 +23,32 @@ function pricedHoldings(ledger: Ledger, today: IsoDate): string[] {
     .sort();
 }
 
-export type DashboardState =
+export type PortfolioState<V> =
   | { status: 'loading' }
   | { status: 'error'; code: string }
   | {
       status: 'ready';
-      view: Dashboard;
+      view: V;
       ledger: Ledger;
+      market: Market;
       /** When the prices were read: the "as of" time. */
       asOf: number;
       /** value-now did not answer: valued with the cached quotes and closes. */
       liveUnavailable: boolean;
     };
 
+export type PortfolioResult<V> = PortfolioState<V> & {
+  refreshing: boolean;
+  refresh(): Promise<void>;
+};
+
 /**
- * The Dashboard's data (docs/app-plan.md §5): value-now first (it refreshes the quotes),
- * the ledger and snapshots in parallel, then prices; core does all the arithmetic.
+ * The fetched rows turned into one screen's view by a core builder (docs/app-plan.md §5):
+ * value-now first (it refreshes the quotes), the ledger and snapshots in parallel, then
+ * prices. Every screen shares the same cached queries; core does all the arithmetic.
+ * `build` must be a stable function (a core builder).
  */
-export function useDashboard(): DashboardState & { refreshing: boolean; refresh(): Promise<void> } {
+export function usePortfolio<V>(build: (input: PortfolioInput) => V): PortfolioResult<V> {
   const { data: api } = useServices();
   const today = localDate(new Date(), TIME_ZONE);
 
@@ -74,7 +83,7 @@ export function useDashboard(): DashboardState & { refreshing: boolean; refresh(
     try {
       const reference = valueNow.data ?? null;
       return {
-        view: buildDashboard({
+        view: build({
           today,
           transactions: ledger.data.transactions,
           assets: ledger.data.assets,
@@ -89,7 +98,7 @@ export function useDashboard(): DashboardState & { refreshing: boolean; refresh(
     } catch (e) {
       return { error: errorCode(e) };
     }
-  }, [today, ledger.data, snapshots.data, market.data, valueNow.data, valueNow.isFetched]);
+  }, [build, today, ledger.data, snapshots.data, market.data, valueNow.data, valueNow.isFetched]);
 
   const refresh = useCallback(async () => {
     await valueNow.refetch();
@@ -99,18 +108,32 @@ export function useDashboard(): DashboardState & { refreshing: boolean; refresh(
   const refreshing = valueNow.isRefetching || ledger.isRefetching || market.isRefetching;
 
   const failed = [ledger, snapshots, market].find((q) => q.isError);
-  let state: DashboardState;
+  let state: PortfolioState<V>;
   if (failed) state = { status: 'error', code: errorCode(failed.error) };
   else if (computed && 'error' in computed)
     state = { status: 'error', code: computed.error as string };
-  else if (computed && ledger.data)
+  else if (computed && ledger.data && market.data)
     state = {
       status: 'ready',
-      view: computed.view,
+      view: computed.view as V,
       ledger: ledger.data,
+      market: market.data,
       asOf: market.dataUpdatedAt,
       liveUnavailable: valueNow.isError || valueNow.data === null,
     };
   else state = { status: 'loading' };
   return { ...state, refreshing, refresh };
+}
+
+export const useDashboard = () => usePortfolio(buildDashboard);
+
+/** One asset's whole price history, fetched (paginated) when its chart opens. */
+export function usePriceHistory(assetId: string, enabled: boolean) {
+  const { data: api } = useServices();
+  return useQuery<StoredPriceRow[]>({
+    queryKey: ['prices', assetId],
+    queryFn: () => api.priceHistory(assetId),
+    enabled,
+    staleTime: 60 * MINUTE,
+  });
 }

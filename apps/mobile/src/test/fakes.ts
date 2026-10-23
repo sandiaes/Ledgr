@@ -1,6 +1,6 @@
 // Test doubles for the services behind the screens. Not part of the app bundle.
 import type { AssetRecord } from '@ledgr/client';
-import { dec, type Transaction } from '@ledgr/core';
+import { dec, type StoredPriceRow, type Transaction } from '@ledgr/core';
 import type { DataApi, Ledger, Market, Services } from '../services';
 import type { Settings } from '../settings/settings';
 
@@ -106,6 +106,7 @@ export function sampleLedger(today: string): { ledger: Ledger; market: Market } 
     ledger: {
       transactions: [buy('t1', '2025-01-02', 'vwce', '10', '123.456')],
       assets: [asset('vwce', 'VWCE', 'Vanguard FTSE All-World')],
+      accounts: [{ id: 'degiro', name: 'Degiro' }],
       ca: { subscriptions: [], factors: [] },
     },
     market: {
@@ -116,12 +117,158 @@ export function sampleLedger(today: string): { ledger: Ledger; market: Market } 
   };
 }
 
-export function fakeData(fixture: { ledger: Ledger; market: Market }): jest.Mocked<DataApi> {
+export function fakeData(fixture: {
+  ledger: Ledger;
+  market: Market;
+  history?: StoredPriceRow[];
+}): jest.Mocked<DataApi> {
   return {
     ledger: jest.fn(async () => fixture.ledger),
     market: jest.fn<Promise<Market>, [string, readonly string[]]>(async () => fixture.market),
     snapshots: jest.fn(async () => []),
+    priceHistory: jest.fn(async (id: string) =>
+      (fixture.history ?? fixture.market.prices).filter((p) => p.assetId === id),
+    ),
     valueNow: jest.fn(async () => null),
+  };
+}
+
+const daysBefore = (today: string, n: number) => {
+  const t = new Date(`${today}T00:00:00Z`);
+  t.setUTCDate(t.getUTCDate() - n);
+  return t.toISOString().slice(0, 10);
+};
+
+const trade = (
+  type: 'buy' | 'sell' | 'subscription',
+  id: string,
+  date: string,
+  accountId: string,
+  assetId: string,
+  qty: string,
+  price: string,
+  fx = '1',
+): Transaction => ({
+  id,
+  accountId,
+  assetId,
+  type,
+  tradeDate: date,
+  quantity: dec(qty),
+  unitPrice: dec(price),
+  amount: null,
+  fees: dec('0'),
+  currency: fx === '1' ? 'EUR' : 'USD',
+  fxRateToEur: dec(fx),
+});
+
+const cash = (
+  type: 'dividend' | 'fee',
+  id: string,
+  date: string,
+  accountId: string,
+  assetId: string | null,
+  amount: string,
+): Transaction => ({
+  id,
+  accountId,
+  assetId,
+  type,
+  tradeDate: date,
+  quantity: null,
+  unitPrice: null,
+  amount: dec(amount),
+  fees: dec('0'),
+  currency: 'EUR',
+  fxRateToEur: dec('1'),
+});
+
+/**
+ * Four open positions at three brokers and one closed, by hand (EUR):
+ *   VWCE  Degiro 10 @ 100, IBKR 5 @ 120; 140 yesterday, 150 now -> 2,250
+ *         (Degiro 1,500, IBKR 750), U +650, day +150 (+7.14%); dividend 12 at Degiro.
+ *   AAPL  IBKR 4 @ 150 USD (fx 0.9, cost 540); 200 USD at 0.92 -> 736, U +196, day 0.
+ *   BTC   Degiro 0.1 @ 30,000; last close 25,000 ten days ago (stale) -> 2,500, U −500.
+ *   CA    AforroNet 1,000 units @ 1, factor 1.10482 (recent) -> 1,104.82, U +104.82.
+ *   MSFT  IBKR 2 @ 300 USD, sold 2 @ 350 (fx 0.9): closed, realized +90. Fee 5 at IBKR.
+ *   V 6,590.82; brokers Degiro 4,000, IBKR 1,486, AforroNet 1,104.82.
+ *   G 547.82 = Degiro 12 + IBKR 431 + AforroNet 104.82.
+ */
+export function portfolioLedger(today: string): {
+  ledger: Ledger;
+  market: Market;
+  history: StoredPriceRow[];
+} {
+  const y = daysBefore(today, 1);
+  const close = (assetId: string, date: string, value: string, currency = 'EUR') => ({
+    assetId,
+    date,
+    close: dec(value),
+    currency,
+    splitFactor: null,
+  });
+  return {
+    ledger: {
+      transactions: [
+        trade('buy', 'v1', '2025-01-02', 'degiro', 'vwce', '10', '100'),
+        trade('subscription', 'ca-sub', '2025-01-15', 'aforronet', 'ca', '1000', '1'),
+        trade('buy', 'm1', '2025-02-03', 'ibkr', 'msft', '2', '300', '0.9'),
+        trade('buy', 'a1', '2025-03-03', 'ibkr', 'aapl', '4', '150', '0.9'),
+        trade('buy', 'v2', '2025-04-01', 'ibkr', 'vwce', '5', '120'),
+        trade('buy', 'b1', '2025-05-02', 'degiro', 'btc', '0.1', '30000'),
+        trade('sell', 'm2', '2025-06-02', 'ibkr', 'msft', '2', '350', '0.9'),
+        cash('dividend', 'd1', '2025-06-20', 'degiro', 'vwce', '12'),
+        cash('fee', 'f1', '2025-07-01', 'ibkr', null, '5'),
+      ],
+      assets: [
+        { ...asset('vwce', 'VWCE', 'Vanguard FTSE All-World'), isin: 'IE00BK5BQT80' },
+        {
+          ...asset('aapl', 'AAPL', 'Apple Inc.'),
+          assetType: 'stock',
+          exchange: 'XNAS',
+          tradingCurrency: 'USD',
+        },
+        {
+          ...asset('msft', 'MSFT', 'Microsoft'),
+          assetType: 'stock',
+          exchange: 'XNAS',
+          tradingCurrency: 'USD',
+        },
+        { ...asset('btc', 'BTC', 'Bitcoin'), assetType: 'crypto', exchange: null },
+        {
+          ...asset('ca', '', 'Certificados de Aforro E'),
+          ticker: null,
+          assetType: 'certificado_aforro',
+          exchange: null,
+        },
+      ],
+      accounts: [
+        { id: 'degiro', name: 'Degiro' },
+        { id: 'ibkr', name: 'IBKR' },
+        { id: 'aforronet', name: 'AforroNet' },
+      ],
+      ca: {
+        subscriptions: [{ id: 's1', seriesId: 'E', transactionId: 'ca-sub' }],
+        // In force yesterday and today, and at most 35 days old (not stale).
+        factors: [
+          {
+            subscriptionId: 's1',
+            month: `${daysBefore(today, 2).slice(0, 7)}-01`,
+            factor: dec('1.10482'),
+          },
+        ],
+      },
+    },
+    market: {
+      prices: [
+        close('vwce', y, '140'),
+        close('aapl', y, '200', 'USD'),
+        close('btc', daysBefore(today, 10), '25000'),
+      ],
+      fx: [{ currency: 'USD', date: y, rateToEur: dec('0.92') }],
+      liveQuotes: [{ assetId: 'vwce', date: today, close: dec('150'), currency: 'EUR' }],
+    },
+    history: [close('vwce', '2025-01-02', '100'), close('vwce', y, '140')],
   };
 }
 

@@ -3,7 +3,7 @@ import { localDate } from '@ledgr/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { AppRoot } from '../AppRoot';
 import { createSupabaseData } from '../data/supabaseData';
-import { TIME_ZONE } from '../data/useDashboard';
+import { TIME_ZONE } from '../data/usePortfolio';
 import { fakeAuth, fakeData, fakeServices, sampleLedger, token } from '../test/fakes';
 
 jest.mock('../dashboard/ValueChart', () => ({ ValueChart: () => null }));
@@ -110,6 +110,7 @@ describe('the data layer', () => {
     await expect(api.ledger()).rejects.toBeInstanceOf(MfaRequiredError);
     await expect(api.snapshots()).rejects.toBeInstanceOf(MfaRequiredError);
     await expect(api.market(today, [])).rejects.toBeInstanceOf(MfaRequiredError);
+    await expect(api.priceHistory('vwce')).rejects.toBeInstanceOf(MfaRequiredError);
     await expect(api.valueNow()).rejects.toBeInstanceOf(MfaRequiredError);
     expect(ran).toEqual([]);
     expect(
@@ -121,7 +122,13 @@ describe('the data layer', () => {
     const { client, ran } = fakeClient('aal2');
     await createSupabaseData(client).ledger();
     await waitFor(() =>
-      expect([...ran].sort()).toEqual(['assets', 'ca_factors', 'ca_subscriptions', 'transactions']),
+      expect([...ran].sort()).toEqual([
+        'accounts',
+        'assets',
+        'ca_factors',
+        'ca_subscriptions',
+        'transactions',
+      ]),
     );
   });
 });
