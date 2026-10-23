@@ -49,10 +49,26 @@ export function netInvestedEur(transactions: readonly Transaction[], asOf?: IsoD
   return net;
 }
 
+/** Net income of a dividend or interest row (amount - withholding - fees); 0 for others. */
+export function rowIncomeNetEur(tx: Transaction): Decimal {
+  if (tx.type !== 'dividend' && tx.type !== 'interest') return ZERO;
+  return amountEur(tx).minus(withholdingTaxEur(tx)).minus(feesEur(tx));
+}
+
+/**
+ * Other cost of a row: a fee row's amount + fees, a transfer's fee; 0 for others. Deposits
+ * and withdrawals change no figure, their fees included (assumption #19, D5).
+ */
+export function rowOtherCostEur(tx: Transaction): Decimal {
+  if (tx.type === 'fee') return amountEur(tx).plus(feesEur(tx));
+  if (tx.type === 'transfer') return feesEur(tx);
+  return ZERO;
+}
+
 export interface GainsSummary {
   /**
-   * Sum of disposal gains (pooled FIFO, fees in cost and proceeds). A performance metric,
-   * not a tax figure.
+   * Sum of disposal gains (FIFO per account, fees in cost and proceeds). A performance
+   * metric, not a tax figure.
    */
   realizedEur: Decimal;
   /** Market value - cost basis of open positions. */
@@ -61,11 +77,14 @@ export interface GainsSummary {
   totalGainEur: Decimal;
   /** Dividends + interest, net of withholding tax and fees on those rows. */
   incomeNetEur: Decimal;
-  /** Standalone fee rows plus fees on deposits, withdrawals and transfers. */
+  /**
+   * Standalone fee rows plus fees on transfers. Deposits and withdrawals (and their fees)
+   * change no figure: cash is not tracked (assumption #19, decision D5).
+   */
   otherCostsEur: Decimal;
   /**
-   * totalGain + incomeNet - otherCosts. Equals holdings value + cash - net contributions
-   * (cash as computed by cashBalanceEur, whether or not it is tracked in snapshots).
+   * Total gain G = realized + unrealized + incomeNet - otherCosts (decision D1). Equals the
+   * holdings' value minus the sum of the day flows F(d) (`dailyFlows`).
    */
   totalReturnEur: Decimal;
 }
@@ -87,16 +106,8 @@ export function gainsSummary(input: {
   let incomeNetEur = ZERO;
   let otherCostsEur = ZERO;
   for (const tx of prepareLedger(transactions, asOf)) {
-    if (tx.type === 'dividend' || tx.type === 'interest') {
-      incomeNetEur = incomeNetEur
-        .plus(amountEur(tx))
-        .minus(withholdingTaxEur(tx))
-        .minus(feesEur(tx));
-    } else if (tx.type === 'fee') {
-      otherCostsEur = otherCostsEur.plus(amountEur(tx)).plus(feesEur(tx));
-    } else if (tx.type === 'deposit' || tx.type === 'withdrawal' || tx.type === 'transfer') {
-      otherCostsEur = otherCostsEur.plus(feesEur(tx));
-    }
+    incomeNetEur = incomeNetEur.plus(rowIncomeNetEur(tx));
+    otherCostsEur = otherCostsEur.plus(rowOtherCostEur(tx));
   }
 
   const totalGainEur = realizedEur.plus(unrealizedEur);

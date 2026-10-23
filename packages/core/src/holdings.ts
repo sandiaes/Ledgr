@@ -1,9 +1,8 @@
 import type { CaContext } from './certificados';
 import type { IsoDate } from './dates';
 import { ZERO, type Decimal } from './decimal';
-import { InsufficientHoldingsError, LedgerError } from './errors';
+import { LedgerError } from './errors';
 import { runFifo, type Lot } from './fifo';
-import { isAcquisition, isDisposal, prepareLedger } from './ledger';
 import type { Asset, AssetType, FxLookup, PriceLookup, PriceQuote, Transaction } from './types';
 
 export interface HoldingsInput {
@@ -35,18 +34,25 @@ export interface CertificadoLotValuation {
   factorMonth: IsoDate | null;
 }
 
-/** Units of a holding sitting in one account. */
+/** The part of a holding sitting in one account: its own lots (FIFO per account, #1). */
 export interface HoldingAccount {
   accountId: string;
-  /** That account's acquisitions minus its disposals, plus transfers in minus transfers out. */
+  /** Units of the account's open lots. */
   quantity: Decimal;
-  /** The holding's market value pro rata to `quantity`; null if the holding is unvalued. */
+  /** Cost of the account's open lots. */
+  costBasisEur: Decimal;
+  /**
+   * The account's units at the holding's unit value (certificados: its lots' values); null
+   * if the holding is unvalued. The accounts' values add up exactly to the holding's.
+   */
   marketValueEur: Decimal | null;
+  unrealizedGainEur: Decimal | null;
+  lots: Lot[];
 }
 
 /**
- * One open position per asset. Cost basis comes from FIFO lots pooled across accounts, so
- * it is only defined per asset; `accounts` says where the units are.
+ * One open position per asset, over all accounts; `accounts` splits it exactly (units,
+ * cost, value, unrealized) by the account holding each lot.
  */
 export interface Holding {
   assetId: string;
@@ -62,7 +68,7 @@ export interface Holding {
   unrealizedGainEur: Decimal | null;
   valuation: HoldingValuation;
   lots: Lot[];
-  /** Accounts with a non-zero quantity, by account id. */
+  /** Accounts holding open lots of the asset, by account id. */
   accounts: HoldingAccount[];
 }
 
@@ -74,7 +80,6 @@ export function computeHoldings(input: HoldingsInput): Holding[] {
 
   const groups = new Map<string, Lot[]>();
   for (const lot of openLots) groups.set(lot.assetId, [...(groups.get(lot.assetId) ?? []), lot]);
-  const perAccount = accountQuantities(transactions, asOf);
 
   const caValue = ca ? certificadoValuer(transactions, asOf, ca) : null;
   const holdings: Holding[] = [];
@@ -89,12 +94,17 @@ export function computeHoldings(input: HoldingsInput): Holding[] {
 
     let valuation: HoldingValuation | null = null;
     let marketValueEur: Decimal | null = null;
+    /** Value of some of the holding's lots, given the valuation found. */
+    let valueOf: ((lots: readonly Lot[]) => Decimal) | null = null;
 
     if (asset.assetType === 'certificado_aforro' && caValue) {
       const valued = caValue(lots);
       if (valued) {
         valuation = { kind: 'certificado', lots: valued.lots };
         marketValueEur = valued.total;
+        const unit = new Map(valued.lots.map((l) => [l.lotId, l.unitValue]));
+        valueOf = (some) =>
+          some.reduce((s, l) => s.plus(l.quantity.times(unit.get(l.lotId) as Decimal)), ZERO);
       }
     }
     if (!valuation) {
@@ -105,17 +115,13 @@ export function computeHoldings(input: HoldingsInput): Holding[] {
       else {
         valuation = { kind: 'price', price, fxRateToEur: rate };
         marketValueEur = quantity.times(price.close).times(rate);
+        valueOf = (some) =>
+          some
+            .reduce((s, l) => s.plus(l.quantity), ZERO)
+            .times(price.close)
+            .times(rate);
       }
     }
-
-    const accounts = [...(perAccount.get(asset.id) ?? new Map<string, Decimal>())]
-      .filter(([, q]) => !q.isZero())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([accountId, q]) => ({
-        accountId,
-        quantity: q,
-        marketValueEur: marketValueEur ? marketValueEur.times(q).div(quantity) : null,
-      }));
 
     holdings.push({
       assetId: asset.id,
@@ -128,7 +134,7 @@ export function computeHoldings(input: HoldingsInput): Holding[] {
       unrealizedGainEur: marketValueEur ? marketValueEur.minus(costBasisEur) : null,
       valuation,
       lots,
-      accounts,
+      accounts: splitByAccount(lots, marketValueEur, valueOf),
     });
   }
 
@@ -136,53 +142,57 @@ export function computeHoldings(input: HoldingsInput): Holding[] {
 }
 
 /**
- * assetId -> accountId -> units acquired, minus units disposed, plus/minus units
- * transferred in/out. A transfer may not move more than the sending account holds.
+ * The holding's lots grouped by account. Each account is valued on its own lots; the last
+ * account takes the remainder, so the parts add up exactly to the holding's value.
  */
-function accountQuantities(transactions: readonly Transaction[], asOf: IsoDate) {
-  const result = new Map<string, Map<string, Decimal>>();
-  for (const tx of prepareLedger(transactions, asOf)) {
-    if (!tx.assetId || !tx.quantity) continue;
-    const byAccount = result.get(tx.assetId) ?? new Map<string, Decimal>();
-    result.set(tx.assetId, byAccount);
-    const add = (accountId: string, delta: Decimal) =>
-      byAccount.set(accountId, (byAccount.get(accountId) ?? ZERO).plus(delta));
-
-    if (isAcquisition(tx.type)) add(tx.accountId, tx.quantity);
-    else if (isDisposal(tx.type)) add(tx.accountId, tx.quantity.neg());
-    else if (tx.type === 'transfer') {
-      const available = byAccount.get(tx.accountId) ?? ZERO;
-      if (tx.quantity.gt(available)) {
-        throw new InsufficientHoldingsError(
-          tx.id,
-          tx.assetId,
-          tx.quantity,
-          available,
-          tx.accountId,
-        );
-      }
-      add(tx.accountId, tx.quantity.neg());
-      add(tx.transferToAccountId as string, tx.quantity);
+function splitByAccount(
+  lots: readonly Lot[],
+  total: Decimal | null,
+  valueOf: ((lots: readonly Lot[]) => Decimal) | null,
+): HoldingAccount[] {
+  const byAccount = new Map<string, Lot[]>();
+  for (const lot of lots)
+    byAccount.set(lot.accountId, [...(byAccount.get(lot.accountId) ?? []), lot]);
+  const ids = [...byAccount.keys()].sort((a, b) => a.localeCompare(b));
+  let valueLeft = total;
+  return ids.map((accountId, i) => {
+    const own = byAccount.get(accountId) as Lot[];
+    const costBasisEur = own.reduce((s, l) => s.plus(l.costEur), ZERO);
+    let marketValueEur: Decimal | null = null;
+    if (valueLeft && valueOf) {
+      marketValueEur = i === ids.length - 1 ? valueLeft : valueOf(own);
+      valueLeft = valueLeft.minus(marketValueEur);
     }
-  }
-  return result;
+    return {
+      accountId,
+      quantity: own.reduce((s, l) => s.plus(l.quantity), ZERO),
+      costBasisEur,
+      marketValueEur,
+      unrealizedGainEur: marketValueEur ? marketValueEur.minus(costBasisEur) : null,
+      lots: own,
+    };
+  });
 }
 
 /**
- * Returns a function valuing a certificado holding's lots, or null for a holding whose lots
- * are not all linked to a ca_subscriptions row (those fall back to the price lookup).
+ * Returns a function valuing certificado lots, or null for lots not all linked to a
+ * ca_subscriptions row (a holding with such lots falls back to the price lookup).
  */
-function certificadoValuer(transactions: readonly Transaction[], asOf: IsoDate, ca: CaContext) {
+export function certificadoValuer(
+  transactions: readonly Transaction[],
+  asOf: IsoDate,
+  ca: CaContext,
+) {
   const txById = new Map(transactions.map((t) => [t.id, t]));
   const subByTx = new Map(ca.subscriptions.map((s) => [s.transactionId, s]));
   const seriesById = new Map((ca.accrual?.series ?? []).map((s) => [s.id, s]));
 
-  return (lots: Lot[]) => {
+  return (lots: readonly Lot[]) => {
     const valued: CertificadoLotValuation[] = [];
     let total = ZERO;
     for (const lot of lots) {
-      const sub = subByTx.get(lot.lotId);
-      const tx = txById.get(lot.lotId);
+      const sub = subByTx.get(lot.originTransactionId);
+      const tx = txById.get(lot.originTransactionId);
       if (!sub || !tx?.unitPrice) return null;
 
       const factor = ca.factors(sub.id, asOf);

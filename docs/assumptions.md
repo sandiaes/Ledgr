@@ -1,7 +1,9 @@
 # Calculation assumptions
 
-Assumptions made by `packages/core`, approved as **provisional** on 2026-10-21 (#1–#20) and
-2026-10-22 (#23–#28, prices, snapshots and value now). Each one
+Assumptions made by `packages/core`, approved as **provisional** on 2026-10-21 (#1–#20),
+2026-10-22 (#23–#28, prices, snapshots and value now) and 2026-10-23 (#29–#34, the app's
+KPIs, decisions D1–D7 in `docs/app-plan.md` §9; #1, #3, #5, #17, #19, #21 and #22 changed
+the same day). Each one
 stays `unverified` until it has been checked against an official source (or the owner's
 own records), and is then updated here with the source.
 
@@ -13,7 +15,7 @@ Paths are relative to `packages/core/src/` unless stated.
 
 | #   | Topic                       | Status             |
 | --- | --------------------------- | ------------------ |
-| 1   | FIFO lot pooling            | out of scope (tax) |
+| 1   | FIFO lots per account       | out of scope (tax) |
 | 2   | Same-day ordering           | unverified         |
 | 3   | Fees in cost and proceeds   | out of scope (tax) |
 | 4   | FX conversion of gains      | out of scope (tax) |
@@ -41,6 +43,12 @@ Paths are relative to `packages/core/src/` unless stated.
 | 26  | Listing currency and FX     | unverified         |
 | 27  | Daily snapshot conventions  | unverified         |
 | 28  | Value now (intraday)        | unverified         |
+| 29  | Day change                  | unverified         |
+| 30  | Period returns (XIRR, TWR)  | unverified         |
+| 31  | Monthly and yearly returns  | unverified         |
+| 32  | Top positions and movers    | unverified         |
+| 33  | Closed positions            | unverified         |
+| 34  | Units that can be sold      | unverified         |
 
 "Out of scope (tax)" means: **out of scope: tax reports will come from importing broker
 report exports, not from this ledger.** These items describe how the performance numbers
@@ -48,23 +56,30 @@ are computed; nothing here should be used for a tax return.
 
 ## Lots and gains
 
-### 1. FIFO lot pooling
+### 1. FIFO lots per account
 
-FIFO lot matching is per asset, **pooled across all accounts and brokers**: a sale in any
-account consumes the oldest open lot of that asset, wherever it was bought. Selling more
-than the total held across all accounts is an error. The resulting realized gain is a
-performance metric, not a tax figure.
+Changed 2026-10-23 (decision D2; until then lots were pooled across accounts). FIFO lot
+matching is per **(account, asset)**: a sale consumes the oldest open lots of that asset
+**in its own account** (broker), and selling more than that account holds is an error
+(`InsufficientHoldingsError` with the account id), even when another account holds enough.
+A transfer moves lots between accounts (#21). The resulting realized gain is a performance
+metric, not a tax figure.
 
-Because cost basis is pooled, it exists per asset only. Each holding also lists the units
-per account (that account's acquisitions minus its disposals, plus transfers in minus
-transfers out; see #21) and the market value pro rata to those units; allocation by
-account uses this split. An account that sells units it never received (an unrecorded
-transfer) shows a negative quantity.
+Each holding is one row per asset with an exact split by account: each account's units,
+lots, cost basis, value (its units at the holding's unit value; certificados by lot) and
+unrealized gain. The accounts add up exactly to the holding (the last account takes the
+remainder of the value), so portfolio realized and unrealized gains equal the sum over
+accounts by construction. Allocation by account uses these values.
+
+Pooled matching survives only as `runFifo`'s `matching: 'pooled'` option for the one-off
+`pnpm prices fifo-compare` command and the tests; no app figure, snapshot or value-now uses
+it, and it will be deleted once the comparison has been run.
 
 - Status: out of scope: tax reports will come from importing broker report exports, not
   from this ledger.
-- Implemented in: `fifo.ts` (`runFifo`), `holdings.ts` (`computeHoldings`,
-  `accountQuantities`), `allocation.ts` (`allocation`, account dimension).
+- Implemented in: `fifo.ts` (`runFifo`, `FifoMatching`), `holdings.ts` (`computeHoldings`,
+  `HoldingAccount`), `allocation.ts` (`allocation`, account dimension), `accounts.ts`
+  (`accountSummaries`); `scripts/prices/src/fifo-compare.ts`.
 
 ### 2. Same-day ordering
 
@@ -77,20 +92,25 @@ rows of one date in their original order (for imports, file order, kept through 
 explicitly increasing `created_at`). Moving acquisitions first does not change which lots
 a disposal consumes, as long as no disposal in that order exceeds the units held.
 
+Lots are per account (#1), so file order matters only among the rows of one account; rows
+of other brokers in the same month do not affect which lots a sale consumes.
+
 - Status: unverified
-- Implemented in: `ledger.ts` (`prepareLedger`, `phase`); test `fifo.test.ts` ("within one
-  date, lots are consumed in input (file) order").
+- Implemented in: `ledger.ts` (`prepareLedger`, `phase`); tests `fifo.test.ts` ("within one
+  date, lots are consumed in input (file) order", "same-month rows of two brokers").
 
 ### 3. Fees in cost and proceeds
 
 Fees on buys/subscriptions are added to the cost; fees on sells/redemptions are deducted
-from the proceeds. Standalone `fee` rows (custody etc.) and fees on deposits/withdrawals
-are never added to a cost basis; they are counted as other costs in total return.
+from the proceeds. Standalone `fee` rows (custody etc.) and transfer fees are never added
+to a cost basis; they are counted as other costs in total gain. Changed 2026-10-23: fees on
+deposits and withdrawals are no longer other costs (those rows change no figure, #19).
 
 - Status: out of scope: tax reports will come from importing broker report exports, not
   from this ledger.
 - Implemented in: `ledger.ts` (`acquisitionCostEur`, `disposalProceedsEur`), `gains.ts`
-  (`gainsSummary`, `otherCostsEur`), `fees.ts` (`feeSummary`).
+  (`gainsSummary`, `rowOtherCostEur`), `fees.ts` (`feeSummary`, a fee report that still
+  lists deposit and withdrawal fees).
 
 ### 4. FX conversion of gains
 
@@ -109,6 +129,10 @@ On dividend and interest rows, `amount` is gross. The optional `withholding_tax`
 withheld at source as shown on the statement (recorded, never computed), and `fees` are
 charges. Cash received = amount − withholding_tax − fees. Withholding is not counted as a
 fee (it is excluded from fee totals and fee drag). Yield on cost uses gross income.
+
+Added 2026-10-23 (decision D6): rows entered in the app record **the net amount received**
+as `amount`, with no withholding and no fee, in EUR at fx 1 (every app row is EUR at fx 1,
+D7). For them gross = net. The withholding column stays for rows that have it.
 
 - Status: unverified
 - Implemented in: `types.ts` (`Transaction.withholdingTax`), `ledger.ts`
@@ -208,7 +232,8 @@ every capitalisation on or before its month, and later periods accrue from it by
 
 - Status: unverified
 - Implemented in: `certificados.ts` (`CaFactor`, `CaContext`, `createRuleBasedCaValuer`
-  anchor), `lookups.ts` (`createCaFactorLookup`), `holdings.ts` (`certificadoValuer`);
+  anchor, `certificadoSubscriptions`), `lookups.ts` (`createCaFactorLookup`), `holdings.ts`
+  (`certificadoValuer`);
   `supabase/migrations/20261021000004_ca_factors.sql`.
 
 ### 15. Test parameters
@@ -235,8 +260,14 @@ raises the minimum). Returns a reason instead of a rate when none exists.
 External flows happen at the end of their day (they earn nothing that day). Annualised only
 when the series spans at least 365 days.
 
+Changed 2026-10-23: a step that starts from zero value with a positive flow (the first buy,
+or re-entry after selling everything) takes that day's flow at the start of the day:
+r = V ÷ F − 1 (until then it threw unless the value equalled the flow, which month-level
+imported buys almost never do). A step from zero that ends at zero is skipped. With cash not
+tracked (#19), the flows are the ledger's buys, sells, income and fee rows (`dailyFlows`).
+
 - Status: unverified
-- Implemented in: `twr.ts` (`twr`).
+- Implemented in: `twr.ts` (`twr`), `cashflows.ts` (`flowEur`, `dailyFlows`).
 
 ### 18. Yield on cost
 
@@ -249,14 +280,19 @@ Portfolio-level figures include cash interest.
 
 ### 19. Cash
 
-Cash is tracked only when the ledger records at least one deposit (overridable with
-`trackCash`). When it is not tracked, `cash_eur` is null and `total_value_eur` is the
-positions alone. When tracked, cash is in EUR at each row's trade-time rate; foreign cash
-is not revalued.
+Changed 2026-10-23 (decision D5): **cash is not tracked.** Deposit and withdrawal rows stay
+in the schema but are not offered in the app, and they change no figure, their fees
+included: not total gain, net invested, day change, XIRR, TWR or snapshots. Net
+contributions, XIRR and TWR are built from buys and sells (`docs/kpis.md` §0.1).
+`buildSnapshot` includes cash only when a caller passes `trackCash: true` (default false;
+until then the default was "whenever a deposit is recorded"); the daily jobs pass false.
+When it is on, `cash_eur` is in EUR at each row's trade-time rate and foreign cash is not
+revalued.
 
 - Status: unverified
-- Implemented in: `ledger.ts` (`hasDeposits`, `cashBalanceEur`, `cashEffectEur`),
-  `snapshot.ts` (`buildSnapshot`); nullable column in
+- Implemented in: `gains.ts` (`gainsSummary`, `rowOtherCostEur`), `cashflows.ts`
+  (`investmentCashFlows`, `flowEur`), `snapshot.ts` (`buildSnapshot`), `ledger.ts`
+  (`cashBalanceEur`, `cashEffectEur`); nullable column in
   `supabase/migrations/20261021000001_withholding_tax_and_optional_cash.sql`.
 
 ### 20. Price and FX lookup
@@ -270,22 +306,26 @@ Prices and FX rates use the latest value on or before the date, with no age limi
 ### 21. Transfers between accounts
 
 Added 2026-10-21. A `transfer` row moves `quantity` units of an asset from `account_id` to
-`transfer_to_account_id`. It is not a sale: no proceeds, no gain, and lots and cost basis
-are unchanged (lots are pooled, #1). It only changes the per-account split. A transfer may
-not move more units than the sending account holds at that point (sales are still checked
-against the pooled total only). Within a day, transfers come after acquisitions and before
-disposals (#2).
+`transfer_to_account_id`. It is not a sale: no proceeds, no gain, and the total cost basis
+is unchanged. Changed 2026-10-23 (lots per account, #1): it moves the sender's **oldest
+lots**, with their acquisition date and remaining cost, to the receiving account, where
+they queue by acquisition date (after lots of the same date already there). A partly moved
+lot is split: the moved part takes the cost pro rata and gets the id
+`<lot id>:<transfer id>`, the part left keeps the rest (by subtraction, so the parts sum
+exactly); both keep `originTransactionId`, which CA redemptions match on. A transfer may not
+move more units than the sending account holds at that point. Within a day, transfers come
+after acquisitions and before disposals (#2).
 
 `fees` on a transfer is a cash fee in `currency`: it reduces cash, counts as an other cost
 in total return and as an outflow in investment cash flows, and is reported as its own fee
 category. It is never added to the cost basis. Fees paid in units of the asset (e.g. a
 crypto network fee) are not modelled: if you record the units received, the lost units
-stay counted in the sending account and in the pooled total. Only asset transfers exist;
+stay counted in the sending account's lots. Only asset transfers exist;
 cash moved between brokers is not a transfer row.
 
 - Status: unverified
 - Implemented in: `types.ts` (`Transaction.transferToAccountId`), `ledger.ts`
-  (`validateTransaction`, `phase`, `cashEffectEur`), `holdings.ts` (`accountQuantities`),
+  (`validateTransaction`, `phase`, `cashEffectEur`), `fifo.ts` (`runFifo`, `moveLots`),
   `fees.ts` (`feeSummary`, `transferEur`), `gains.ts` (`otherCostsEur`), `cashflows.ts`
   (`investmentCashFlows`); `supabase/migrations/20261021000002_transfer_type.sql` and
   `20261021000003_transfer_columns.sql`.
@@ -310,7 +350,10 @@ Added 2026-10-21. How `scripts/import` turns the Excel tables into ledger rows (
   unit of Order Value's last written decimal plus |Units| × half a unit of Order Price's
   (Units are taken as exact).
 - **Holdings check**: a sell may not exceed what its broker's account holds at that point
-  (earlier months, then file order). This is validation only; FIFO stays pooled (#1).
+  (earlier months, then file order). Since 2026-10-23 this is the same rule FIFO applies
+  (lots per account, #1).
+- **Precision**: imported rows have `trade_date_precision = 'month'`; core reads it as
+  `Transaction.tradeDatePrecision` to mark months as approximate (#31).
 - **Accounts**: one per broker (Degiro, IBKR, Kraken, Aforro), reused by name.
 - **Certificados**: CA rows are grouped by (series, month) into one subscription at 1 EUR
   per unit; the CA table's Units must equal the group total, and its Ratio is stored as the
@@ -375,7 +418,8 @@ subscriptions, the oldest date counts, and the source is `factor`, `subscription
 - Status: unverified
 - Implemented in: `prices.ts` (`ageInDays`, `isStale`, `createTradePriceLookup`,
   `DEFAULT_STALE_AFTER_DAYS`, `DEFAULT_CA_MAX_AGE_DAYS`), `snapshot.ts` (`buildSnapshot`,
-  `ValuationFlag`).
+  `ValuationFlag`), `certificados.ts` (`certificadoSubscriptions`: per subscription, the
+  same age and 35-day flag).
 
 ### 26. Listing currency and FX
 
@@ -426,3 +470,82 @@ Value now is never written to `portfolio_snapshots`.
 - Implemented in: `prices.ts` (`withLiveQuotes`); `market/src/live.ts` (`needsRefresh`,
   `runValueNow`), `market/src/value-now.ts`, providers' `fetchLatest`;
   `supabase/migrations/20261022000003_live_quotes.sql`.
+
+## App KPIs
+
+Added 2026-10-23 with slice 5a-core (definitions in `docs/kpis.md`). T is the owner's local
+date, Y = T − 1 day. All figures are EUR, Decimal; none involves cash (#19).
+
+### 29. Day change
+
+D = V(T) − V(Y) − F(T): both ends valued with the same price lookup (closes plus intraday
+quotes, #28), today's rows only in F(T), flows at the end of the day. A buy today counts
+only for the difference between today's price and the price paid; a dividend today counts
+as change; % = D ÷ V(Y), none when V(Y) = 0. Per asset the same with that asset's rows; a
+position held today and not yesterday is "opened today" and has no %. Rows without an
+asset (interest, fee rows) count in the portfolio's F(T) only. A holding without a value on
+either day is an error, never a zero.
+
+- Status: unverified
+- Implemented in: `daychange.ts` (`dayChange`), `cashflows.ts` (`flowEur`).
+
+### 30. Period returns (XIRR and TWR)
+
+Since start, YTD and 1Y, all ending on T. S = the day before the first row, 31 December of
+the previous year, `addMonths(T, −12)`. V(S) is the snapshot of day S (0 when S is before
+the first row, `fromStart`); a missing snapshot gives the reason `snapshot-missing`
+instead of a rate. XIRR: −V(S) on S, −F on each day in (S, T], +V(T) on T. TWR: (S, V(S)),
+every snapshot day in (S, T) with the flows since the previous point, and (T, V(T)). Both
+are annualized only for 365 days or more, counted from the first flow (or S when V(S) > 0);
+XIRR then shows its period rate (1 + r)^(days/365) − 1. Since start, XIRR equals
+`xirr(investmentCashFlows(...))` exactly.
+
+- Status: unverified
+- Implemented in: `returns.ts` (`periodReturns`, `periodStart`, `valueSeries`).
+
+### 31. Monthly and yearly returns
+
+Each calendar month (year) runs over (end of the previous one, its last day], the current
+one to T. Return = TWR over it (#30's points); contributions = NI(end) − NI(start); market
+gain = V(end) − V(start) − contributions; income = net income dated in it. A missing
+boundary snapshot leaves the return and market gain empty with `snapshot-missing`. Because
+both use the same daily points, a year's return is the product of its months'. A period
+with month-level rows (#22) is `approximate`. Best / worst month: completed months only,
+ties to the earlier month.
+
+- Status: unverified
+- Implemented in: `returns.ts` (`monthlyReturns`, `yearlyReturns`, `bestWorstMonth`).
+
+### 32. Top positions and movers
+
+Top positions: open positions by value, largest first, ties by asset id. Top movers
+(decision D4): ranked by € impact (day change D_a, or unrealized gain U_a for "total"),
+with the % beside it; 3 positive and 3 negative, zero left out; ties to the larger
+position, then the asset id. Ranking by % is the same function with another key and leaves
+out positions without a % (opened today, or with no cost).
+
+- Status: unverified
+- Implemented in: `movers.ts` (`topPositions`, `topMovers`).
+
+### 33. Closed positions
+
+An asset with no open lots on the date and at least one disposal. Figures: units bought and
+sold, FIFO cost of the units sold, proceeds net of fees, realized gain and its % of the
+cost, net dividends booked on the asset, first buy, last sale, and per account the units
+sold, cost, proceeds and gain. An asset sold out and bought again is not listed: its
+realized gains stay with the open position. Performance, not tax.
+
+- Status: unverified
+- Implemented in: `closed.ts` (`closedPositions`).
+
+### 34. Units that can be sold
+
+`unitsHeld` = the account's units at the end of the date. `maxDisposable` = the most a new
+sale in that account dated D may sell: it is processed after D's other rows, so the limit is
+the smallest balance of that account from the end of D to the end of the ledger (holding 10
+on 1 March and selling 6 on 1 May, a sale on 1 April may sell at most 4). It counts units
+only: a CA redemption linked to a subscription also needs that subscription's lot, so the
+final check is `runFifo` over the ledger with the new row.
+
+- Status: unverified
+- Implemented in: `validation.ts` (`unitsHeld`, `maxDisposable`).

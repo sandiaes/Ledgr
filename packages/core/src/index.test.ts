@@ -34,6 +34,21 @@ describe('public API', () => {
       'rateToEurFromEcbQuote',
       'sanityReport',
       'withLiveQuotes',
+      'accountSummaries',
+      'dailyFlows',
+      'flowEur',
+      'dayChange',
+      'periodReturns',
+      'valueSeries',
+      'monthlyReturns',
+      'yearlyReturns',
+      'bestWorstMonth',
+      'topPositions',
+      'topMovers',
+      'closedPositions',
+      'unitsHeld',
+      'maxDisposable',
+      'certificadoSubscriptions',
     ]) {
       expect(core, name).toHaveProperty(name);
     }

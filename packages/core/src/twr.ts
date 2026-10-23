@@ -23,9 +23,12 @@ export interface TwrResult {
  *
  * Flows are assumed to happen at the end of their day, so they earn nothing that day:
  *   r_i = (V_i - F_i) / V_{i-1} - 1
- * The first point is the starting value (its flow is ignored). A period starting from zero
- * value is skipped if nothing changed but the flow (e.g. the first deposit); a value
- * appearing from zero without a flow, or a negative starting value, is an error.
+ * The first point is the starting value (its flow is ignored).
+ *
+ * A period starting from zero value (the first buy, or re-entry after selling everything)
+ * takes its flow at the start of the day instead: r_i = V_i / F_i - 1 when F_i > 0. A period
+ * from zero that ends at zero is skipped (nothing was held at either end). A value
+ * appearing from zero without a positive flow, or a negative starting value, is an error.
  */
 export function twr(series: readonly ValuePoint[]): TwrResult {
   const points = [...series].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
@@ -45,13 +48,17 @@ export function twr(series: readonly ValuePoint[]): TwrResult {
     if (prev.value.isNegative()) {
       throw new RangeError(`Negative value on ${prev.date}; TWR is undefined`);
     }
+    let r: Decimal;
     if (prev.value.isZero()) {
-      if (!endBeforeFlow.isZero()) {
+      const flow = cur.flow ?? ZERO;
+      if (cur.value.isZero()) continue;
+      if (!flow.gt(0)) {
         throw new RangeError(`Value on ${cur.date} grew from zero without a flow`);
       }
-      continue;
+      r = cur.value.div(flow).minus(1);
+    } else {
+      r = endBeforeFlow.div(prev.value).minus(1);
     }
-    const r = endBeforeFlow.div(prev.value).minus(1);
     growth = growth.times(ONE.plus(r));
     periods.push({ date: cur.date, return: r });
   }

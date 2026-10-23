@@ -30,38 +30,74 @@ export function investmentCashFlows(
   );
   const flows: CashFlow[] = [];
   for (const tx of rows) {
-    const gross = toEur(tx, grossNative(tx));
-    const fee = excludeFees ? ZERO : feesEur(tx);
-    let amount: Decimal | null = null;
-    switch (tx.type) {
-      case 'buy':
-      case 'subscription':
-        amount = gross.plus(fee).neg();
-        break;
-      case 'sell':
-      case 'redemption':
-        amount = gross.minus(fee);
-        break;
-      case 'dividend':
-      case 'interest':
-        // Withholding is not a fee, so it stays deducted even with excludeFees.
-        amount = amountEur(tx).minus(withholdingTaxEur(tx)).minus(fee);
-        break;
-      case 'fee':
-        if (!excludeFees) amount = amountEur(tx).plus(fee).neg();
-        break;
-      case 'transfer':
-        // Units stay in the portfolio; only a transfer fee leaves it.
-        if (!fee.isZero()) amount = fee.neg();
-        break;
-      case 'deposit':
-      case 'withdrawal':
-        break;
-    }
+    const amount = investorFlow(tx, excludeFees);
     if (amount) flows.push({ date: tx.tradeDate, amount });
   }
   flows.push({ date: asOf, amount: options.terminalValueEur });
   return flows;
+}
+
+/** One row's flow from the investor's view (negative = paid in); null when it is none. */
+function investorFlow(tx: Transaction, excludeFees: boolean): Decimal | null {
+  const gross = toEur(tx, grossNative(tx));
+  const fee = excludeFees ? ZERO : feesEur(tx);
+  switch (tx.type) {
+    case 'buy':
+    case 'subscription':
+      return gross.plus(fee).neg();
+    case 'sell':
+    case 'redemption':
+      return gross.minus(fee);
+    case 'dividend':
+    case 'interest':
+      // Withholding is not a fee, so it stays deducted even with excludeFees.
+      return amountEur(tx).minus(withholdingTaxEur(tx)).minus(fee);
+    case 'fee':
+      return excludeFees ? null : amountEur(tx).plus(fee).neg();
+    case 'transfer':
+      // Units stay in the portfolio; only a transfer fee leaves it.
+      return fee.isZero() ? null : fee.neg();
+    case 'deposit':
+    case 'withdrawal':
+      return null;
+  }
+}
+
+/**
+ * F for one row: the money it put into the positions (docs/kpis.md §0), the negative of its
+ * investor cash flow. Buys +cost, sells -proceeds, income -net amount, fee rows +amount,
+ * transfers +fee; null for deposits and withdrawals (cash is not tracked, D5).
+ */
+export function flowEur(tx: Transaction): Decimal | null {
+  return investorFlow(tx, false)?.neg() ?? null;
+}
+
+export interface DailyFlow {
+  date: IsoDate;
+  /** Sum of the day's flows F(d); may be zero when they cancel out. */
+  flowEur: Decimal;
+}
+
+/**
+ * F(d) per day with at least one flow row, oldest first, up to `asOf` (inclusive) and
+ * after `after` (exclusive) when given. `assetId` keeps only that asset's rows.
+ */
+export function dailyFlows(
+  transactions: readonly Transaction[],
+  options: { asOf?: IsoDate; after?: IsoDate; assetId?: string } = {},
+): DailyFlow[] {
+  const { after, assetId } = options;
+  const out: DailyFlow[] = [];
+  for (const tx of prepareLedger(transactions, options.asOf)) {
+    if (assetId !== undefined && tx.assetId !== assetId) continue;
+    if (after !== undefined && tx.tradeDate <= after) continue;
+    const f = flowEur(tx);
+    if (!f) continue;
+    const last = out[out.length - 1];
+    if (last && last.date === tx.tradeDate) last.flowEur = last.flowEur.plus(f);
+    else out.push({ date: tx.tradeDate, flowEur: f });
+  }
+  return out;
 }
 
 /**

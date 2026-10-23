@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { dailyFlows } from './cashflows';
 import { MissingValuationError } from './errors';
 import { gainsSummary, netContributions } from './gains';
 import { computeHoldings } from './holdings';
-import { cashBalanceEur } from './ledger';
 import { createFxLookup, createPriceLookup } from './lookups';
 import { buy, d, deposit, dividend, expectDec, fee, interest, sell, withdraw } from './test-utils';
 import type { Asset } from './types';
@@ -18,7 +18,8 @@ const assets: Asset[] = [
 // B: buy 5 @ 200 USD + 2 USD at fx 0.9 = 1002 * 0.9 = 901.8 EUR
 //    price 210 USD at fx 0.95 -> 5*210*0.95 = 997.5                   unrealized +95.7
 // dividend 20 - 3 fee, interest 4                                     income net  21
-// fee row 6                                                           other costs 6 + 1 + 2 = 9
+// fee row 6                                                           other costs 6
+// (the deposit and withdrawal fees change no figure: cash is not tracked, D5)
 const transactions = [
   deposit('2024-01-01', '2000'),
   deposit('2024-01-02', '1000', { fees: '1' }),
@@ -65,18 +66,25 @@ describe('gainsSummary', () => {
     expectDec(g.unrealizedEur, '32.7');
     expectDec(g.totalGainEur, '108.7');
     expectDec(g.incomeNetEur, '21');
-    expectDec(g.otherCostsEur, '9');
-    // 108.7 + 21 - 9
-    expectDec(g.totalReturnEur, '120.7');
+    expectDec(g.otherCostsEur, '6');
+    // 108.7 + 21 - 6
+    expectDec(g.totalReturnEur, '123.7');
   });
 
-  it('total return = positions + cash - net contributions', () => {
-    // cash: 2000 + 999 - 1005 - 901.8 + 478 + 17 + 4 - 6 - 502 = 1083.2
-    // 540 + 997.5 + 1083.2 - 2500 = 120.7
-    const cash = cashBalanceEur(transactions, asOf);
-    expectDec(cash, '1083.2');
+  it('total gain = value - the sum of the day flows (deposits and withdrawals are not flows)', () => {
+    // flows: +1005 +901.8 -478 -17 -4 +6 = 1413.8; value 540 + 997.5 = 1537.5
+    // 1537.5 - 1413.8 = 123.7
+    const flows = dailyFlows(transactions, { asOf });
+    const total = flows.reduce((s, f) => s.plus(f.flowEur), d('0'));
+    expectDec(total, '1413.8');
     const positions = holdings.reduce((s, h) => s.plus(h.marketValueEur!), d('0'));
-    expectDec(positions.plus(cash).minus(netContributions(transactions).netEur), g.totalReturnEur);
+    expectDec(positions.minus(total), g.totalReturnEur);
+  });
+
+  it('deposits and withdrawals, fees included, change no figure', () => {
+    const without = transactions.filter((t) => t.type !== 'deposit' && t.type !== 'withdrawal');
+    const g2 = gainsSummary({ transactions: without, holdings, asOf });
+    expect(Object.values(g2).map(String)).toEqual(Object.values(g).map(String));
   });
 
   it('negative returns are reported as negative', () => {

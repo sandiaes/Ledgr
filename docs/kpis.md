@@ -2,8 +2,9 @@
 
 Exact definitions of every number the apps show. Status: **approved** 2026-10-23 with
 decisions D1–D7 (`docs/app-plan.md` §9); each definition becomes an entry in
-`docs/assumptions.md` when its slice is built. Each KPI is computed by a `packages/core` function (named in
-`docs/app-plan.md` §3); the apps only format and display the result. All amounts are EUR,
+`docs/assumptions.md` when its slice is built (#29–#34 for slice 5a-core). Each KPI is
+computed by a `packages/core` function (§10 below, planned in `docs/app-plan.md` §3); the
+apps only format and display the result. All amounts are EUR,
 `Decimal` end to end. JS numbers appear only at the chart boundary (pixel positions).
 
 These are **performance** figures. Realized gains are not tax figures (assumptions #1, #7).
@@ -35,15 +36,18 @@ These are **performance** figures. Realized gains are not tax figures (assumptio
   | deposit, withdrawal | 0 (cash is not tracked, §0.1)             |
 
   So income counts as return, fee rows count as a cost, and trades are neutral. Rows
-  entered in the app are EUR at fx 1; dividends and interest have no withholding and no
-  fee (the amount entered is what was received), so for them the flow is − amount.
+  entered in the app are EUR at fx 1; dividends and interest are the **net amount
+  received**, with no withholding field and no fee (decision D6), so for them the flow is
+  − amount. Deposits and withdrawals change no figure, their fees included (D5).
 
 - **Net invested** _NI(d)_ (#24): Σ over _L(d)_ of acquisition cost (fees in) minus
   disposal proceeds (fees out). Stored as `portfolio_snapshots.net_contributions_eur`.
   Income, fee rows, deposits, withdrawals and transfers are not in it.
-- **Lots**: FIFO **per account** (the proposed change in `docs/app-plan.md` §4). A sale
-  consumes the oldest open lots _of its own account_; a transfer moves the sender's oldest
-  lots, with their dates and cost, to the receiving account.
+- **Lots**: FIFO **per account** (decision D2, assumption #1). A sale consumes the oldest
+  open lots _of its own account_, and selling more than that account holds is an error; a
+  transfer moves the sender's oldest lots, with their dates and cost, to the receiving
+  account. Pooled FIFO exists only in the one-off `pnpm prices fifo-compare`, never in an
+  app.
 - **Stale**: a close more than 3 days old, or a trade-price stand-in (#25); a certificado
   factor more than 35 days old, aged from its month's 1st (#25).
 - **Display**: amounts rounded half-up to cents, percentages to 2 decimals, both with
@@ -103,7 +107,7 @@ Example (2025, one asset, no fees):
 | **Unrealized gain** _U_ | _V(T)_ − cost basis. % = _U_ ÷ cost basis.                                                 |
 | **Realized gain** _R_   | Σ over all disposals in _L(T)_ of (proceeds net of fees − FIFO cost of the lots consumed). |
 | **Net income** _I_      | Σ dividends and interest in _L(T)_: amount − withholding tax − fees.                       |
-| **Other costs** _C_     | Σ fee rows (amount + fees) plus fees on deposits, withdrawals and transfers.               |
+| **Other costs** _C_     | Σ fee rows (amount + fees) plus fees on transfers (deposits and withdrawals: none, D5).    |
 | **Total gain** _G_      | _R_ + _U_ + _I_ − _C_ (core `gainsSummary().totalReturnEur`).                              |
 | **Net contributions**   | _NI(T)_ (net invested). Labeled "Net invested" in the UI.                                  |
 
@@ -115,9 +119,9 @@ Identities (checked in core tests and at run time, §8):
 - Per account: Σ over accounts of _R_, _U_, cost basis and value equals the portfolio
   figure exactly; per-account _I_ and _C_ are the rows booked in that account.
 
-Total gain includes income and costs (decision D1), so it agrees with XIRR and TWR, which
-count dividends as return. The dashboard shows _G_ and, on separate lines that add up to
-it, _R_, _U_ (€ and %), _I_ and −*C*.
+Total gain = realized + unrealized + net income − costs (decision D1), so it agrees with
+XIRR and TWR, which count dividends as return. The dashboard shows _G_ and, on separate
+lines that add up to it, _R_, _U_ (€ and %), _I_ and −*C*.
 
 ## 2. Day change
 
@@ -172,10 +176,10 @@ _d_ in (_S_, _Y_] with (_V(d)_, _F(d)_), then (_T_, _V(T)_, _F(T)_). Flows of a 
 snapshot are added to the next point. For each step
 _r_i_ = (_V_i_ − _F_i_) ÷ _V\_{i−1}_ − 1, and TWR = Π(1 + _r_i_) − 1.
 
-- **New:** a step that starts from zero value with a positive flow (the first buy, or
-  re-entry after selling everything) uses _r_i_ = _V_i_ ÷ _F_i_ − 1 (that day's flow taken at
-  the start of the day). Today `twr()` throws in that case; month-level imported buys on the
-  1st almost never equal the close of the 1st, so the first day would always throw.
+- A step that starts from zero value with a positive flow (the first buy, or re-entry
+  after selling everything) uses _r_i_ = _V_i_ ÷ _F_i_ − 1 (that day's flow taken at the
+  start of the day; #17, changed 2026-10-23: `twr()` used to throw there, and month-level
+  imported buys on the 1st almost never equal the close of the 1st).
 - A step from zero to zero is skipped.
 - Shown as cumulative; annualized ((1+TWR)^(365/days) − 1) only for spans of 365 days or more.
 
@@ -225,7 +229,8 @@ of the 5 / 10 largest assets (core `concentration`).
 
 ## 7. Top movers
 
-Ranked by **€ impact** (decision D4), with the % shown beside it:
+Ranked by **€ impact** (decision D4: top movers are ranked by EUR impact, with the %
+shown beside it):
 
 - **Day**: open positions ranked by day change € _D_a_ (§2), 3 best (positive only) and
   3 worst (negative only). Positions with _D_a_ = 0 are left out. A position opened today
@@ -272,3 +277,23 @@ exceeds 35 days**. Factor update screen: change vs last month = new − previous
   days old.
 - **Last price update / last snapshot**: newest `job_runs.finished_at` with job `prices` /
   `snapshots` and its status.
+
+## 10. Where each KPI is computed
+
+Built in slice 5a-core (2026-10-23); the apps call these and only format the result.
+
+| KPI                                         | `packages/core` function (file)                               |
+| ------------------------------------------- | ------------------------------------------------------------- |
+| Lots, per-account holdings (§0, §8)         | `runFifo` (`fifo.ts`), `computeHoldings` → `Holding.accounts` |
+| Total value, cost, _R_, _U_, _I_, _C_, _G_  | `gainsSummary` (`gains.ts`); per broker `accountSummaries`    |
+| Net invested                                | `netInvestedEur` (`gains.ts`)                                 |
+| Flows _F(d)_                                | `flowEur`, `dailyFlows` (`cashflows.ts`)                      |
+| Day change (§2)                             | `dayChange` (`daychange.ts`)                                  |
+| XIRR, TWR: Since start, YTD, 1Y (§3)        | `periodReturns` (`returns.ts`)                                |
+| Value vs contributions (§4)                 | `valueSeries` (`returns.ts`)                                  |
+| Monthly, yearly, best / worst month (§5)    | `monthlyReturns`, `yearlyReturns`, `bestWorstMonth`           |
+| Allocation, top 5 / 10 (§6)                 | `allocation`, `concentration` (`allocation.ts`)               |
+| Top positions, top movers (§6, §7)          | `topPositions`, `topMovers` (`movers.ts`)                     |
+| Closed positions (§8)                       | `closedPositions` (`closed.ts`)                               |
+| Units held, most that can be sold on a date | `unitsHeld`, `maxDisposable` (`validation.ts`)                |
+| Certificado subscription, factor age (§8)   | `certificadoSubscriptions` (`certificados.ts`)                |

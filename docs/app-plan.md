@@ -1,7 +1,7 @@
 # Android app plan (Step 5)
 
-Status: **plan approved with decisions D1–D7 on 2026-10-23** (§9). Nothing here is built
-yet; slices start only when asked. KPI definitions are in `docs/kpis.md`; calculation
+Status: **plan approved with decisions D1–D7 on 2026-10-23** (§9). **Slice 5a-core built
+2026-10-23** (`packages/core` and docs only, §8); the rest starts only when asked. KPI definitions are in `docs/kpis.md`; calculation
 assumptions in `docs/assumptions.md`.
 
 `apps/mobile`: Expo + React Native + TypeScript, Android only, run with Expo Go during
@@ -187,15 +187,14 @@ screen, so the app has no arithmetic at all; they are tested on the fixture-shap
 
 ## 4. FIFO per account (broker)
 
-**What core does today:** pooled. `runFifo` keys its lot queues by asset only
-(`fifo.ts`), a sale in any account consumes the oldest lot anywhere, and the oversell check
-is against the total over all accounts; transfers only change the per-account unit split.
-Assumption #1 has said "pooled" since it was written (commit 5afff85, Step 2 review); the
-code was per (account, asset) _before_ that commit, which is where "#1 says per account"
-comes from. The importer already checks every sell against its own broker's holdings (#22),
-while FIFO stays pooled.
+**Before slice 5a-core:** pooled. `runFifo` keyed its lot queues by asset only
+(`fifo.ts`), a sale in any account consumed the oldest lot anywhere, and the oversell check
+was against the total over all accounts; transfers only changed the per-account unit split.
+Assumption #1 said "pooled" since it was written (commit 5afff85, Step 2 review); the code
+was per (account, asset) _before_ that commit, which is where "#1 says per account" comes
+from. The importer already checked every sell against its own broker's holdings (#22).
 
-**Change (slice 5a, before any UI):**
+**Change (built in slice 5a-core, 2026-10-23):**
 
 - Lot queues keyed by (account, asset). A sale consumes only its account's lots; selling
   more than that account holds throws `InsufficientHoldingsError` (with the account id).
@@ -206,10 +205,10 @@ while FIFO stays pooled.
   match on.
 - Holdings: one row per asset as now, plus exact per-account lots, cost, value and
   unrealized (no more pro rata split). `accountQuantities` goes away (derived from lots).
-- **Pooled mode only for a one-off comparison** (D2): `runFifo` keeps an internal
-  `matching: 'pooled'` option (the current code path: the queue key, and "transfers do not
-  move lots", about 20 lines), documented as "comparison only". Its only callers are the
-  one-off `pnpm prices fifo-compare` command and the tests. The app, snapshots and
+- **Pooled mode only for a one-off comparison** (D2): `runFifo` keeps a
+  `matching: 'pooled'` option (the old code path: the queue key, and "transfers do not
+  move lots"), documented as "comparison only". Its only callers are the one-off
+  `pnpm prices fifo-compare` command and the tests. The app, snapshots and
   value-now always use per-account FIFO; nothing in any UI offers pooled. Once you have
   run the comparison, the command and the option can be deleted in a later step.
 - Totals: realized is Σ disposals and each disposal belongs to one account; open cost is
@@ -233,12 +232,15 @@ brokers: every one of the 13 sells is of an asset held only at Degiro, there are
 transfers, and SXR8, the only asset at two brokers (Degiro 2024-04 to 2024-09, IBKR from
 2024-10), has **no sells**. So **no realized gain changes, before or after; nor does any
 cost basis or snapshot.** Before: realized as now. After: identical figures. What this
-cannot see is rows added to the database after the import; slice 5a therefore adds the
-read-only one-off command `pnpm prices fifo-compare`, which runs both modes on the live
-ledger and writes `fifo_compare.csv` (per disposal: pooled gain, per-account gain; per
-asset: pooled and per-account cost basis) to `prices-data/reports/<time>-fifo-compare/`
-(git-ignored), printing only the number of differing rows. I expect 0. A core test runs
-both modes on the fixture-shaped ledger and asserts identical results.
+cannot see is rows added to the database after the import; slice 5a-core therefore adds
+the read-only one-off command `pnpm prices fifo-compare` (`docs/prices.md`), which runs both
+modes on the live ledger of `LEDGR_USER_ID` (service-role key in the git-ignored
+`scripts/prices/.env`, like the importer) and **prints only counts and totals**: ledger
+rows, disposals, realized gain under each mode, the number of disposals whose gain changes,
+open cost under each mode and the number of assets whose cost changes. No per-trade value
+is printed or written. `pnpm prices fifo-compare --fixtures` runs the same on
+`fixtures/sample_transactions.csv` (no `.env` needed); a test asserts it finds 0 changes
+(13 disposals). I expect 0 on the live ledger too.
 
 **Sell form** (slice 5c): units held per broker for the chosen asset on the chosen date
 (`unitsHeld`), only brokers with units offered, and the limit is `maxDisposable`: the most
@@ -426,6 +428,15 @@ Go (no custom native code).
 
 Each slice: short plan, implement, tests, `pnpm check`, commit and push, summary.
 
+**5a-core — built 2026-10-23** (`packages/core` and docs only): FIFO per account (§4) and
+`pnpm prices fifo-compare`; `accountSummaries`, `flowEur` / `dailyFlows`, the `twr` from-zero
+rule, `dayChange`, `periodReturns`, `valueSeries`, `monthlyReturns`, `yearlyReturns`,
+`bestWorstMonth`, `topPositions`, `topMovers`, `closedPositions`, `unitsHeld`,
+`maxDisposable`, `certificadoSubscriptions` (pulled forward from 5b/5c as asked). Still to
+do from 5a step 2: `reconcile`, `localDate`, `buildDashboard`; from 5b/5c: `positionDetail`,
+`buildPositions`, the validation and input functions, `factorChange`, `mostUsedAccount`.
+After it: rebuild and redeploy the functions (`docs/prices.md`, "After a core change").
+
 **5a — Foundation, login, lock, Dashboard**
 
 1. Core: FIFO per account (§4), assumptions #1/#21/#22, tests; the one-off
@@ -468,17 +479,20 @@ row; a retried insert with the same id does not duplicate. Plus symbol resolutio
 
 - **D1 Total gain** = realized + unrealized + net income − other costs
   (_R_ + _U_ + _I_ − _C_), and the dashboard shows each component on its own line.
-- **D2 Pooled FIFO** only as a one-off comparison (`pnpm prices fifo-compare` and a core
-  test); never in the app UI, snapshots or value-now (§4).
+- **D2 FIFO per account (broker)**: a sale consumes only lots of the account selected for
+  it; this is the default in `packages/core` (`runFifo`). **Pooled FIFO** exists only as a
+  one-off comparison (`pnpm prices fifo-compare` and tests); never in any UI, snapshot or
+  value-now (§4).
 - **D3 Symbol resolution** is added to `prices-daily` (§5); a resolution failure never
   breaks the price run, and the app shows "price pending". `docs/prices.md` gets redeploy
   steps with a Dashboard route for when the CLI fails on the company network.
 - **D4 Top movers** ranked by € impact with % beside it, plus a €/% ranking chip (cheap:
   one sort key in `topMovers`).
-- **D5 Deposits and withdrawals** stay in the schema but are not in the New transaction
-  form. `docs/kpis.md` §0.1 states how net contributions, XIRR and TWR are built from buys
-  and sells while cash is not tracked.
+- **D5 Cash is not tracked.** Net contributions, XIRR and TWR are built from buys and
+  sells (`docs/kpis.md` §0.1). Deposits and withdrawals stay in the schema but are not in
+  the app (not in the New transaction form) and **change no figure**, their fees included.
 - **D6 Dividends and interest**: the net amount received, labeled "Amount received", no
   withholding field (so `withholding_tax` stays empty on app-entered rows) and no fee.
+  **All app rows are EUR at fx 1.**
 - **D7 Not in the form**: transfers, certificado subscriptions and redemptions, and
   foreign-currency rows. Totals are entered in EUR (fx 1), as in the import.

@@ -1,7 +1,10 @@
 import { addDays, dec, type Transaction } from '@ledgr/core';
 import { describe, expect, it } from 'vitest';
 import { fakeFetch, jsonResponse, MemoryDb } from '../../../packages/market/src/test/memory-db';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { parseArgs, run, type CliDeps } from './cli';
+import { compareFifo, fixtureLedger } from './fifo-compare';
 
 const REF = 'abcdefghijklmnopqrst';
 const ENV = [
@@ -103,6 +106,7 @@ function harness(
   const deps: CliDeps = {
     envPath: '/repo/scripts/prices/.env',
     reportsRoot: '/repo/prices-data/reports',
+    fixturesRoot: '/repo/fixtures',
     resolveArg: (p) => p,
     readText: async (p) => (p.endsWith('.env') ? envText : (inputs.get(p) ?? null)),
     writeFile: async (p, c) => void files.set(p, c),
@@ -129,6 +133,8 @@ describe('parseArgs', () => {
     expect(() => parseArgs(['backfill', '--commit'])).toThrow(/resolve and import-history only/);
     expect(() => parseArgs(['backfill', '--only', 'cash'])).toThrow(/--only/);
     expect(() => parseArgs(['backfill', '--from', '2024-1-1'])).toThrow(/YYYY-MM-DD/);
+    expect(parseArgs(['fifo-compare', '--fixtures'])).toMatchObject({ fixtures: true });
+    expect(() => parseArgs(['report', '--fixtures'])).toThrow(/fifo-compare only/);
   });
 });
 
@@ -245,5 +251,86 @@ describe('run', () => {
     );
     expect(await run([...base, '--asset', 'NOPE', '--currency', 'EUR'], h.deps)).toBe(1);
     expect(h.out.at(-1)).toBe('No asset with ticker NOPE.');
+  });
+});
+
+describe('fifo-compare', () => {
+  const fixture = readFileSync(
+    fileURLToPath(new URL('../../../fixtures/sample_transactions.csv', import.meta.url)),
+    'utf8',
+  );
+
+  it('--fixtures runs without the .env and finds no change', async () => {
+    const db = seed();
+    const h = harness(
+      db,
+      REF,
+      null,
+      new Map([['/repo/fixtures/sample_transactions.csv', fixture]]),
+    );
+    expect(await run(['fifo-compare', '--fixtures'], h.deps)).toBe(0);
+    expect(h.out[0]).toBe(
+      'FIFO comparison on fixtures/sample_transactions.csv: 140 ledger rows, 13 disposals.',
+    );
+    expect(h.out).toContain('Disposals whose realized gain changes: 0.');
+    expect(h.out.at(-1)).toMatch(/assets whose cost basis changes: 0\.$/);
+  });
+
+  it('on the database: counts and totals only, read-only', async () => {
+    // SXR8-like: degiro 4 @ 100 then ibkr 5 @ 120; ibkr sells 3 @ 130.
+    // pooled: cost 300, gain 90; per account: cost 360, gain 30 -> 1 disposal changes (-60);
+    // open cost 1,000 - 300 = 700 pooled, 1,000 - 360 = 640 per account
+    const db = seed();
+    db.transactions = [
+      { ...tx('buy', '2024-01-01', 'btc', '4', '100', 'b1'), accountId: 'degiro' },
+      { ...tx('buy', '2024-01-02', 'btc', '5', '120', 'b2'), accountId: 'ibkr' },
+      {
+        ...tx('buy', '2024-01-03', 'btc', '3', '130', 's1'),
+        type: 'sell',
+        accountId: 'ibkr',
+      },
+    ];
+    const h = harness(db);
+    expect(await run(['fifo-compare'], h.deps)).toBe(1);
+    expect(h.out).toEqual([
+      `FIFO comparison on project ${REF}: 3 ledger rows, 1 disposals.`,
+      'Realized gain: pooled 90.00 EUR, per account 30.00 EUR (change -60.00 EUR).',
+      'Disposals whose realized gain changes: 1.',
+      'Open cost basis: pooled 700.00 EUR, per account 640.00 EUR; assets whose cost basis changes: 1.',
+    ]);
+    expect(db.writes).toEqual({ prices: 0, fx: 0, snapshots: 0 });
+    expect(db.runs).toEqual([]);
+    expect(h.files.size).toBe(0);
+  });
+
+  it('names the row (ids only) when per-account FIFO refuses the ledger', async () => {
+    const db = seed();
+    db.transactions = [
+      { ...tx('buy', '2024-01-01', 'btc', '4', '100', 'b1'), accountId: 'degiro' },
+      { ...tx('buy', '2024-01-03', 'btc', '1', '130', 's1'), type: 'sell', accountId: 'ibkr' },
+    ];
+    const h = harness(db);
+    expect(await run(['fifo-compare'], h.deps)).toBe(1);
+    expect(h.out[1]).toBe(
+      'Per-account FIFO refuses the ledger: a disposal exceeds the units its account holds ' +
+        '(transaction s1, asset btc, account ibkr).',
+    );
+  });
+});
+
+describe('compareFifo on the fixture ledger', () => {
+  it('pooled and per-account FIFO agree on the sample data (SXR8 at two brokers, no sells)', () => {
+    const text = readFileSync(
+      fileURLToPath(new URL('../../../fixtures/sample_transactions.csv', import.meta.url)),
+      'utf8',
+    );
+    const ledger = fixtureLedger(text);
+    const sxr8 = new Set(ledger.filter((t) => t.assetId === 'SXR8').map((t) => t.accountId));
+    expect([...sxr8].sort()).toEqual(['Degiro', 'IBKR']);
+    const c = compareFifo(ledger);
+    if ('kind' in c) throw new Error('per-account FIFO refused the fixtures');
+    expect([c.disposals, c.disposalsChanged, c.assetsCostChanged]).toEqual([13, 0, 0]);
+    expect(c.realizedPerAccountEur.toString()).toBe(c.realizedPooledEur.toString());
+    expect(c.openCostPerAccountEur.toString()).toBe(c.openCostPooledEur.toString());
   });
 });
