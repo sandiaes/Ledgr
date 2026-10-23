@@ -79,12 +79,13 @@ minute in the background (More → Security to change it). Screenshots are block
 After changing `.env`, restart with `npx expo start --clear` (the values are built into the
 bundle).
 
-## 4. When the company Wi-Fi blocks the connection
+## 4. When the phone cannot reach the PC (company Wi-Fi or laptop)
 
 Signs: Expo Go spins on the loading screen and then shows _"Uncaught Error:
 java.io.IOException: Failed to download remote update"_, _"Could not connect to the
 server"_ or a timeout, and the terminal never prints `Android Bundling …`. The phone cannot
-reach the PC's port 8081.
+reach the PC's port 8081. On a company-managed laptop this happens on your home Wi-Fi too:
+its firewall blocks incoming connections; use the USB cable (B).
 
 Check it first: in the terminal, under the QR code, Expo prints `Metro waiting on
 exp://<address>:8081`. On the phone, open `http://<address>:8081/status` in Chrome.
@@ -106,13 +107,18 @@ exp://<address>:8081`. On the phone, open `http://<address>:8081/status` in Chro
 
 ### A. Tunnel
 
+Since SDK 58, `--tunnel` uses Expo's own tunnel, which needs you logged in to your
+(free) Expo account; you need the account for the APK anyway (step 5):
+
 ```bash
 cd apps/mobile
+npx expo login                      # once; sign up at https://expo.dev first
 npx expo start --tunnel
 ```
 
-The first time it asks to install `@expo/ngrok`: answer yes. Scan the new QR code. The
-tunnel goes through ngrok's servers, which the company proxy may also block; then use B.
+Without an account, use ngrok instead: `npx expo start --tunnel ngrok` (the first time it
+asks to install `@expo/ngrok`: answer yes). Either way, scan the new QR code. The company
+proxy may block the tunnel service as well; then use B.
 
 ### B. USB cable (`adb reverse`)
 
@@ -125,15 +131,27 @@ tunnel goes through ngrok's servers, which the company proxy may also block; the
    export PATH="$PATH:/c/platform-tools"
    ```
 3. Connect the phone by USB, accept **Allow USB debugging** on the phone, then:
+
    ```bash
-   adb devices                       # must list the phone as "device"
+   adb devices                       # must list the phone as "device" (its serial number)
    adb reverse tcp:8081 tcp:8081     # the phone's port 8081 now reaches the PC
+   adb reverse --list                # check: <serial> tcp:8081 tcp:8081
    cd apps/mobile
-   npx expo start --localhost --android
+   npx expo start
    ```
-   `--android` opens the project in Expo Go on the phone (and offers to install the right
-   Expo Go). You can also open Expo Go and enter `exp://127.0.0.1:8081` by hand. Run
-   `adb reverse` again after you unplug the cable.
+
+   Then in Expo Go tap **Enter URL manually** and open `exp://127.0.0.1:8081`. Do not scan
+   the QR code or press `a`: those use the PC's Wi-Fi address, which is what is blocked.
+   Check first, if you like: `http://127.0.0.1:8081/status` in Chrome on the phone must
+   show `packager-status:running`.
+
+   Do **not** add `--localhost` here: on Windows it makes Metro listen on IPv6 `::1` only,
+   while `adb reverse` connects to IPv4 `127.0.0.1`, so the phone gets _"Failed to download
+   remote update"_ although the PC's own browser reaches Metro.
+
+   Run `adb reverse` again after you unplug the cable. The warnings _"Failed to resolve the
+   Android SDK path"_ are harmless (Expo then uses the `adb` on your PATH); with
+   `export ANDROID_HOME=/c` they go away, since Expo looks for `platform-tools\adb` there.
 
 ### C. Phone hotspot
 
@@ -194,8 +212,8 @@ proxy blocks expo.dev altogether, run the `eas` commands on the phone's hotspot.
 git pull && pnpm install
 cd apps/mobile
 npx expo start                      # same Wi-Fi: scan the QR code with Expo Go
-npx expo start --tunnel             # company Wi-Fi: through a tunnel
-adb reverse tcp:8081 tcp:8081 && npx expo start --localhost --android   # USB cable
+npx expo start --tunnel             # company Wi-Fi: through a tunnel (after npx expo login)
+adb reverse tcp:8081 tcp:8081 && npx expo start   # USB cable, then exp://127.0.0.1:8081 in Expo Go
 
 # installable APK
 eas build --platform android --profile preview
