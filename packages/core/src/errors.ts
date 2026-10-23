@@ -13,8 +13,7 @@ export class LedgerError extends Error {
 
 /**
  * A sell or redemption for more units than its account holds of the asset, or a transfer of
- * more units than the sending account holds. `accountId` is null only for the pooled
- * comparison mode of runFifo, where the check is against all accounts combined.
+ * more units than the sending account holds.
  */
 export class InsufficientHoldingsError extends LedgerError {
   override name = 'InsufficientHoldingsError';
@@ -23,13 +22,12 @@ export class InsufficientHoldingsError extends LedgerError {
     readonly assetId: string,
     readonly requested: Decimal,
     readonly available: Decimal,
-    readonly accountId: string | null,
+    readonly accountId: string,
     readonly kind: 'disposal' | 'transfer' = 'disposal',
   ) {
     super(
       `${kind === 'transfer' ? 'Transfer' : 'Disposal'} of ${requested.toString()} units exceeds the ` +
-        `${available.toString()} held of asset ${assetId}` +
-        (accountId ? ` in account ${accountId}` : ''),
+        `${available.toString()} held of asset ${assetId} in account ${accountId}`,
       transactionId,
     );
   }

@@ -46,7 +46,7 @@ const opArb = fc.record({
 type Op = typeof opArb extends fc.Arbitrary<infer T> ? T : never;
 
 function buildLedger([ops, seed]: [Op[], number]) {
-  const held = new Map<string, Decimal>(); // pooled, by asset
+  const held = new Map<string, Decimal>(); // total over all accounts, by asset
   const perAccount = new Map<string, Decimal>(); // by `${account}/${asset}`
   // Units transferred in today: same-day transfers may be reordered, so they cannot be sent on.
   const receivedToday = new Map<string, Decimal>(); // by `${day}/${account}/${asset}`
@@ -122,13 +122,6 @@ function buildLedger([ops, seed]: [Op[], number]) {
 
 const opsArb = fc.tuple(fc.array(opArb, { maxLength: 60 }), fc.integer());
 const ledgerArb = opsArb.map(buildLedger);
-/** Every asset held in one account only (no transfers): both FIFO modes must agree. */
-const singleAccountArb = opsArb.map(([ops, seed]) =>
-  buildLedger([
-    ops.map((o) => ({ ...o, account: o.asset % 2, kind: o.kind === 'transfer' ? 'buy' : o.kind })),
-    seed,
-  ]),
-);
 
 const ASOF = addDays(START, 59);
 const prices = createPriceLookup(
@@ -260,22 +253,6 @@ describe('properties', () => {
         const over = qty.plus(new Decimal(extra).div(10 ** 8));
         const oversell = sell(ASOF, asset, over.toString(), '1', { account: 'acc2' });
         expect(() => runFifo([...txs, oversell])).toThrow(InsufficientHoldingsError);
-      }),
-    );
-  });
-
-  it('both FIFO modes agree whenever every asset is held in one account only', () => {
-    fc.assert(
-      fc.property(singleAccountArb, ({ txs }) => {
-        const perAccount = runFifo(txs);
-        const pooled = runFifo(txs, { matching: 'pooled' });
-        const gains = (r: typeof pooled) => r.disposals.map((x) => x.gainEur.toString());
-        const lots = (r: typeof pooled) =>
-          r.openLots
-            .map((l) => [l.lotId, l.quantity.toString(), l.costEur.toString()].join(' '))
-            .sort();
-        expect(gains(perAccount)).toEqual(gains(pooled));
-        expect(lots(perAccount)).toEqual(lots(pooled));
       }),
     );
   });

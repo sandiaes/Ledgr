@@ -160,7 +160,7 @@ hand-checkable numbers (a few lots, round prices), plus property tests (fast-che
 
 | Function (file)                                                    | Purpose                                                                                                                                               | Tests                                                                                                                                                    |
 | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `runFifo` option `matching: 'account' \| 'pooled'` (`fifo.ts`)     | per-account lots by default; transfers move the sender's oldest lots                                                                                  | §4 below                                                                                                                                                 |
+| `runFifo` per account (`fifo.ts`)                                  | per-account lots by default; transfers move the sender's oldest lots                                                                                  | §4 below                                                                                                                                                 |
 | `Holding.accounts[]` extended (`holdings.ts`)                      | per account: units, lots, cost basis, value, unrealized                                                                                               | 2 brokers × 2 lots by hand; property: Σ accounts = holding for value, cost, unrealized                                                                   |
 | `accountSummaries` (`accounts.ts`)                                 | per broker: value, weight, cost, _U_, _R_, _I_, _C_, gain                                                                                             | hand example; property: Σ brokers = `gainsSummary`                                                                                                       |
 | `closedPositions` (`closed.ts`)                                    | realized results per fully closed asset, split by account                                                                                             | buy 10 @ 10, buy 10 @ 12, sell 20 @ 15 → gain 80; reopened asset is not listed                                                                           |
@@ -205,20 +205,16 @@ from. The importer already checked every sell against its own broker's holdings 
   match on.
 - Holdings: one row per asset as now, plus exact per-account lots, cost, value and
   unrealized (no more pro rata split). `accountQuantities` goes away (derived from lots).
-- **Pooled mode only for a one-off comparison** (D2): `runFifo` keeps a
-  `matching: 'pooled'` option (the old code path: the queue key, and "transfers do not
-  move lots"), documented as "comparison only". Its only callers are the one-off
-  `pnpm prices fifo-compare` command and the tests. The app, snapshots and
-  value-now always use per-account FIFO; nothing in any UI offers pooled. Once you have
-  run the comparison, the command and the option can be deleted in a later step.
+- **Pooled mode only for a one-off comparison** (D2): `runFifo` kept a
+  `matching: 'pooled'` option used only by the one-off `pnpm prices fifo-compare` command
+  and the tests. **Removed 2026-10-23** after the comparison was run (below).
 - Totals: realized is Σ disposals and each disposal belongs to one account; open cost is
   Σ lots and each lot belongs to one account. So portfolio realized and unrealized equal
   the sum over accounts by construction; a property test checks it on random ledgers
-  (2 accounts, 3 assets, buys/sells/transfers), and another that both modes give identical
-  results whenever every asset is held in one account only.
+  (2 accounts, 3 assets, buys/sells/transfers).
 - Tests: the pooled tests in `fifo.test.ts` become per-account ("a sale in IBKR does not
   touch the older Degiro lot", "oversell is per account", "transfer moves the oldest lots
-  with their cost", "partial transfer splits a lot"), plus one pooled-mode test each.
+  with their cost", "partial transfer splits a lot").
 - `docs/assumptions.md` #1 (renamed "FIFO lots per account"), #21 (transfers move lots)
   and #22 (the importer's check now matches FIFO) are rewritten; the change is dated.
 - The Edge Function bundle must be rebuilt and redeployed (`docs/prices.md` step 6) so the
@@ -241,6 +237,10 @@ open cost under each mode and the number of assets whose cost changes. No per-tr
 is printed or written. `pnpm prices fifo-compare --fixtures` runs the same on
 `fixtures/sample_transactions.csv` (no `.env` needed); a test asserts it finds 0 changes
 (13 disposals). I expect 0 on the live ledger too.
+
+**Result (2026-10-23):** on the live ledger, 137 rows and 13 disposals, **no change**: the
+same realized gain for every disposal and the same open cost for every asset, so no
+snapshot needed recomputing. The command and the pooled option were then deleted.
 
 **Sell form** (slice 5c): units held per broker for the chosen asset on the chosen date
 (`unitsHeld`), only brokers with units offered, and the limit is `maxDisposable`: the most
@@ -429,7 +429,7 @@ Go (no custom native code).
 Each slice: short plan, implement, tests, `pnpm check`, commit and push, summary.
 
 **5a-core — built 2026-10-23** (`packages/core` and docs only): FIFO per account (§4) and
-`pnpm prices fifo-compare`; `accountSummaries`, `flowEur` / `dailyFlows`, the `twr` from-zero
+the one-off `pnpm prices fifo-compare` (run: no change; then removed); `accountSummaries`, `flowEur` / `dailyFlows`, the `twr` from-zero
 rule, `dayChange`, `periodReturns`, `valueSeries`, `monthlyReturns`, `yearlyReturns`,
 `bestWorstMonth`, `topPositions`, `topMovers`, `closedPositions`, `unitsHeld`,
 `maxDisposable`, `certificadoSubscriptions` (pulled forward from 5b/5c as asked). Still to
@@ -480,9 +480,9 @@ row; a retried insert with the same id does not duplicate. Plus symbol resolutio
 - **D1 Total gain** = realized + unrealized + net income − other costs
   (_R_ + _U_ + _I_ − _C_), and the dashboard shows each component on its own line.
 - **D2 FIFO per account (broker)**: a sale consumes only lots of the account selected for
-  it; this is the default in `packages/core` (`runFifo`). **Pooled FIFO** exists only as a
-  one-off comparison (`pnpm prices fifo-compare` and tests); never in any UI, snapshot or
-  value-now (§4).
+  it; this is the only rule in `packages/core` (`runFifo`). **Pooled FIFO** existed only for
+  a one-off comparison (`pnpm prices fifo-compare`), never in any UI, snapshot or
+  value-now; it found no change and was removed (§4).
 - **D3 Symbol resolution** is added to `prices-daily` (§5); a resolution failure never
   breaks the price run, and the app shows "price pending". `docs/prices.md` gets redeploy
   steps with a Dashboard route for when the CLI fails on the company network.

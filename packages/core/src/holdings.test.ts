@@ -167,7 +167,7 @@ describe('computeHoldings', () => {
   });
 
   it('a transfer of more than the sending account holds throws', () => {
-    // pooled total is 2, but acc1 only has 1
+    // 2 held over both accounts, but acc1 only has 1
     const txs = [
       buy('2024-01-01', 'A', '1', '10', { account: 'acc1' }),
       buy('2024-01-01', 'A', '1', '10', { account: 'acc2' }),

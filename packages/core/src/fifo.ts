@@ -63,22 +63,11 @@ export interface Disposal {
   matches: LotMatch[];
 }
 
-/**
- *   account  lots per (account, asset): a sale consumes only its own account's lots, and a
- *            transfer moves the sender's oldest lots to the receiver. The default, and the
- *            only mode the apps, snapshots and value-now use.
- *   pooled   lots per asset across all accounts; transfers move no lots. COMPARISON ONLY
- *            (the one-off `pnpm prices fifo-compare` and tests); never shown in any UI.
- */
-export type FifoMatching = 'account' | 'pooled';
-
 export interface FifoOptions {
   /** Ignore rows after this date (inclusive cut-off). */
   asOf?: IsoDate;
   /** Lets redemptions with caSubscriptionId target that subscription's lot. */
   caSubscriptions?: readonly { id: string; transactionId: string }[];
-  /** Default 'account'. 'pooled' is for the one-off comparison only. */
-  matching?: FifoMatching;
 }
 
 export interface FifoResult {
@@ -109,13 +98,11 @@ export function runFifo(
   transactions: readonly Transaction[],
   options: FifoOptions = {},
 ): FifoResult {
-  const pooled = options.matching === 'pooled';
   const ledger = prepareLedger(transactions, options.asOf);
   const caLot = new Map((options.caSubscriptions ?? []).map((s) => [s.id, s.transactionId]));
 
   const queues = new Map<string, MutableLot[]>();
-  const keyOf = (accountId: string, assetId: string) =>
-    pooled ? assetId : `${accountId}\u0000${assetId}`;
+  const keyOf = (accountId: string, assetId: string) => `${accountId}\u0000${assetId}`;
   const queueOf = (key: string) => {
     let queue = queues.get(key);
     if (!queue) queues.set(key, (queue = []));
@@ -152,7 +139,7 @@ export function runFifo(
       record(tx.tradeDate);
     } else if (isDisposal(tx.type)) {
       const queue = queueOf(key);
-      const disposal = dispose(tx, queue, caLot, pooled ? null : tx.accountId);
+      const disposal = dispose(tx, queue, caLot);
       queues.set(
         key,
         queue.filter((lot) => !lot.quantity.isZero()),
@@ -160,7 +147,7 @@ export function runFifo(
       openCost = openCost.minus(disposal.costEur);
       disposals.push(disposal);
       record(tx.tradeDate);
-    } else if (tx.type === 'transfer' && !pooled) {
+    } else if (tx.type === 'transfer') {
       const to = tx.transferToAccountId as string;
       const moved = moveLots(tx, queueOf(key));
       queues.set(
@@ -221,12 +208,7 @@ function moveLots(tx: Transaction, queue: MutableLot[]): MutableLot[] {
   return moved;
 }
 
-function dispose(
-  tx: Transaction,
-  queue: MutableLot[],
-  caLot: Map<string, string>,
-  accountId: string | null,
-): Disposal {
+function dispose(tx: Transaction, queue: MutableLot[], caLot: Map<string, string>): Disposal {
   const assetId = tx.assetId as string;
   const requested = tx.quantity as Decimal;
 
@@ -239,7 +221,7 @@ function dispose(
 
   const available = candidates.reduce((s, lot) => s.plus(lot.quantity), ZERO);
   if (requested.gt(available)) {
-    throw new InsufficientHoldingsError(tx.id, assetId, requested, available, accountId);
+    throw new InsufficientHoldingsError(tx.id, assetId, requested, available, tx.accountId);
   }
 
   const proceeds = disposalProceedsEur(tx);

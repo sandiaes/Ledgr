@@ -71,15 +71,16 @@ unrealized gain. The accounts add up exactly to the holding (the last account ta
 remainder of the value), so portfolio realized and unrealized gains equal the sum over
 accounts by construction. Allocation by account uses these values.
 
-Pooled matching survives only as `runFifo`'s `matching: 'pooled'` option for the one-off
-`pnpm prices fifo-compare` command and the tests; no app figure, snapshot or value-now uses
-it, and it will be deleted once the comparison has been run.
+Before the switch, a one-off comparison of the two rules on the live ledger (2026-10-23:
+137 rows, 13 disposals) found no change: the same realized gain for every disposal and the
+same open cost for every asset, so no stored snapshot needed recomputing. Pooled matching
+and the comparison command were then removed.
 
 - Status: out of scope: tax reports will come from importing broker report exports, not
   from this ledger.
-- Implemented in: `fifo.ts` (`runFifo`, `FifoMatching`), `holdings.ts` (`computeHoldings`,
+- Implemented in: `fifo.ts` (`runFifo`), `holdings.ts` (`computeHoldings`,
   `HoldingAccount`), `allocation.ts` (`allocation`, account dimension), `accounts.ts`
-  (`accountSummaries`); `scripts/prices/src/fifo-compare.ts`.
+  (`accountSummaries`).
 
 ### 2. Same-day ordering
 
