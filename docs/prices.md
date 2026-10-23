@@ -10,6 +10,7 @@ repository folder. Nothing here needs admin rights or Docker.
 | ------------------------------ | -------------------------------- | --------------------------------------------------------------------------------- |
 | `pnpm prices resolve`          | your computer (`scripts/prices`) | finds each asset's provider symbol and fills `assets.price_source(_id)`           |
 | `pnpm prices backfill`         | your computer                    | ECB rates, prices and daily snapshots from your first trade, then a sanity report |
+| `pnpm prices fifo-compare`     | your computer, one-off           | read-only: pooled vs per-account FIFO, counts and totals only (see below)         |
 | `fx-daily` Edge Function       | Supabase, 05:15 UTC daily        | ECB rates up to today (re-reads the last 7 days)                                  |
 | `prices-daily` Edge Function   | Supabase, 05:25 UTC daily        | closes up to yesterday for what you hold (re-reads the last 5 days)               |
 | `snapshot-daily` Edge Function | Supabase, 05:40 UTC daily        | snapshots from the 1st of last month to yesterday                                 |
@@ -370,6 +371,28 @@ pnpm prices backfill --to 2025-12-31                             # stop at a dat
 - **One daily run by hand:** the curl command from step 6, optionally with
   `-H "Content-Type: application/json" -d '{"from":"YYYY-MM-DD"}'` (at most 62 days back)
   instead of `-H "Content-Length: 0"`.
+
+## FIFO per account: the one-off comparison and redeploy (2026-10-23)
+
+Since slice 5a-core, `packages/core` matches lots **per account** (`docs/assumptions.md` #1).
+To see whether that changes any of your figures, run once (read-only; it uses
+`scripts/prices/.env` like the other commands, so only `LEDGR_USER_ID`'s rows are read):
+
+```bash
+pnpm prices fifo-compare              # your database
+pnpm prices fifo-compare --fixtures   # the anonymized sample (no .env needed): expect 0 changes
+```
+
+It prints only counts and totals: ledger rows, disposals, realized gain under each rule,
+how many disposals change, open cost under each rule and how many assets change. Exit code
+0 means nothing changes. If a sale exceeds what its own account holds, it names that row
+by id (fix it, or record the missing transfer). Once you have run it, the command and the
+pooled option are deleted in a later step.
+
+**After a core change**, the daily functions still run the old bundle. Rebuild and deploy
+them (step 6: `pnpm functions:build`, then the four `deploy` commands), so snapshots and
+value-now use the same rule as the app. If the comparison reported changes, recompute the
+stored snapshots: `pnpm prices backfill --only snapshots` (from your first trade).
 
 ## Rotating a key
 

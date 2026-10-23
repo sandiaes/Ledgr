@@ -36,10 +36,40 @@ describe('twr', () => {
   });
 
   it('starts from zero on the first deposit', () => {
-    // period into the first deposit is skipped; then 1000 -> 1050 = +5%
+    // from zero the flow counts at the start of the day: 1000 / 1000 - 1 = 0; then +5%
     const r = twr([p('2024-01-01', '0'), p('2024-01-02', '1000', '1000'), p('2024-01-03', '1050')]);
-    expect(r.periods).toHaveLength(1);
+    expect(r.periods.map((x) => x.return.toString())).toEqual(['0', '0.05']);
     expectDec(r.cumulative, '0.05');
+  });
+
+  it('from zero: a buy of 1,000 worth 1,010 that evening is +1%', () => {
+    const r = twr([p('2024-01-01', '0'), p('2024-01-02', '1010', '1000')]);
+    expectDec(r.cumulative, '0.01');
+  });
+
+  it('full exit and re-entry: each re-entry day is measured from its own buy', () => {
+    // d2: buy 100, worth 110 at the close         110/100 - 1 = +10%
+    // d3: sell all for 121 (value 0, flow -121)    (0 + 121)/110 - 1 = +10%
+    // d4: nothing held, nothing done               skipped
+    // d5: buy 200, worth 190 at the close          190/200 - 1 = -5%
+    // d6: 190 -> 209                               +10%
+    // cumulative = 1.1 * 1.1 * 0.95 * 1.1 - 1 = 0.26445
+    const r = twr([
+      p('2024-01-01', '0'),
+      p('2024-01-02', '110', '100'),
+      p('2024-01-03', '0', '-121'),
+      p('2024-01-04', '0'),
+      p('2024-01-05', '190', '200'),
+      p('2024-01-06', '209'),
+    ]);
+    expect(r.periods.map((x) => x.return.toString())).toEqual(['0.1', '0.1', '-0.05', '0.1']);
+    expectDec(r.cumulative, '0.26445');
+  });
+
+  it('from zero to zero is skipped (bought and sold the same day)', () => {
+    const r = twr([p('2024-01-01', '0'), p('2024-01-02', '0', '10'), p('2024-01-03', '0')]);
+    expect(r.periods).toEqual([]);
+    expectDec(r.cumulative, '0');
   });
 
   it('can close out to zero and restart', () => {
@@ -85,6 +115,7 @@ describe('twr', () => {
 
   it('rejects inconsistent series', () => {
     expect(() => twr([p('2024-01-01', '0'), p('2024-01-02', '10')])).toThrow(/from zero/);
+    expect(() => twr([p('2024-01-01', '0'), p('2024-01-02', '10', '-5')])).toThrow(/from zero/);
     expect(() => twr([p('2024-01-01', '-5'), p('2024-01-02', '10')])).toThrow(/Negative/);
     expect(() => twr([p('2024-01-01', '1'), p('2024-01-01', '2')])).toThrow(/Duplicate/);
     expect(() => twr([p('2024-1-1', '1')])).toThrow(/Invalid/);

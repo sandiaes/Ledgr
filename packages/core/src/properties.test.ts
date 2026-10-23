@@ -1,17 +1,20 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { accountSummaries } from './accounts';
 import { allocation } from './allocation';
+import { dailyFlows } from './cashflows';
 import { addDays } from './dates';
 import { Decimal, ZERO } from './decimal';
 import { InsufficientHoldingsError } from './errors';
 import { runFifo } from './fifo';
-import { gainsSummary, netContributions } from './gains';
+import { gainsSummary } from './gains';
 import { computeHoldings } from './holdings';
-import { acquisitionCostEur, cashBalanceEur, isAcquisition } from './ledger';
+import { acquisitionCostEur, isAcquisition } from './ledger';
 import { createFxLookup, createPriceLookup } from './lookups';
 import { buy, d, deposit, dividend, expectClose, fee, sell, transfer } from './test-utils';
 import { twr } from './twr';
 import type { Asset, Transaction } from './types';
+import { maxDisposable } from './validation';
 import { xirr } from './xirr';
 
 const START = '2024-01-01';
@@ -36,16 +39,19 @@ const opArb = fc.record({
 });
 
 /**
- * A random but valid ledger: sells never exceed what is held across all accounts (lots are
- * pooled; simulated in processing order: by day, acquisitions first). A sell may come from
- * an account holding fewer units than it sells. Shuffled so input order is arbitrary.
+ * A random but valid ledger: sells and transfers never exceed what their account holds
+ * (FIFO per account; simulated in processing order: by day, acquisitions first, sells
+ * last). Shuffled so input order is arbitrary.
  */
-const ledgerArb = fc.tuple(fc.array(opArb, { maxLength: 60 }), fc.integer()).map(([ops, seed]) => {
+type Op = typeof opArb extends fc.Arbitrary<infer T> ? T : never;
+
+function buildLedger([ops, seed]: [Op[], number]) {
   const held = new Map<string, Decimal>(); // pooled, by asset
   const perAccount = new Map<string, Decimal>(); // by `${account}/${asset}`
-  const ordered = [...ops].sort(
-    (a, b) => a.day - b.day || Number(a.kind === 'sell') - Number(b.kind === 'sell'),
-  );
+  // Units transferred in today: same-day transfers may be reordered, so they cannot be sent on.
+  const receivedToday = new Map<string, Decimal>(); // by `${day}/${account}/${asset}`
+  const phase = (k: string) => (k === 'buy' ? 0 : k === 'sell' ? 2 : 1);
+  const ordered = [...ops].sort((a, b) => a.day - b.day || phase(a.kind) - phase(b.kind));
   const txs: Transaction[] = [];
   for (const op of ordered) {
     const date = addDays(START, op.day);
@@ -70,21 +76,27 @@ const ledgerArb = fc.tuple(fc.array(opArb, { maxLength: 60 }), fc.integer()).map
     } else if (op.kind === 'sell') {
       const qty =
         op.sellBp === 10_000
-          ? position
-          : position.times(op.sellBp).div(10_000).toDecimalPlaces(8, Decimal.ROUND_DOWN);
+          ? inAccount
+          : inAccount.times(op.sellBp).div(10_000).toDecimalPlaces(8, Decimal.ROUND_DOWN);
       if (qty.isZero()) continue;
       txs.push(sell(date, asset.id, qty.toString(), price, extra));
       held.set(asset.id, position.minus(qty));
       perAccount.set(key, inAccount.minus(qty));
     } else if (op.kind === 'transfer') {
-      // Move part of what this account holds to the other one.
-      if (!inAccount.gt(0)) continue;
-      const qty = inAccount.times(op.sellBp).div(10_000).toDecimalPlaces(8, Decimal.ROUND_DOWN);
+      // Move part of what this account held before today's transfers to the other one.
+      const movable = inAccount.minus(receivedToday.get(`${op.day}/${key}`) ?? ZERO);
+      if (!movable.gt(0)) continue;
+      const qty = movable.times(op.sellBp).div(10_000).toDecimalPlaces(8, Decimal.ROUND_DOWN);
       if (qty.isZero()) continue;
       const to = ACCOUNTS[1 - op.account]!;
+      const toKey = `${to}/${asset.id}`;
       txs.push(transfer(date, asset.id, qty.toString(), to, extra));
       perAccount.set(key, inAccount.minus(qty));
-      perAccount.set(`${to}/${asset.id}`, (perAccount.get(`${to}/${asset.id}`) ?? ZERO).plus(qty));
+      perAccount.set(toKey, (perAccount.get(toKey) ?? ZERO).plus(qty));
+      receivedToday.set(
+        `${op.day}/${toKey}`,
+        (receivedToday.get(`${op.day}/${toKey}`) ?? ZERO).plus(qty),
+      );
     } else if (op.kind === 'dividend') {
       if (op.price > 0) {
         const withholding = new Decimal(op.price).times(op.sellBp % 3500).div(1_000_000);
@@ -106,7 +118,17 @@ const ledgerArb = fc.tuple(fc.array(opArb, { maxLength: 60 }), fc.integer()).map
     [txs[i], txs[j]] = [txs[j]!, txs[i]!];
   }
   return { txs, held, perAccount };
-});
+}
+
+const opsArb = fc.tuple(fc.array(opArb, { maxLength: 60 }), fc.integer());
+const ledgerArb = opsArb.map(buildLedger);
+/** Every asset held in one account only (no transfers): both FIFO modes must agree. */
+const singleAccountArb = opsArb.map(([ops, seed]) =>
+  buildLedger([
+    ops.map((o) => ({ ...o, account: o.asset % 2, kind: o.kind === 'transfer' ? 'buy' : o.kind })),
+    seed,
+  ]),
+);
 
 const ASOF = addDays(START, 59);
 const prices = createPriceLookup(
@@ -146,7 +168,17 @@ describe('properties', () => {
             .map(([k, q]) => [k.split('/')[0], q.toString()])
             .sort();
           expect(h.accounts.map((a) => [a.accountId, a.quantity.toString()])).toEqual(expected);
+          // The accounts add up exactly to the holding.
           expect(sumBy(h.accounts, (a) => a.quantity).toString()).toBe(qty.toString());
+          expect(sumBy(h.accounts, (a) => a.costBasisEur).toString()).toBe(
+            h.costBasisEur.toString(),
+          );
+          expect(sumBy(h.accounts, (a) => a.marketValueEur!).toString()).toBe(
+            h.marketValueEur!.toString(),
+          );
+          expect(sumBy(h.accounts, (a) => a.unrealizedGainEur!).toString()).toBe(
+            h.unrealizedGainEur!.toString(),
+          );
         }
         expect(openLots.every((l) => l.quantity.gt(0))).toBe(true);
       }),
@@ -183,7 +215,7 @@ describe('properties', () => {
     );
   });
 
-  it('total return = positions + cash - net contributions', () => {
+  it('total gain = value - sum of the day flows, and = the sum over accounts', () => {
     fc.assert(
       fc.property(ledgerArb, ({ txs }) => {
         const holdings = computeHoldings({
@@ -195,23 +227,79 @@ describe('properties', () => {
         });
         const g = gainsSummary({ transactions: txs, holdings, asOf: ASOF });
         const positions = sumBy(holdings, (h) => h.marketValueEur as Decimal);
-        const identity = positions
-          .plus(cashBalanceEur(txs, ASOF))
-          .minus(netContributions(txs, ASOF).netEur);
-        expectClose(g.totalReturnEur, identity, '1e-30');
+        const flows = sumBy(dailyFlows(txs, { asOf: ASOF }), (f) => f.flowEur);
+        expectClose(g.totalReturnEur, positions.minus(flows), '1e-30');
+
+        const accounts = accountSummaries({ transactions: txs, holdings, asOf: ASOF });
+        expect(sumBy(accounts, (a) => a.realizedEur).toString()).toBe(g.realizedEur.toString());
+        expect(sumBy(accounts, (a) => a.incomeNetEur).toString()).toBe(g.incomeNetEur.toString());
+        expect(sumBy(accounts, (a) => a.otherCostsEur).toString()).toBe(g.otherCostsEur.toString());
+        expectClose(
+          sumBy(accounts, (a) => a.unrealizedEur),
+          g.unrealizedEur,
+          '1e-30',
+        );
+        expectClose(
+          sumBy(accounts, (a) => a.totalGainEur),
+          g.totalReturnEur,
+          '1e-30',
+        );
       }),
     );
   });
 
-  it('selling more than held always throws', () => {
+  it('selling more than the account holds always throws', () => {
     fc.assert(
-      fc.property(ledgerArb, fc.integer({ min: 1, max: 10 ** 8 }), ({ txs, held }, extra) => {
-        // Exceeds the pooled total, sold from whichever account.
-        const [asset, qty] = [...held.entries()][0] ?? ['A', ZERO];
+      fc.property(ledgerArb, fc.integer({ min: 1, max: 10 ** 8 }), ({ txs, perAccount }, extra) => {
+        // Exceeds what acc2 holds, even when acc1 holds plenty.
+        const [key, qty] = [...perAccount.entries()].find(([k]) => k.startsWith('acc2/')) ?? [
+          'acc2/A',
+          ZERO,
+        ];
+        const asset = key.split('/')[1]!;
         const over = qty.plus(new Decimal(extra).div(10 ** 8));
         const oversell = sell(ASOF, asset, over.toString(), '1', { account: 'acc2' });
         expect(() => runFifo([...txs, oversell])).toThrow(InsufficientHoldingsError);
       }),
+    );
+  });
+
+  it('both FIFO modes agree whenever every asset is held in one account only', () => {
+    fc.assert(
+      fc.property(singleAccountArb, ({ txs }) => {
+        const perAccount = runFifo(txs);
+        const pooled = runFifo(txs, { matching: 'pooled' });
+        const gains = (r: typeof pooled) => r.disposals.map((x) => x.gainEur.toString());
+        const lots = (r: typeof pooled) =>
+          r.openLots
+            .map((l) => [l.lotId, l.quantity.toString(), l.costEur.toString()].join(' '))
+            .sort();
+        expect(gains(perAccount)).toEqual(gains(pooled));
+        expect(lots(perAccount)).toEqual(lots(pooled));
+      }),
+    );
+  });
+
+  it('maxDisposable is the largest sale runFifo accepts', () => {
+    fc.assert(
+      fc.property(
+        ledgerArb,
+        fc.integer({ min: 0, max: 59 }),
+        fc.integer({ min: 0, max: 5 }),
+        ({ txs }, day, pick) => {
+          const date = addDays(START, day);
+          const accountId = ACCOUNTS[pick % 2]!;
+          const assetId = ASSETS[pick % 3]!.id;
+          const max = maxDisposable(txs, { accountId, assetId, date });
+          expect(max.isNegative()).toBe(false);
+          const sale = (q: Decimal) =>
+            sell(date, assetId, q.toString(), '1', { account: accountId, id: 'new-sale' });
+          if (max.gt(0)) expect(() => runFifo([...txs, sale(max)])).not.toThrow();
+          expect(() => runFifo([...txs, sale(max.plus('1e-18'))])).toThrow(
+            InsufficientHoldingsError,
+          );
+        },
+      ),
     );
   });
 

@@ -75,15 +75,19 @@ describe('computeHoldings', () => {
     expectDec(btc.unrealizedGainEur, '998');
   });
 
-  it('one holding per asset across accounts, with units and value per account', () => {
-    // acc1 buys 6 @ 10 (60), acc2 buys 4 @ 15 (60); acc2 sells 2 -> pooled FIFO takes
-    // 2 of acc1's older lot (cost 20). Left: 8 units, cost 100, avg 12.5.
-    // Units: acc1 6, acc2 4 - 2 = 2. Price 11: value 88 -> acc1 66, acc2 22.
+  it('one holding per asset across accounts, split exactly by account (2 brokers x 2 lots)', () => {
+    // acc1: 2024-01-01 6 @ 10 = 60, 2024-02-01 2 @ 12 = 24
+    // acc2: 2024-01-02 4 @ 15 = 60, 2024-02-02 2 @ 9 = 18
+    // acc2 sells 5 @ 12 -> its own lots only: 4 @ 15 + 1 @ 9 = 69 (acc1's older lot untouched)
+    // left: acc1 8 units, cost 84; acc2 1 unit, cost 9; total 9 units, cost 93
+    // price 11: acc1 88 (U +4), acc2 11 (U +2); total 99 (U +6)
     const [h, ...rest] = computeHoldings({
       transactions: [
         buy('2024-01-01', 'A', '6', '10', { account: 'acc1' }),
         buy('2024-01-02', 'A', '4', '15', { account: 'acc2' }),
-        sell('2024-03-01', 'A', '2', '12', { account: 'acc2' }),
+        buy('2024-02-01', 'A', '2', '12', { account: 'acc1' }),
+        buy('2024-02-02', 'A', '2', '9', { account: 'acc2' }),
+        sell('2024-03-01', 'A', '5', '12', { account: 'acc2' }),
       ],
       assets,
       asOf: '2024-06-30',
@@ -93,22 +97,31 @@ describe('computeHoldings', () => {
       fx,
     });
     expect(rest).toEqual([]);
-    expectDec(h!.quantity, '8');
-    expectDec(h!.costBasisEur, '100');
-    expectDec(h!.averageCostEur, '12.5');
+    expectDec(h!.quantity, '9');
+    expectDec(h!.costBasisEur, '93');
+    expectDec(h!.marketValueEur, '99');
+    expectDec(h!.unrealizedGainEur, '6');
     expect(
-      h!.accounts.map((a) => [a.accountId, a.quantity.toString(), a.marketValueEur!.toString()]),
+      h!.accounts.map((a) => [
+        a.accountId,
+        a.quantity.toString(),
+        a.costBasisEur.toString(),
+        a.marketValueEur!.toString(),
+        a.unrealizedGainEur!.toString(),
+        a.lots.length,
+      ]),
     ).toEqual([
-      ['acc1', '6', '66'],
-      ['acc2', '2', '22'],
+      ['acc1', '8', '84', '88', '4', 2],
+      ['acc2', '1', '9', '11', '2', 1],
     ]);
   });
 
-  it('transfers move units between accounts without touching cost basis', () => {
+  it('transfers move lots with their cost to the receiving account', () => {
     // exchange buys 1 BTC @ 40000 + 10 fee = 40010
-    // transfer 0.4 to wallet (2 EUR fee: a cost, not part of the cost basis)
-    // wallet sells 0.1 @ 50000: pooled FIFO, cost 40010 * 0.1 = 4001; left 0.9, cost 36009
-    // units: exchange 0.6, wallet 0.4 - 0.1 = 0.3; value 0.9 * 60000 = 54000 = 36000 + 18000
+    // transfer 0.4 to wallet (2 EUR fee: a cost, not part of the cost basis): the moved part
+    //   costs 40010 * 0.4 = 16004, the exchange keeps 0.6 at 24006
+    // wallet sells 0.1 @ 50000: cost 16004 * 0.1 / 0.4 = 4001; wallet keeps 0.3 at 12003
+    // value 0.9 * 60000 = 54000 = exchange 36000 (U 11994) + wallet 18000 (U 5997)
     const [h] = computeHoldings({
       transactions: [
         buy('2024-01-01', 'BTC', '1', '40000', { fees: '10', account: 'ex' }),
@@ -125,10 +138,16 @@ describe('computeHoldings', () => {
     expectDec(h!.quantity, '0.9');
     expectDec(h!.costBasisEur, '36009');
     expect(
-      h!.accounts.map((a) => [a.accountId, a.quantity.toString(), a.marketValueEur!.toString()]),
+      h!.accounts.map((a) => [
+        a.accountId,
+        a.quantity.toString(),
+        a.costBasisEur.toString(),
+        a.marketValueEur!.toString(),
+        a.unrealizedGainEur!.toString(),
+      ]),
     ).toEqual([
-      ['ex', '0.6', '36000'],
-      ['wal', '0.3', '18000'],
+      ['ex', '0.6', '24006', '36000', '11994'],
+      ['wal', '0.3', '12003', '18000', '5997'],
     ]);
   });
 
@@ -172,7 +191,9 @@ describe('computeHoldings', () => {
       prices: createPriceLookup([]),
       fx,
     });
-    expect(h!.accounts).toEqual([{ accountId: 'acc1', quantity: d('5'), marketValueEur: null }]);
+    expect(h!.accounts.map((a) => [a.accountId, a.quantity.toString(), a.marketValueEur])).toEqual([
+      ['acc1', '5', null],
+    ]);
   });
 
   it('uses the price currency, not the trading currency, for conversion', () => {

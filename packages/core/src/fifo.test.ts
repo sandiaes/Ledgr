@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { InsufficientHoldingsError, LedgerError } from './errors';
 import { runFifo } from './fifo';
-import { buy, expectDec, redeem, sell, subscribe, transfer } from './test-utils';
+import { buy, d, expectDec, redeem, sell, subscribe, transfer } from './test-utils';
 
 describe('runFifo', () => {
   it('partial sell of a single lot, fees in cost and proceeds', () => {
@@ -125,6 +125,33 @@ describe('runFifo', () => {
     expectDec(swapped.disposals[0]!.costEur, '20');
   });
 
+  it('same-month rows of two brokers: each account follows the file order', () => {
+    // Month-level import, all on 2021-02-01, in file order:
+    //   degiro buy 10 @ 1, ibkr buy 10 @ 5, degiro sell 10, degiro buy 10 @ 2,
+    //   ibkr sell 5, degiro sell 5
+    // degiro: first sell takes the @1 lot (cost 10), second half the @2 lot (cost 10)
+    // ibkr:   its sell takes its own @5 lot (cost 25), never degiro's cheaper ones
+    const rows = [
+      buy('2021-02-01', 'V', '10', '1', { id: 'r1', account: 'degiro' }),
+      buy('2021-02-01', 'V', '10', '5', { id: 'r2', account: 'ibkr' }),
+      sell('2021-02-01', 'V', '10', '3', { id: 'r3', account: 'degiro' }),
+      buy('2021-02-01', 'V', '10', '2', { id: 'r4', account: 'degiro' }),
+      sell('2021-02-01', 'V', '5', '3', { id: 'r5', account: 'ibkr' }),
+      sell('2021-02-01', 'V', '5', '3', { id: 'r6', account: 'degiro' }),
+    ];
+    const { disposals } = runFifo(rows);
+    expect(disposals.map((x) => [x.transactionId, x.matches.map((m) => m.lotId)])).toEqual([
+      ['r3', ['r1']],
+      ['r5', ['r2']],
+      ['r6', ['r4']],
+    ]);
+    expect(disposals.map((x) => x.costEur.toString())).toEqual(['10', '25', '10']);
+    // Swapping degiro's two buys in the file swaps the lot its first sell consumes.
+    const swapped = runFifo([rows[3]!, rows[1]!, rows[2]!, rows[0]!, rows[4]!, rows[5]!]);
+    expect(swapped.disposals[0]!.matches.map((m) => m.lotId)).toEqual(['r4']);
+    expectDec(swapped.disposals[0]!.costEur, '20');
+  });
+
   it('fractional crypto down to the satoshi', () => {
     // b1 0.05 BTC @ 40000 + fee 2  -> 2000 + 2 = 2002
     // b2 0.02 BTC @ 50000 + fee 1  -> 1000 + 1 = 1001
@@ -183,49 +210,159 @@ describe('runFifo', () => {
     ).toThrow(InsufficientHoldingsError);
   });
 
-  it('pools lots across accounts: a sale anywhere consumes the oldest lot anywhere', () => {
-    // b1: acc1 10 @ 1 = 10 (oldest)     b2: acc2 10 @ 2 = 20
-    // sell 5 @ 3 from acc2 -> consumes b1 (acc1's lot): cost 5, proceeds 15, gain 10
-    // sell 12 @ 3 from acc2 (more than acc2 bought) -> b1 5 (cost 5) + b2 7 (cost 14) = 19
+  it('a sale in IBKR does not touch the older Degiro lot', () => {
+    // b1: degiro 10 @ 1 = 10 (oldest)     b2: ibkr 10 @ 2 = 20
+    // sell 5 @ 3 from ibkr -> consumes b2 only: cost 10, proceeds 15, gain 5
     const { openLots, disposals } = runFifo([
-      buy('2024-01-01', 'A', '10', '1', { id: 'b1', account: 'acc1' }),
-      buy('2024-01-02', 'A', '10', '2', { id: 'b2', account: 'acc2' }),
-      sell('2024-02-01', 'A', '5', '3', { account: 'acc2' }),
-      sell('2024-03-01', 'A', '12', '3', { account: 'acc2' }),
+      buy('2024-01-01', 'A', '10', '1', { id: 'b1', account: 'degiro' }),
+      buy('2024-01-02', 'A', '10', '2', { id: 'b2', account: 'ibkr' }),
+      sell('2024-02-01', 'A', '5', '3', { account: 'ibkr' }),
     ]);
-    expect(disposals[0]!.matches.map((m) => m.lotId)).toEqual(['b1']);
-    expectDec(disposals[0]!.gainEur, '10');
-    expect(disposals[0]!.accountId).toBe('acc2');
-    expect(disposals[1]!.matches.map((m) => [m.lotId, m.quantity.toString()])).toEqual([
-      ['b1', '5'],
-      ['b2', '7'],
-    ]);
-    expectDec(disposals[1]!.costEur, '19');
+    expect(disposals[0]!.matches.map((m) => m.lotId)).toEqual(['b2']);
+    expectDec(disposals[0]!.costEur, '10');
+    expectDec(disposals[0]!.gainEur, '5');
+    expect(disposals[0]!.accountId).toBe('ibkr');
     expect(openLots.map((l) => [l.lotId, l.accountId, l.quantity.toString()])).toEqual([
-      ['b2', 'acc2', '3'],
+      ['b1', 'degiro', '10'],
+      ['b2', 'ibkr', '5'],
     ]);
   });
 
-  it('a transfer is not a sale: no disposal, lots and cost unchanged', () => {
-    const { openLots, disposals } = runFifo([
-      buy('2024-01-01', 'A', '10', '5', { id: 'b1', account: 'acc1' }),
-      transfer('2024-01-02', 'A', '4', 'acc2', { fees: '1' }),
+  it('the same asset at two brokers (like SXR8): each sale uses its own broker’s lots', () => {
+    // degiro: 2024-04 buy 4 @ 100 = 400, 2024-06 buy 2 @ 110 = 220
+    // ibkr:   2024-10 buy 5 @ 120 = 600
+    // 2024-11 sell 3 @ 130 at ibkr -> ibkr lot: cost 360, proceeds 390, gain 30
+    //   (pooled would take the 2024-04 Degiro lot: cost 300, gain 90)
+    // 2024-12 sell 5 @ 130 at degiro -> 4 @ 100 + 1 @ 110 = 510; proceeds 650; gain 140
+    // left: degiro 1 (cost 110), ibkr 2 (cost 240)
+    const rows = [
+      buy('2024-04-01', 'SXR8', '4', '100', { id: 'd1', account: 'degiro' }),
+      buy('2024-06-01', 'SXR8', '2', '110', { id: 'd2', account: 'degiro' }),
+      buy('2024-10-01', 'SXR8', '5', '120', { id: 'i1', account: 'ibkr' }),
+      sell('2024-11-01', 'SXR8', '3', '130', { account: 'ibkr' }),
+      sell('2024-12-01', 'SXR8', '5', '130', { account: 'degiro' }),
+    ];
+    const { openLots, disposals } = runFifo(rows);
+    expect(disposals.map((x) => [x.accountId, x.costEur.toString(), x.gainEur.toString()])).toEqual(
+      [
+        ['ibkr', '360', '30'],
+        ['degiro', '510', '140'],
+      ],
+    );
+    expect(openLots.map((l) => [l.lotId, l.accountId, l.costEur.toString()])).toEqual([
+      ['d2', 'degiro', '110'],
+      ['i1', 'ibkr', '240'],
     ]);
-    expect(disposals).toEqual([]);
-    expect(openLots.map((l) => [l.lotId, l.quantity.toString(), l.costEur.toString()])).toEqual([
-      ['b1', '10', '50'],
-    ]);
+    // Pooled (comparison only): the first sale takes 3 of d1 (cost 300, gain 90); the second
+    // 1 of d1 + 2 of d2 + 2 of i1 = 100 + 220 + 240 = 560 (gain 90). Realized 180 pooled
+    // vs 170 per account; the 10 is in the open cost instead (pooled 360, per account 350).
+    const pooled = runFifo(rows, { matching: 'pooled' });
+    expect(pooled.disposals.map((x) => x.gainEur.toString())).toEqual(['90', '90']);
+    expect(pooled.openLots.map((l) => [l.lotId, l.costEur.toString()])).toEqual([['i1', '360']]);
   });
 
-  it('the oversell check is against all accounts combined', () => {
+  it('oversell is per account: selling more than that account holds throws', () => {
     const txs = [
       buy('2024-01-01', 'A', '10', '1', { account: 'acc1' }),
       buy('2024-01-01', 'A', '10', '1', { account: 'acc2' }),
     ];
-    const sellAll = sell('2024-01-02', 'A', '20', '1', { account: 'acc1' });
-    const sellMore = sell('2024-01-02', 'A', '21', '1', { account: 'acc1' });
-    expect(runFifo([...txs, sellAll]).openLots).toEqual([]);
-    expect(() => runFifo([...txs, sellMore])).toThrow(InsufficientHoldingsError);
+    expect(
+      runFifo([...txs, sell('2024-01-02', 'A', '10', '1', { account: 'acc1' })]).openLots,
+    ).toHaveLength(1);
+    const over = sell('2024-01-02', 'A', '11', '1', { id: 's-over', account: 'acc1' });
+    expect(() => runFifo([...txs, over])).toThrow(InsufficientHoldingsError);
+    expect(() => runFifo([...txs, over])).toThrow(
+      /Disposal of 11 units exceeds the 10 held of asset A in account acc1/,
+    );
+    try {
+      runFifo([...txs, over]);
+    } catch (e) {
+      const err = e as InsufficientHoldingsError;
+      expect([err.transactionId, err.accountId, err.kind]).toEqual(['s-over', 'acc1', 'disposal']);
+    }
+    // Pooled (comparison only) checks against both accounts together.
+    expect(runFifo([...txs, over], { matching: 'pooled' }).openLots).toHaveLength(1);
+  });
+
+  it('a transfer moves the oldest lots with their date and cost; no disposal', () => {
+    // ex: b1 2024-01 2 @ 10 = 20, b2 2024-02 2 @ 20 = 40; wal: b3 2024-01-15 1 @ 15 = 15
+    // transfer 2 ex -> wal on 2024-03 moves b1 whole (dated 2024-01-01, cost 20).
+    // In wal, b1 now queues before b3 (older): a wal sale of 2 takes b1.
+    const { openLots, disposals } = runFifo([
+      buy('2024-01-01', 'A', '2', '10', { id: 'b1', account: 'ex' }),
+      buy('2024-02-01', 'A', '2', '20', { id: 'b2', account: 'ex' }),
+      buy('2024-01-15', 'A', '1', '15', { id: 'b3', account: 'wal' }),
+      transfer('2024-03-01', 'A', '2', 'wal', { id: 't1', account: 'ex', fees: '1' }),
+    ]);
+    expect(disposals).toEqual([]);
+    expect(
+      openLots.map((l) => [
+        l.lotId,
+        l.accountId,
+        l.acquiredOn,
+        l.quantity.toString(),
+        l.costEur.toString(),
+      ]),
+    ).toEqual([
+      ['b2', 'ex', '2024-02-01', '2', '40'],
+      ['b1', 'wal', '2024-01-01', '2', '20'],
+      ['b3', 'wal', '2024-01-15', '1', '15'],
+    ]);
+  });
+
+  it('a partial transfer splits a lot; the parts sum exactly to its cost', () => {
+    // b1: 3 @ 10 + fee 1 = 31. Transfer 1 -> moved part cost 31/3, kept 31 - 31/3.
+    // A later sale of 1 at wal consumes the moved part: cost 31/3.
+    const { openLots, disposals } = runFifo([
+      buy('2024-01-01', 'A', '3', '10', { id: 'b1', account: 'ex', fees: '1' }),
+      transfer('2024-02-01', 'A', '1', 'wal', { id: 't1', account: 'ex' }),
+      sell('2024-03-01', 'A', '1', '12', { account: 'wal' }),
+    ]);
+    expect(disposals[0]!.matches.map((m) => m.lotId)).toEqual(['b1:t1']);
+    expectDec(disposals[0]!.costEur, d('31').div(3));
+    expect(openLots).toHaveLength(1);
+    const kept = openLots[0]!;
+    expect([kept.lotId, kept.originTransactionId, kept.accountId]).toEqual(['b1', 'b1', 'ex']);
+    expectDec(kept.quantity, '2');
+    expectDec(kept.costEur.plus(disposals[0]!.costEur), '31');
+  });
+
+  it('a transfer of more than the sending account holds throws', () => {
+    const txs = [
+      buy('2024-01-01', 'A', '1', '10', { account: 'acc1' }),
+      buy('2024-01-01', 'A', '1', '10', { account: 'acc2' }),
+      transfer('2024-01-02', 'A', '1.5', 'acc2', { id: 't1', account: 'acc1' }),
+    ];
+    expect(() => runFifo(txs)).toThrow(
+      /Transfer of 1.5 units exceeds the 1 held of asset A in account acc1/,
+    );
+  });
+
+  it('pooled mode (comparison only): a sale anywhere takes the oldest lot anywhere', () => {
+    // b1: acc1 10 @ 1 (oldest); b2: acc2 10 @ 2; sell 5 @ 3 from acc2 -> b1, gain 10
+    const { disposals } = runFifo(
+      [
+        buy('2024-01-01', 'A', '10', '1', { id: 'b1', account: 'acc1' }),
+        buy('2024-01-02', 'A', '10', '2', { id: 'b2', account: 'acc2' }),
+        sell('2024-02-01', 'A', '5', '3', { account: 'acc2' }),
+      ],
+      { matching: 'pooled' },
+    );
+    expect(disposals[0]!.matches.map((m) => m.lotId)).toEqual(['b1']);
+    expectDec(disposals[0]!.gainEur, '10');
+  });
+
+  it('pooled mode (comparison only): transfers move no lots', () => {
+    const { openLots } = runFifo(
+      [
+        buy('2024-01-01', 'A', '10', '5', { id: 'b1', account: 'acc1' }),
+        transfer('2024-01-02', 'A', '4', 'acc2', { fees: '1' }),
+      ],
+      { matching: 'pooled' },
+    );
+    expect(openLots.map((l) => [l.lotId, l.accountId, l.quantity.toString()])).toEqual([
+      ['b1', 'acc1', '10'],
+    ]);
   });
 
   it('negative return: selling below cost gives a loss', () => {

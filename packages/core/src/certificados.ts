@@ -1,5 +1,9 @@
 import { addMonths, assertIsoDate, type IsoDate } from './dates';
 import { ONE, ZERO, type Decimal } from './decimal';
+import { runFifo } from './fifo';
+import { certificadoValuer, type CertificadoLotValuation } from './holdings';
+import { ageInDays, DEFAULT_CA_MAX_AGE_DAYS, isStale } from './prices';
+import type { Transaction } from './types';
 
 /**
  * Mirrors public.ca_series. Rates are annual decimals (0.025 = 2.5%). Only the optional
@@ -172,4 +176,79 @@ export interface CaContext {
   factors: CaFactorLookup;
   /** Optional, not the default. Lots whose series is not listed are valued by factors. */
   accrual?: { valuer: CaValuer; series: readonly CaSeries[] };
+}
+
+/** One certificado subscription as the Certificados screen shows it (docs/kpis.md §8). */
+export interface CertificadoSubscriptionView {
+  subscriptionId: string;
+  seriesId: string;
+  /** The subscription transaction. */
+  transactionId: string;
+  accountId: string;
+  subscribedOn: IsoDate;
+  /** Units still held on asOf. */
+  units: Decimal;
+  /** EUR per unit: the latest factor on or before asOf, or the subscription price before it. */
+  unitValueEur: Decimal;
+  source: CertificadoLotValuation['source'];
+  /** Month of the factor used, or null before the first factor. */
+  factorMonth: IsoDate | null;
+  /** units x unitValue. */
+  valueEur: Decimal;
+  /** Cost of the units held (units x subscription price, fees in). */
+  costEur: Decimal;
+  gainEur: Decimal;
+  /** Days from the factor's month (or the subscription date, before any factor) to asOf. */
+  ageDays: number;
+  /** ageDays > caMaxAgeDays (default 35). */
+  stale: boolean;
+}
+
+/**
+ * Every certificado subscription with units held on `asOf`, valued by factor (#14) with the
+ * factor's age (#25), oldest subscription first. Fully redeemed subscriptions are left out.
+ */
+export function certificadoSubscriptions(input: {
+  transactions: readonly Transaction[];
+  asOf: IsoDate;
+  ca: CaContext;
+  caMaxAgeDays?: number;
+}): CertificadoSubscriptionView[] {
+  const { transactions, asOf, ca } = input;
+  const maxAge = input.caMaxAgeDays ?? DEFAULT_CA_MAX_AGE_DAYS;
+  const { openLots } = runFifo(transactions, { asOf, caSubscriptions: ca.subscriptions });
+  const valuer = certificadoValuer(transactions, asOf, ca);
+  const views: CertificadoSubscriptionView[] = [];
+  for (const sub of ca.subscriptions) {
+    const lots = openLots.filter((l) => l.originTransactionId === sub.transactionId);
+    if (lots.length === 0) continue;
+    const valued = valuer(lots);
+    if (!valued) continue;
+    const first = valued.lots[0] as CertificadoLotValuation;
+    const lot = lots[0] as (typeof lots)[number];
+    const units = lots.reduce((s, l) => s.plus(l.quantity), ZERO);
+    const costEur = lots.reduce((s, l) => s.plus(l.costEur), ZERO);
+    const ageDays = ageInDays(first.factorMonth ?? lot.acquiredOn, asOf);
+    views.push({
+      subscriptionId: sub.id,
+      seriesId: sub.seriesId,
+      transactionId: sub.transactionId,
+      accountId: lot.accountId,
+      subscribedOn: lot.acquiredOn,
+      units,
+      unitValueEur: first.unitValue,
+      source: first.source,
+      factorMonth: first.factorMonth,
+      valueEur: valued.total,
+      costEur,
+      gainEur: valued.total.minus(costEur),
+      ageDays,
+      stale: isStale(ageDays, maxAge),
+    });
+  }
+  return views.sort(
+    (a, b) =>
+      (a.subscribedOn < b.subscribedOn ? -1 : a.subscribedOn > b.subscribedOn ? 1 : 0) ||
+      a.subscriptionId.localeCompare(b.subscriptionId),
+  );
 }

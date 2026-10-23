@@ -12,6 +12,7 @@
     "@supabase/supabase-js": "^2.118.0"
   },
   "exports": {
-    "./env": "./src/env.ts"
+    "./env": "./src/env.ts",
+    "./inputs": "./src/inputs.ts"
   }
 }

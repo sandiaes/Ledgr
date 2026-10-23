@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CaRateUnavailableError,
+  certificadoSubscriptions,
   createRuleBasedCaValuer,
   defaultCaRateRule,
   type CaContext,
@@ -308,5 +309,65 @@ describe('certificados in holdings', () => {
       ca: context(),
     });
     expectDec(h!.marketValueEur, '12');
+  });
+});
+
+describe('certificadoSubscriptions', () => {
+  // s1: 1000 units @ 1 on 2024-01-15; factor 1.0054 for 2024-03 (in force from 2024-03-01)
+  // s2:  500 units @ 1 on 2024-02-10; no factor yet -> subscription price, aged from 02-10
+  // s3:  200 units @ 1 on 2024-01-20; fully redeemed -> not listed
+  const transactions = [
+    subscribe('2024-01-15', 'CA', '1000', '1', { id: 'tx1', account: 'aforro' }),
+    subscribe('2024-02-10', 'CA', '500', '1', { id: 'tx2', account: 'aforro' }),
+    subscribe('2024-01-20', 'CA', '200', '1', { id: 'tx3', account: 'aforro' }),
+    redeem('2024-03-01', 'CA', '200', '1.002', { account: 'aforro', caSubscriptionId: 's3' }),
+  ];
+  const ca: CaContext = {
+    subscriptions: [
+      { id: 's1', seriesId: 'E', transactionId: 'tx1' },
+      { id: 's2', seriesId: 'E', transactionId: 'tx2' },
+      { id: 's3', seriesId: 'E', transactionId: 'tx3' },
+    ],
+    factors: createCaFactorLookup([
+      { subscriptionId: 's1', month: '2024-03-01', factor: d('1.0054') },
+    ]),
+  };
+
+  it('value, cost and gain by factor; before the first factor, the subscription price', () => {
+    // s1: 1000 x 1.0054 = 1005.4, cost 1000, gain 5.4, factor month 2024-03-01
+    // s2: 500 x 1 = 500, cost 500, gain 0, no factor
+    const [s1, s2, ...rest] = certificadoSubscriptions({ transactions, asOf: '2024-04-05', ca });
+    expect(rest).toEqual([]);
+    expect([s1!.subscriptionId, s1!.source, s1!.factorMonth, s1!.accountId]).toEqual([
+      's1',
+      'factor',
+      '2024-03-01',
+      'aforro',
+    ]);
+    expectDec(s1!.units, '1000');
+    expectDec(s1!.valueEur, '1005.4');
+    expectDec(s1!.costEur, '1000');
+    expectDec(s1!.gainEur, '5.4');
+    expect([s2!.subscriptionId, s2!.source, s2!.factorMonth]).toEqual(['s2', 'subscription', null]);
+    expectDec(s2!.valueEur, '500');
+    expectDec(s2!.gainEur, '0');
+  });
+
+  it('factor age: 35 days is fresh, 36 days is stale', () => {
+    // 2024-03-01 -> 2024-04-05 = 35 days; -> 2024-04-06 = 36 days
+    const at = (asOf: string) =>
+      certificadoSubscriptions({ transactions, asOf, ca }).find((s) => s.subscriptionId === 's1')!;
+    expect([at('2024-04-05').ageDays, at('2024-04-05').stale]).toEqual([35, false]);
+    expect([at('2024-04-06').ageDays, at('2024-04-06').stale]).toEqual([36, true]);
+    // s2 has no factor: aged from its subscription date (2024-02-10 -> 2024-03-16 = 35 days)
+    const s2 = certificadoSubscriptions({ transactions, asOf: '2024-03-17', ca }).find(
+      (s) => s.subscriptionId === 's2',
+    )!;
+    expect([s2.ageDays, s2.stale]).toEqual([36, true]);
+    // the limit is configurable
+    expect(
+      certificadoSubscriptions({ transactions, asOf: '2024-04-06', ca, caMaxAgeDays: 40 })[0]!
+        .stale,
+    ).toBe(false);
   });
 });

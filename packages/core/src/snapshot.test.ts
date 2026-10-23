@@ -48,8 +48,7 @@ describe('buildSnapshot', () => {
     // etf     E    10 * 55 USD * 0.92               =  506
     // crypto  BTC  0.01 * 60000                     =  600
     // CA      1000 * 1.0054 (factor for 2024-04)     = 1005.4
-    // cash    5000 - 1001 - 450 - 500 - 1000 + 10   = 2059
-    // total   1100 + 506 + 600 + 1005.4 + 2059      = 5270.4
+    // total   1100 + 506 + 600 + 1005.4             = 3211.4 (the deposit changes nothing)
     // cost    1001 + 450 + 500 + 1000               = 2951
     const s = buildSnapshot(input);
     expect(s.snapshotDate).toBe('2024-04-15');
@@ -57,15 +56,14 @@ describe('buildSnapshot', () => {
     expectDec(s.etfValueEur, '506');
     expectDec(s.cryptoValueEur, '600');
     expectDec(s.certificadoAforroValueEur, '1005.4');
-    expectDec(s.cashEur, '2059');
-    expectDec(s.totalValueEur, '5270.4');
+    expect(s.cashEur).toBeNull();
+    expectDec(s.totalValueEur, '3211.4');
     expectDec(s.totalCostBasisEur, '2951');
     // net invested: buys and subscriptions (fees in); the deposit is not counted
     expectDec(s.netContributionsEur, '2951');
   });
 
-  it('without deposits, cash is not tracked and not in the total', () => {
-    // same ledger minus the deposit: positions 1100 + 506 + 600 + 1005.4 = 3211.4
+  it('cash is not tracked by default, deposits or not', () => {
     const noDeposit = input.transactions.filter((t) => t.type !== 'deposit');
     const s = buildSnapshot({ ...input, transactions: noDeposit });
     expect(s.cashEur).toBeNull();
@@ -73,20 +71,20 @@ describe('buildSnapshot', () => {
     expectDec(s.netContributionsEur, '2951');
   });
 
-  it('trackCash overrides the default either way', () => {
-    // forced on without deposits: cash = -1001 - 450 - 500 - 1000 + 10 = -2941
+  it('trackCash: true adds the cash balance', () => {
+    // cash    5000 - 1001 - 450 - 500 - 1000 + 10   = 2059; total 3211.4 + 2059 = 5270.4
+    const on = buildSnapshot({ ...input, trackCash: true });
+    expectDec(on.cashEur, '2059');
+    expectDec(on.totalValueEur, '5270.4');
+    // without the deposit: cash = -1001 - 450 - 500 - 1000 + 10 = -2941
     const noDeposit = input.transactions.filter((t) => t.type !== 'deposit');
-    const on = buildSnapshot({ ...input, transactions: noDeposit, trackCash: true });
-    expectDec(on.cashEur, '-2941');
-    expectDec(on.totalValueEur, '270.4');
-    // forced off with deposits
-    const off = buildSnapshot({ ...input, trackCash: false });
-    expect(off.cashEur).toBeNull();
-    expectDec(off.totalValueEur, '3211.4');
+    const off = buildSnapshot({ ...input, transactions: noDeposit, trackCash: true });
+    expectDec(off.cashEur, '-2941');
+    expectDec(off.totalValueEur, '270.4');
   });
 
   it('before any activity everything is zero', () => {
-    const s = buildSnapshot({ ...input, date: '2023-12-31' });
+    const s = buildSnapshot({ ...input, date: '2023-12-31', trackCash: true });
     for (const v of [
       s.totalValueEur,
       s.totalCostBasisEur,

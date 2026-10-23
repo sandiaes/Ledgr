@@ -4,6 +4,8 @@
 //   report               the sanity report only (read-only)
 //   import-history       daily closes from a file you saved (e.g. ETF history before the
 //                        provider's free window); --commit writes them
+//   fifo-compare         one-off, read-only: pooled vs per-account FIFO on your ledger
+//                        (or --fixtures), counts and totals only
 //
 // Writes need the project reference typed back. Console output is counts and totals only;
 // per-asset detail goes to the report folder (git-ignored).
@@ -22,12 +24,15 @@ import {
   type Sleep,
 } from '@ledgr/market';
 import { parseDotEnv, validatePricesEnv, type PricesEnv } from './env';
+import { compareFifo, comparisonLines, fixtureLedger } from './fifo-compare';
 import { HistoryFileError, parseHistory } from './history';
 import { buildSanity, issuesReport, symbolsReport, type ReportFile } from './report';
 
 export interface CliDeps {
   envPath: string;
   reportsRoot: string;
+  /** The repository's fixtures folder (fifo-compare --fixtures). */
+  fixturesRoot: string;
   /** A path given on the command line (relative to the current directory). */
   resolveArg(path: string): string;
   /** File contents, or null when the file does not exist. */
@@ -47,7 +52,7 @@ export class ArgError extends Error {
   override name = 'ArgError';
 }
 
-const COMMANDS = ['resolve', 'backfill', 'report', 'import-history'] as const;
+const COMMANDS = ['resolve', 'backfill', 'report', 'import-history', 'fifo-compare'] as const;
 type Command = (typeof COMMANDS)[number];
 const JOBS = ['fx', 'prices', 'snapshots'] as const;
 type Job = (typeof JOBS)[number];
@@ -64,6 +69,8 @@ export interface Args {
   file: string | null;
   currency: string | null;
   overwrite: boolean;
+  /** fifo-compare: run on fixtures/sample_transactions.csv instead of the database. */
+  fixtures: boolean;
 }
 
 export const USAGE = `Usage (from the repository root):
@@ -71,6 +78,7 @@ export const USAGE = `Usage (from the repository root):
   pnpm prices backfill [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--only fx,prices,snapshots] [--refetch]
   pnpm prices report [--to YYYY-MM-DD]
   pnpm prices import-history --asset <ticker> --file <path> --currency EUR [--overwrite] [--commit]
+  pnpm prices fifo-compare [--fixtures]
 
   resolve    proposes a price symbol per asset (OpenFIGI + provider); --commit writes them
   backfill   ECB rates, prices and daily snapshots from your first trade (default) to yesterday
@@ -78,7 +86,9 @@ export const USAGE = `Usage (from the repository root):
   --from     backfill only from this date      --to      last day (default yesterday)
   --only     run only some steps               --refetch fetch price ranges already stored
   import-history  closes from a saved table (Date and Close columns) for one asset; dates
-             already stored are kept unless --overwrite; a dry run unless --commit`;
+             already stored are kept unless --overwrite; a dry run unless --commit
+  fifo-compare  one-off and read-only: realized gains and cost basis under pooled FIFO vs
+             FIFO per account (counts and totals only); --fixtures uses the sample data`;
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -95,6 +105,7 @@ export function parseArgs(argv: readonly string[]): Args {
     file: null,
     currency: null,
     overwrite: false,
+    fixtures: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i] as string;
@@ -107,7 +118,7 @@ export function parseArgs(argv: readonly string[]): Args {
       continue;
     }
     const [name, inline] = a.slice(2).split(/=(.*)/s, 2) as [string, string | undefined];
-    if (name === 'commit' || name === 'refetch' || name === 'overwrite') {
+    if (name === 'commit' || name === 'refetch' || name === 'overwrite' || name === 'fixtures') {
       if (inline !== undefined) throw new ArgError(`--${name} takes no value`);
       args[name] = true;
       continue;
@@ -140,6 +151,8 @@ export function parseArgs(argv: readonly string[]): Args {
     throw new ArgError('import-history needs --asset, --file and --currency');
   if (args.overwrite && command !== 'import-history')
     throw new ArgError('--overwrite is for import-history only');
+  if (args.fixtures && command !== 'fifo-compare')
+    throw new ArgError('--fixtures is for fifo-compare only');
   if (args.from && args.to && args.from > args.to) throw new ArgError('--from is after --to');
   return args;
 }
@@ -164,6 +177,19 @@ export async function run(argv: readonly string[], deps: CliDeps): Promise<numbe
     return 2;
   }
 
+  if (args.command === 'fifo-compare' && args.fixtures) {
+    const path = `${deps.fixturesRoot}/sample_transactions.csv`;
+    const fixture = await deps.readText(path);
+    if (fixture === null) {
+      deps.print(`No file ${path}.`);
+      return 1;
+    }
+    const result = compareFifo(fixtureLedger(fixture));
+    for (const line of comparisonLines('fixtures/sample_transactions.csv', result))
+      deps.print(line);
+    return 'kind' in result || result.disposalsChanged > 0 ? 1 : 0;
+  }
+
   const text = await deps.readText(deps.envPath);
   if (text === null) {
     deps.print(
@@ -181,6 +207,14 @@ export async function run(argv: readonly string[], deps: CliDeps): Promise<numbe
 
   const db = deps.openDb(env);
   await deps.checkUser(env);
+
+  if (args.command === 'fifo-compare') {
+    // Read-only: the ledger of LEDGR_USER_ID only (every query filters on it).
+    const [transactions, ca] = await Promise.all([db.loadTransactions(), db.loadCa()]);
+    const result = compareFifo(transactions, ca.subscriptions);
+    for (const line of comparisonLines(`project ${env.projectRef}`, result)) deps.print(line);
+    return 'kind' in result || result.disposalsChanged > 0 ? 1 : 0;
+  }
   const now = deps.now();
   const today: IsoDate = now.toISOString().slice(0, 10);
   const to = args.to ?? addDays(today, -1);

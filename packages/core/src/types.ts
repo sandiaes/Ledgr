@@ -54,6 +54,8 @@ export interface Transaction {
   withholdingTax?: Decimal | null;
   /** Transfers only: the account receiving the units. */
   transferToAccountId?: string | null;
+  /** 'month' for imported rows dated the 1st of their month (#22); absent means 'day'. */
+  tradeDatePrecision?: 'day' | 'month';
 }
 
 /** A close price in `currency` (which may differ from the asset's trading currency). */
