@@ -47,6 +47,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@ledgr/client':
+        specifier: workspace:*
+        version: link:../../packages/client
       '@ledgr/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -92,6 +95,16 @@ importers:
         specifier: ~18.3.12
         version: 18.3.31
 
+  packages/client:
+    dependencies:
+      '@ledgr/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.118.0
+        version: 2.118.0
+
   packages/core:
     dependencies:
       decimal.js:
@@ -104,6 +117,9 @@ importers:
 
   packages/market:
     dependencies:
+      '@ledgr/client':
+        specifier: workspace:*
+        version: link:../client
       '@ledgr/core':
         specifier: workspace:*
         version: link:../core

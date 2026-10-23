@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getMfaState, startEnrollment, verifyCode } from './mfa';
+import {
+  assertAal2,
+  getMfaState,
+  MfaRequiredError,
+  startEnrollment,
+  tokenAal,
+  verifyCode,
+} from './mfa';
 
 type Auth = SupabaseClient['auth'];
 
@@ -88,5 +95,23 @@ describe('verifyCode', () => {
     const { auth, mfa } = mockAuth();
     mfa.challengeAndVerify.mockResolvedValue({ data: null, error: new Error('Invalid TOTP code') });
     await expect(verifyCode(auth, 'f', '000000')).rejects.toThrow('Invalid TOTP code');
+  });
+});
+
+describe('assertAal2', () => {
+  const token = (claims: object) =>
+    `h.${btoa(JSON.stringify(claims)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}.s`;
+
+  it('reads the aal claim locally', () => {
+    expect(tokenAal(token({ aal: 'aal2', sub: 'u' }))).toBe('aal2');
+    expect(tokenAal(token({ sub: 'u' }))).toBeNull();
+    expect(tokenAal('not-a-jwt')).toBeNull();
+  });
+
+  it('lets an aal2 token through and stops aal1, a missing or an unreadable token', () => {
+    expect(() => assertAal2(token({ aal: 'aal2' }))).not.toThrow();
+    for (const t of [token({ aal: 'aal1' }), null, undefined, '', 'x.y.z']) {
+      expect(() => assertAal2(t)).toThrow(MfaRequiredError);
+    }
   });
 });

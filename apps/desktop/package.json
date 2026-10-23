@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@ledgr/client": "workspace:*",
     "@ledgr/core": "workspace:*",
     "@supabase/supabase-js": "^2.118.0",
     "react": "^18.3.1",

@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { getMfaState, startEnrollment, verifyCode, type Enrollment, type MfaState } from './mfa';
+import {
+  getMfaState,
+  startEnrollment,
+  verifyCode,
+  type Enrollment,
+  type MfaState,
+} from '@ledgr/client';
 
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);

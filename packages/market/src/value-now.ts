@@ -6,12 +6,13 @@
 import {
   DEFAULT_CA_MAX_AGE_DAYS,
   DEFAULT_STALE_AFTER_DAYS,
+  localDate,
   MissingValuationError,
   type IsoDate,
 } from '@ledgr/core';
 import type { EdgeDeps } from './edge';
 import { realSleep } from './http';
-import { localDate, runValueNow } from './live';
+import { runValueNow } from './live';
 import { createProviders } from './providers';
 import { createRestDb } from './rest-db';
 

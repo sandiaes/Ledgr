@@ -49,6 +49,10 @@ describe('public API', () => {
       'unitsHeld',
       'maxDisposable',
       'certificadoSubscriptions',
+      'localDate',
+      'reconcile',
+      'buildDashboard',
+      'thinSeries',
     ]) {
       expect(core, name).toHaveProperty(name);
     }

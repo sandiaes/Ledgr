@@ -1,7 +1,7 @@
 /**
  * Calendar dates as ISO strings ('YYYY-MM-DD'), matching Postgres `date`. No time zones:
- * every calculation is in whole days. Day counts are small integers, so plain JS numbers
- * are exact here.
+ * every calculation is in whole days (only `localDate` reads a clock time). Day counts are
+ * small integers, so plain JS numbers are exact here.
  */
 export type IsoDate = string;
 
@@ -66,4 +66,18 @@ export function compareDates(a: IsoDate, b: IsoDate): number {
 
 export function minDate(a: IsoDate, b: IsoDate): IsoDate {
   return a <= b ? a : b;
+}
+
+/** The calendar date at `at` in a time zone ("today" is the owner's, Europe/Lisbon). */
+export function localDate(at: Date, timeZone: string): IsoDate {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(at);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  const date = `${get('year')}-${get('month')}-${get('day')}`;
+  assertIsoDate(date);
+  return date;
 }

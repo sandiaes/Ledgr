@@ -16,7 +16,11 @@ describe('assertPublicKey', () => {
   });
 
   it('rejects empty or unknown keys', () => {
-    expect(() => assertPublicKey('')).toThrow(/not set/);
-    expect(() => assertPublicKey('nonsense')).toThrow(/Unrecognised/);
+    expect(() => assertPublicKey('')).toThrow(/^SUPABASE_ANON_KEY is not set/);
+    expect(() => assertPublicKey(undefined, 'EXPO_PUBLIC_SUPABASE_ANON_KEY')).toThrow(
+      /^EXPO_PUBLIC_SUPABASE_ANON_KEY is not set/,
+    );
+    expect(() => assertPublicKey('nonsense')).toThrow(/unrecognised/);
+    expect(() => assertPublicKey('a.!!!.c')).toThrow(/unrecognised/);
   });
 });

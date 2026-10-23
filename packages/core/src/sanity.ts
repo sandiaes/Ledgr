@@ -62,3 +62,61 @@ export function sanityReport(
     unvalued: rows.filter((r) => !r.marketValueEur).length,
   };
 }
+
+/** The run-time identity checks (docs/app-plan.md §5). Names and asset ids only. */
+export type ReconcileCheck =
+  /** V - NI = R + U (the gap in the value vs net invested chart is the capital gain). */
+  | 'capital-gain'
+  /** A holding's accounts add up to it (units, cost, value, unrealized). */
+  | 'accounts'
+  /** The app's V(T) differs from value-now's: the deployed functions may run an older core. */
+  | 'value-now-value'
+  /** The app's cost basis differs from value-now's. */
+  | 'value-now-cost';
+
+export interface ReconcileIssue {
+  check: ReconcileCheck;
+  assetId?: string;
+}
+
+export interface ReconcileResult {
+  ok: boolean;
+  issues: ReconcileIssue[];
+}
+
+/**
+ * Checks that the figures agree with each other: V - NI = R + U exactly, every holding's
+ * accounts add up to it, and (when given) value-now's totals match at numeric(38,18)
+ * precision. A failure is shown, never silently fixed. Holdings must all be valued.
+ */
+export function reconcile(input: {
+  holdings: readonly Holding[];
+  gains: { realizedEur: Decimal; unrealizedEur: Decimal };
+  netInvestedEur: Decimal;
+  reference?: { totalValueEur: Decimal; costBasisEur: Decimal } | null;
+}): ReconcileResult {
+  const { holdings, gains, reference } = input;
+  const issues: ReconcileIssue[] = [];
+  const value = holdings.reduce((s, h) => s.plus(h.marketValueEur ?? ZERO), ZERO);
+  const cost = holdings.reduce((s, h) => s.plus(h.costBasisEur), ZERO);
+
+  if (!value.minus(input.netInvestedEur).eq(gains.realizedEur.plus(gains.unrealizedEur))) {
+    issues.push({ check: 'capital-gain' });
+  }
+  for (const h of holdings) {
+    const total = (pick: (a: Holding['accounts'][number]) => Decimal | null) =>
+      h.accounts.reduce((s, a) => s.plus(pick(a) ?? ZERO), ZERO);
+    const agrees =
+      total((a) => a.quantity).eq(h.quantity) &&
+      total((a) => a.costBasisEur).eq(h.costBasisEur) &&
+      total((a) => a.marketValueEur).eq(h.marketValueEur ?? ZERO) &&
+      total((a) => a.unrealizedGainEur).eq(h.unrealizedGainEur ?? ZERO);
+    if (!agrees) issues.push({ check: 'accounts', assetId: h.assetId });
+  }
+  if (reference) {
+    const same = (a: Decimal, b: Decimal) => a.toDecimalPlaces(18).eq(b.toDecimalPlaces(18));
+    if (!same(value, reference.totalValueEur)) issues.push({ check: 'value-now-value' });
+    if (!same(cost, reference.costBasisEur)) issues.push({ check: 'value-now-cost' });
+  }
+  return { ok: issues.length === 0, issues };
+}

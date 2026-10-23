@@ -1,0 +1,21 @@
+{
+  "name": "@ledgr/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "What the mobile and desktop apps share: the public-key check, MFA state helpers, row mappers and pagination. Plain TypeScript, no React; imports from supabase-js are types only.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ledgr/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@supabase/supabase-js": "^2.118.0"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.118.0"
+  }
+}

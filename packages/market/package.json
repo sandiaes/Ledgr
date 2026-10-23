@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@ledgr/client": "workspace:*",
     "@ledgr/core": "workspace:*"
   }
 }
