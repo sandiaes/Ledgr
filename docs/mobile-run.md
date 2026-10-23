@@ -106,13 +106,18 @@ exp://<address>:8081`. On the phone, open `http://<address>:8081/status` in Chro
 
 ### A. Tunnel
 
+Since SDK 58, `--tunnel` uses Expo's own tunnel, which needs you logged in to your
+(free) Expo account; you need the account for the APK anyway (step 5):
+
 ```bash
 cd apps/mobile
+npx expo login                      # once; sign up at https://expo.dev first
 npx expo start --tunnel
 ```
 
-The first time it asks to install `@expo/ngrok`: answer yes. Scan the new QR code. The
-tunnel goes through ngrok's servers, which the company proxy may also block; then use B.
+Without an account, use ngrok instead: `npx expo start --tunnel ngrok` (the first time it
+asks to install `@expo/ngrok`: answer yes). Either way, scan the new QR code. The company
+proxy may block the tunnel service as well; then use B.
 
 ### B. USB cable (`adb reverse`)
 
@@ -194,7 +199,7 @@ proxy blocks expo.dev altogether, run the `eas` commands on the phone's hotspot.
 git pull && pnpm install
 cd apps/mobile
 npx expo start                      # same Wi-Fi: scan the QR code with Expo Go
-npx expo start --tunnel             # company Wi-Fi: through a tunnel
+npx expo start --tunnel             # company Wi-Fi: through a tunnel (after npx expo login)
 adb reverse tcp:8081 tcp:8081 && npx expo start --localhost --android   # USB cable
 
 # installable APK
