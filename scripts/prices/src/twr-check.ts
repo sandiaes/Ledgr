@@ -83,7 +83,7 @@ export async function twrCheck(
           const how = f ? `${f.source} ${f.asOf}${f.stale ? ' stale' : ''}` : 'not held';
           return `${label.get(id) ?? id} (${how})`;
         })
-        .join('; '),
+        .join(' | '),
       [...flags.values()].filter((f) => f.stale).length,
     ];
   });
