@@ -17,12 +17,15 @@ import {
   liveQuoteFromRow,
   PRICE_COLUMNS,
   priceFromRow,
+  SNAPSHOT_COLUMNS,
+  snapshotFromRow,
   TRANSACTION_COLUMNS,
   transactionFromRow,
   type Row,
 } from '@ledgr/client';
 import type { IsoDate, Transaction } from '@ledgr/core';
 import {
+  parseValuationFlags,
   snapshotRow,
   type AssetRecord,
   type FxUpsert,
@@ -204,6 +207,17 @@ export function createRestDb(opts: RestDbOptions): JobsDb {
           source: r.source,
         })),
       ),
+
+    async loadSnapshots() {
+      const rows = await select(
+        'portfolio_snapshots',
+        `select=${SNAPSHOT_COLUMNS},valuation_flags&order=snapshot_date`,
+      );
+      return rows.map((r) => ({
+        ...snapshotFromRow(r),
+        flags: parseValuationFlags(r.valuation_flags),
+      }));
+    },
 
     upsertSnapshots: (rows) =>
       upsert('portfolio_snapshots', 'user_id,snapshot_date', rows.map(snapshotRow)),

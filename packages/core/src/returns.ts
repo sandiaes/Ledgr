@@ -221,6 +221,59 @@ function twrFigure(
   }
 }
 
+/** One step of a period's TWR chain (docs/kpis.md §3), for diagnosing an odd figure. */
+export interface TwrStep {
+  /** The step runs over (from, date]. */
+  from: IsoDate;
+  date: IsoDate;
+  /** r_i; the period's TWR is the product of (1 + r_i) - 1. */
+  return: Decimal;
+  /** V at `from`. */
+  startValueEur: Decimal;
+  /** V at `date`. */
+  endValueEur: Decimal;
+  /** Flows dated in (from, date]. */
+  flowEur: Decimal;
+  /** The step started from zero: its flow was taken at the start of the day. */
+  fromZero: boolean;
+}
+
+/**
+ * The steps behind `periodReturns`' TWR for one period, oldest first: the same points and
+ * rules (steps from zero to zero are skipped). Null when the period has no rows, its start
+ * snapshot is missing, or the TWR is undefined.
+ */
+export function twrSteps(input: ReturnsInput, period: ReturnPeriod): TwrStep[] | null {
+  const ctx = context(input);
+  if (ctx.first === null) return null;
+  const start = periodStart(period, ctx.today, ctx.first);
+  const startValue = valueOn(ctx, start);
+  if (startValue === null) return null;
+  const points = twrPoints(ctx, start, startValue, ctx.today, ctx.valueToday);
+  let periods;
+  try {
+    periods = twr(points).periods;
+  } catch (e) {
+    if (e instanceof RangeError) return null;
+    throw e;
+  }
+  const index = new Map(points.map((p, i) => [p.date, i]));
+  return periods.map((p) => {
+    const i = index.get(p.date) as number;
+    const prev = points[i - 1] as ValuePoint;
+    const cur = points[i] as ValuePoint;
+    return {
+      from: prev.date,
+      date: cur.date,
+      return: p.return,
+      startValueEur: prev.value,
+      endValueEur: cur.value,
+      flowEur: cur.flow ?? ZERO,
+      fromZero: prev.value.isZero(),
+    };
+  });
+}
+
 export type SeriesRange = '1M' | '3M' | 'YTD' | '1Y' | 'All';
 
 export interface ValueSeries {

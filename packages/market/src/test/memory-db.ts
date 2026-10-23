@@ -9,6 +9,7 @@ import type {
 } from '@ledgr/core';
 import { dec } from '@ledgr/core';
 import {
+  parseValuationFlags,
   snapshotRow,
   type AssetRecord,
   type JobRunRecord,
@@ -90,6 +91,16 @@ export class MemoryDb implements JobsDb {
         source: r.source,
       });
     }
+  }
+  async loadSnapshots() {
+    return [...this.snapshots.values()]
+      .sort((a, b) => String(a.snapshot_date).localeCompare(String(b.snapshot_date)))
+      .map((r) => ({
+        date: String(r.snapshot_date),
+        valueEur: dec(String(r.total_value_eur)),
+        netInvestedEur: dec(String(r.net_contributions_eur)),
+        flags: parseValuationFlags(r.valuation_flags),
+      }));
   }
   async upsertSnapshots(rows: Parameters<JobsDb['upsertSnapshots']>[0]) {
     this.writes.snapshots += rows.length;

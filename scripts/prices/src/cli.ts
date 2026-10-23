@@ -4,6 +4,7 @@
 //   report               the sanity report only (read-only)
 //   import-history       daily closes from a file you saved (e.g. ETF history before the
 //                        provider's free window); --commit writes them
+//   twr-check            which days drive the "Since start" TWR (read-only)
 //
 // Writes need the project reference typed back. Console output is counts and totals only;
 // per-asset detail goes to the report folder (git-ignored).
@@ -24,6 +25,7 @@ import {
 import { parseDotEnv, validatePricesEnv, type PricesEnv } from './env';
 import { HistoryFileError, parseHistory } from './history';
 import { buildSanity, issuesReport, symbolsReport, type ReportFile } from './report';
+import { twrCheck } from './twr-check';
 
 export interface CliDeps {
   envPath: string;
@@ -47,7 +49,7 @@ export class ArgError extends Error {
   override name = 'ArgError';
 }
 
-const COMMANDS = ['resolve', 'backfill', 'report', 'import-history'] as const;
+const COMMANDS = ['resolve', 'backfill', 'report', 'import-history', 'twr-check'] as const;
 type Command = (typeof COMMANDS)[number];
 const JOBS = ['fx', 'prices', 'snapshots'] as const;
 type Job = (typeof JOBS)[number];
@@ -71,6 +73,7 @@ export const USAGE = `Usage (from the repository root):
   pnpm prices backfill [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--only fx,prices,snapshots] [--refetch]
   pnpm prices report [--to YYYY-MM-DD]
   pnpm prices import-history --asset <ticker> --file <path> --currency EUR [--overwrite] [--commit]
+  pnpm prices twr-check
 
   resolve    proposes a price symbol per asset (OpenFIGI + provider); --commit writes them
   backfill   ECB rates, prices and daily snapshots from your first trade (default) to yesterday
@@ -78,7 +81,8 @@ export const USAGE = `Usage (from the repository root):
   --from     backfill only from this date      --to      last day (default yesterday)
   --only     run only some steps               --refetch fetch price ranges already stored
   import-history  closes from a saved table (Date and Close columns) for one asset; dates
-             already stored are kept unless --overwrite; a dry run unless --commit`;
+             already stored are kept unless --overwrite; a dry run unless --commit
+  twr-check  the days that move the "Since start" TWR most (read-only; twr-steps.csv)`;
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -290,6 +294,13 @@ export async function run(argv: readonly string[], deps: CliDeps): Promise<numbe
     deps.print(
       `Wrote ${write.length} closes. Now recompute the snapshots: pnpm prices backfill --only snapshots --from ${first}`,
     );
+    return 0;
+  }
+
+  if (args.command === 'twr-check') {
+    const { lines, file } = await twrCheck(db);
+    for (const line of lines) deps.print(line);
+    if (file) await save([file]);
     return 0;
   }
 

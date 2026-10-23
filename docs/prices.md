@@ -371,6 +371,21 @@ pnpm prices backfill --to 2025-12-31                             # stop at a dat
   `-H "Content-Type: application/json" -d '{"from":"YYYY-MM-DD"}'` (at most 62 days back)
   instead of `-H "Content-Length: 0"`.
 
+## Checking an odd TWR
+
+```bash
+pnpm prices twr-check
+```
+
+Read-only. TWR chains one step per snapshot day, so one day whose stored value does not
+match that day's rows (for example a large buy valued at a wrong or stand-in price, or a
+month-level imported row valued on the 1st) moves it a lot and is not undone later; XIRR
+does not use the snapshots. The console shows TWR and XIRR since start (to the last
+snapshot) and how much the largest steps explain; `twr-steps.csv` in the report folder lists
+those days with the step %, the flow as a % of the value before it, the row types, how many
+rows are month-level, and how each traded asset was valued that day (`price`, `trade` =
+trade-price stand-in, `stale`). No amounts are printed or written.
+
 ## After a core change
 
 The daily functions run the `packages/core` that was bundled when they were deployed. After
