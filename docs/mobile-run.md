@@ -81,9 +81,28 @@ bundle).
 
 ## 4. When the company Wi-Fi blocks the connection
 
-Signs: Expo Go spins and then shows _"Could not connect to the server"_ or a timeout. The
-company Wi-Fi usually keeps devices from reaching each other (client isolation), so the
-phone cannot reach the PC's port 8081. Three ways round it:
+Signs: Expo Go spins on the loading screen and then shows _"Uncaught Error:
+java.io.IOException: Failed to download remote update"_, _"Could not connect to the
+server"_ or a timeout, and the terminal never prints `Android Bundling …`. The phone cannot
+reach the PC's port 8081.
+
+Check it first: in the terminal, under the QR code, Expo prints `Metro waiting on
+exp://<address>:8081`. On the phone, open `http://<address>:8081/status` in Chrome.
+
+- **It shows `packager-status:running`**: the network is fine; reload in Expo Go (shake the
+  phone → Reload, or close Expo Go and scan again).
+- **The address is not your PC's Wi-Fi address** (compare with `ipconfig` → "Wireless LAN
+  adapter Wi-Fi" → IPv4 Address; company laptops often have VPN, Hyper-V or WSL adapters,
+  and Expo can pick one of them): start Expo with the right one,
+  ```bash
+  REACT_NATIVE_PACKAGER_HOSTNAME=<Wi-Fi IPv4 address> npx expo start
+  ```
+- **The page does not load at all**: Windows Firewall or the company Wi-Fi is in the way.
+  On a home network marked Private, allow Node.js there (Windows Security → Firewall &
+  network protection → Allow an app through firewall → Node.js → Private). On the company
+  network (usually marked Public, and often keeping devices from reaching each other) do
+  not open the firewall: use one of the three ways below, the USB cable (B) being the most
+  reliable.
 
 ### A. Tunnel
 
@@ -184,13 +203,15 @@ eas build --platform android --profile preview
 
 ## Troubleshooting
 
-| Message                                                | What to do                                                                                         |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| "Cannot start: EXPO_PUBLIC_… is set / is not set"      | Fix `apps/mobile/.env` (or the EAS variables), then `npx expo start --clear`.                      |
-| "Project is incompatible with this version of Expo Go" | Install the SDK 58 Expo Go (step 2).                                                               |
-| "Set up two-factor sign-in first"                      | Enroll an authenticator in the desktop app, then sign in again.                                    |
-| "That code did not work"                               | Use the current code; check the phone's clock is set automatically.                                |
-| App lock switch is greyed out                          | Set a screen lock (PIN, pattern or fingerprint) on the phone.                                      |
-| "live prices unavailable" under the total              | value-now did not answer; the dashboard uses the latest stored quotes and closes.                  |
-| "Figures do not reconcile: … value-now … differs"      | The deployed functions run an older core: redeploy them (`docs/prices.md`, "After a core change"). |
-| Screenshots come out black                             | That is screenshot blocking; turn it off in More if you need one.                                  |
+| Message                                                          | What to do                                                                                                                                       |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| "java.io.IOException: Failed to download remote update"          | The phone cannot reach the PC: step 4 (check `http://<address>:8081/status` on the phone first).                                                 |
+| `npx expo start` stops with "Cannot find module 'async-limiter'" | Leftovers from the old SDK 52 install: `rm -rf node_modules apps/*/node_modules packages/*/node_modules scripts/*/node_modules && pnpm install`. |
+| "Cannot start: EXPO_PUBLIC_… is set / is not set"                | Fix `apps/mobile/.env` (or the EAS variables), then `npx expo start --clear`.                                                                    |
+| "Project is incompatible with this version of Expo Go"           | Install the SDK 58 Expo Go (step 2).                                                                                                             |
+| "Set up two-factor sign-in first"                                | Enroll an authenticator in the desktop app, then sign in again.                                                                                  |
+| "That code did not work"                                         | Use the current code; check the phone's clock is set automatically.                                                                              |
+| App lock switch is greyed out                                    | Set a screen lock (PIN, pattern or fingerprint) on the phone.                                                                                    |
+| "live prices unavailable" under the total                        | value-now did not answer; the dashboard uses the latest stored quotes and closes.                                                                |
+| "Figures do not reconcile: … value-now … differs"                | The deployed functions run an older core: redeploy them (`docs/prices.md`, "After a core change").                                               |
+| Screenshots come out black                                       | That is screenshot blocking; turn it off in More if you need one.                                                                                |
