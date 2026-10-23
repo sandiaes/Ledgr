@@ -2,7 +2,7 @@ import { addDays, dec, type IsoDate, type Transaction } from '@ledgr/core';
 import { describe, expect, it } from 'vitest';
 import type { AssetRecord } from './db';
 import { HttpError } from './http';
-import { localDate, needsRefresh, runValueNow, type ValueNowContext } from './live';
+import { needsRefresh, runValueNow, type ValueNowContext } from './live';
 import type { LiveQuote, PriceProvider } from './providers';
 import { MemoryDb } from './test/memory-db';
 
@@ -49,11 +49,6 @@ describe('needsRefresh', () => {
       ttlMs: 5 * MIN,
     });
     expect(crypto).toBe(true);
-  });
-
-  it('takes "today" in the owner time zone', () => {
-    expect(localDate(at('2026-07-01T23:30:00Z'), 'Europe/Lisbon')).toBe('2026-07-02');
-    expect(localDate(at('2026-12-01T23:30:00Z'), 'Europe/Lisbon')).toBe('2026-12-01');
   });
 });
 

@@ -4,7 +4,24 @@
 // on user_id and every write sets it. Numerics are read as text (::text)
 // and written as strings, never through JS floats. Errors carry the HTTP status and the
 // PostgREST error code only: a constraint message can quote row values.
-import { dec, type IsoDate, type StoredPriceRow, type Transaction } from '@ledgr/core';
+import {
+  ASSET_COLUMNS,
+  assetFromRow,
+  CA_FACTOR_COLUMNS,
+  CA_SUBSCRIPTION_COLUMNS,
+  caFactorFromRow,
+  caSubscriptionFromRow,
+  FX_COLUMNS,
+  fxFromRow,
+  LIVE_QUOTE_COLUMNS,
+  liveQuoteFromRow,
+  PRICE_COLUMNS,
+  priceFromRow,
+  TRANSACTION_COLUMNS,
+  transactionFromRow,
+  type Row,
+} from '@ledgr/client';
+import type { IsoDate, Transaction } from '@ledgr/core';
 import {
   snapshotRow,
   type AssetRecord,
@@ -39,8 +56,6 @@ export interface RestDbOptions {
   userId: string;
   fetch: Fetch;
 }
-
-type Row = Record<string, unknown>;
 
 export function createRestDb(opts: RestDbOptions): JobsDb {
   const base = `${opts.url.replace(/\/+$/, '')}/rest/v1`;
@@ -96,103 +111,49 @@ export function createRestDb(opts: RestDbOptions): JobsDb {
     }
   }
 
-  const str = (v: unknown) => (v === null || v === undefined ? null : String(v));
-  const priceRow = (r: Row): StoredPriceRow => ({
-    assetId: String(r.asset_id),
-    date: String(r.price_date),
-    close: dec(String(r.close)),
-    currency: String(r.currency),
-    splitFactor:
-      r.split_factor === null || r.split_factor === undefined ? null : dec(String(r.split_factor)),
-  });
-  const PRICE_COLUMNS = 'select=asset_id,price_date,close::text,currency,split_factor::text';
+  const PRICES = `select=${PRICE_COLUMNS}`;
 
   return {
     async loadAssets(): Promise<AssetRecord[]> {
-      const rows = await select(
-        'assets',
-        'select=id,name,ticker,isin,exchange,asset_type,trading_currency,price_source,price_source_id&deleted_at=is.null&order=id',
-      );
-      return rows.map((r) => ({
-        id: String(r.id),
-        name: String(r.name),
-        ticker: str(r.ticker),
-        isin: str(r.isin),
-        exchange: str(r.exchange),
-        assetType: r.asset_type as AssetRecord['assetType'],
-        tradingCurrency: String(r.trading_currency),
-        priceSource: String(r.price_source),
-        priceSourceId: str(r.price_source_id),
-      }));
+      const rows = await select('assets', `select=${ASSET_COLUMNS}&deleted_at=is.null&order=id`);
+      return rows.map(assetFromRow);
     },
 
     async loadTransactions(): Promise<Transaction[]> {
       const rows = await select(
         'transactions',
-        'select=id,account_id,asset_id,type,trade_date,quantity::text,unit_price::text,amount::text,fees::text,' +
-          'currency,fx_rate_to_eur::text,ca_subscription_id,withholding_tax::text,transfer_to_account_id' +
-          '&deleted_at=is.null&order=trade_date.asc,created_at.asc,id.asc',
+        `select=${TRANSACTION_COLUMNS}&deleted_at=is.null&order=trade_date.asc,created_at.asc,id.asc`,
       );
-      const decOrNull = (v: unknown) => (v === null || v === undefined ? null : dec(String(v)));
-      return rows.map((r) => ({
-        id: String(r.id),
-        accountId: String(r.account_id),
-        assetId: str(r.asset_id),
-        type: r.type as Transaction['type'],
-        tradeDate: String(r.trade_date),
-        quantity: decOrNull(r.quantity),
-        unitPrice: decOrNull(r.unit_price),
-        amount: decOrNull(r.amount),
-        fees: dec(String(r.fees)),
-        currency: String(r.currency).trim(),
-        fxRateToEur: dec(String(r.fx_rate_to_eur)),
-        caSubscriptionId: str(r.ca_subscription_id),
-        withholdingTax: decOrNull(r.withholding_tax),
-        transferToAccountId: str(r.transfer_to_account_id),
-      }));
+      return rows.map(transactionFromRow);
     },
 
     async loadCa() {
       const [subs, factors] = await Promise.all([
-        select(
-          'ca_subscriptions',
-          'select=id,series_id,transaction_id&deleted_at=is.null&order=id',
-        ),
-        select(
-          'ca_factors',
-          'select=subscription_id,month,factor::text&order=subscription_id,month',
-        ),
+        select('ca_subscriptions', `select=${CA_SUBSCRIPTION_COLUMNS}&deleted_at=is.null&order=id`),
+        select('ca_factors', `select=${CA_FACTOR_COLUMNS}&order=subscription_id,month`),
       ]);
       return {
-        subscriptions: subs.map((s) => ({
-          id: String(s.id),
-          seriesId: String(s.series_id),
-          transactionId: String(s.transaction_id),
-        })),
-        factors: factors.map((f) => ({
-          subscriptionId: String(f.subscription_id),
-          month: String(f.month),
-          factor: dec(String(f.factor)),
-        })),
+        subscriptions: subs.map(caSubscriptionFromRow),
+        factors: factors.map(caFactorFromRow),
       };
     },
 
     async loadPrices(o = {}) {
-      let q = `${PRICE_COLUMNS}&order=asset_id,price_date`;
+      let q = `${PRICES}&order=asset_id,price_date`;
       if (o.from) q += `&price_date=gte.${o.from}`;
       if (o.assetIds) {
         if (o.assetIds.length === 0) return [];
         q += `&asset_id=in.(${o.assetIds.map(encodeURIComponent).join(',')})`;
       }
-      return (await select('prices', q)).map(priceRow);
+      return (await select('prices', q)).map(priceFromRow);
     },
 
     async latestPriceBefore(assetId, date) {
       const r = await first(
         'prices',
-        `${PRICE_COLUMNS}&asset_id=eq.${encodeURIComponent(assetId)}&price_date=lt.${date}&order=price_date.desc`,
+        `${PRICES}&asset_id=eq.${encodeURIComponent(assetId)}&price_date=lt.${date}&order=price_date.desc`,
       );
-      return r ? priceRow(r) : null;
+      return r ? priceFromRow(r) : null;
     },
 
     async priceBounds(assetId) {
@@ -205,13 +166,9 @@ export function createRestDb(opts: RestDbOptions): JobsDb {
     },
 
     async loadFx(o = {}) {
-      let q = 'select=currency,rate_date,rate_to_eur::text&order=currency,rate_date';
+      let q = `select=${FX_COLUMNS}&order=currency,rate_date`;
       if (o.from) q += `&rate_date=gte.${o.from}`;
-      return (await select('fx_rates', q)).map((r) => ({
-        currency: String(r.currency).trim(),
-        date: String(r.rate_date),
-        rateToEur: dec(String(r.rate_to_eur)),
-      }));
+      return (await select('fx_rates', q)).map(fxFromRow);
     },
 
     async lastFxDate(currency) {
@@ -271,19 +228,8 @@ export function createRestDb(opts: RestDbOptions): JobsDb {
     },
 
     async loadLiveQuotes() {
-      const rows = await select(
-        'live_quotes',
-        'select=asset_id,price::text,currency,trading_day,quoted_at,fetched_at,source&order=asset_id',
-      );
-      return rows.map((r) => ({
-        assetId: String(r.asset_id),
-        price: String(r.price),
-        currency: String(r.currency).trim(),
-        tradingDay: String(r.trading_day),
-        quotedAt: String(r.quoted_at),
-        fetchedAt: String(r.fetched_at),
-        source: String(r.source),
-      }));
+      const rows = await select('live_quotes', `select=${LIVE_QUOTE_COLUMNS}&order=asset_id`);
+      return rows.map(liveQuoteFromRow);
     },
 
     upsertLiveQuotes: (rows) =>

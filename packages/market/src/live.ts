@@ -12,6 +12,7 @@ import {
   createTradePriceLookup,
   dec,
   holdingPeriods,
+  localDate,
   splitAdjustPrices,
   withLiveQuotes,
   type IsoDate,
@@ -50,11 +51,6 @@ function localClock(at: Date, timeZone: string) {
     weekday: WEEKDAYS.indexOf(get('weekday')),
     minutes: Number(get('hour')) * 60 + Number(get('minute')),
   };
-}
-
-/** The calendar date at `at` in a time zone. */
-export function localDate(at: Date, timeZone: string): IsoDate {
-  return localClock(at, timeZone).date;
 }
 
 /**

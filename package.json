@@ -13,10 +13,11 @@
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm test:mobile",
     "importer": "tsx scripts/import/src/main.ts",
     "prices": "tsx scripts/prices/src/main.ts",
-    "functions:build": "esbuild packages/market/src/edge.ts --bundle --format=esm --platform=neutral --main-fields=module,main --target=es2022 --legal-comments=none --outfile=supabase/functions/_shared/ledgr-jobs.js"
+    "functions:build": "esbuild packages/market/src/edge.ts --bundle --format=esm --platform=neutral --main-fields=module,main --target=es2022 --legal-comments=none --outfile=supabase/functions/_shared/ledgr-jobs.js",
+    "test:mobile": "pnpm --filter @ledgr/mobile test"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

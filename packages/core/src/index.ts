@@ -22,4 +22,5 @@ export * from './snapshot';
 export * from './twr';
 export * from './types';
 export * from './validation';
+export * from './views';
 export * from './xirr';

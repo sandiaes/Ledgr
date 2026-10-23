@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { jwtClaims } from './jwt';
 
 type Auth = SupabaseClient['auth'];
 
@@ -55,4 +56,27 @@ export async function verifyCode(auth: Auth, factorId: string, code: string): Pr
   if (!CODE.test(trimmed)) throw new Error('Enter the 6-digit code from your authenticator');
   const { error } = await auth.mfa.challengeAndVerify({ factorId, code: trimmed });
   if (error) throw error;
+}
+
+/**
+ * A data request was attempted without an MFA-verified (aal2) session. Under aal1 RLS
+ * returns empty results, which would look like "no data": the app shows the code prompt
+ * instead.
+ */
+export class MfaRequiredError extends Error {
+  override name = 'MfaRequiredError';
+  constructor() {
+    super('MFA verification required');
+  }
+}
+
+/** The assurance level in an access token ('aal1', 'aal2'), read locally; null if none. */
+export function tokenAal(accessToken: string): string | null {
+  const aal = jwtClaims(accessToken)?.aal;
+  return typeof aal === 'string' ? aal : null;
+}
+
+/** Throws MfaRequiredError unless the token is aal2. Call before every data request. */
+export function assertAal2(accessToken: string | null | undefined): void {
+  if (!accessToken || tokenAal(accessToken) !== 'aal2') throw new MfaRequiredError();
 }

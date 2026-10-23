@@ -8,6 +8,8 @@ export default defineConfig({
       'apps/*/src/**/*.test.{ts,tsx}',
       'scripts/*/src/**/*.test.ts',
     ],
+    // React Native components run under jest-expo (pnpm test:mobile).
+    exclude: ['**/node_modules/**', 'apps/mobile/**'],
     coverage: {
       provider: 'v8',
       include: ['packages/core/src/**/*.ts'],

@@ -1,8 +1,8 @@
 // What the jobs read and write. One instance is bound to one user: every read filters on
 // that user_id and every write sets it (the service role bypasses RLS; value-now uses the
 // owner's own session, so RLS applies as well).
+import type { AssetRecord, LiveQuoteRecord } from '@ledgr/client';
 import type {
-  AssetType,
   CaFactor,
   CaSubscription,
   FxRow,
@@ -12,20 +12,7 @@ import type {
   Transaction,
 } from '@ledgr/core';
 
-/** Mirrors the public.assets columns the jobs need (soft-deleted rows excluded). */
-export interface AssetRecord {
-  id: string;
-  name: string;
-  ticker: string | null;
-  isin: string | null;
-  /** ISO 10383 MIC, e.g. XNAS, XETR; null for none. */
-  exchange: string | null;
-  assetType: AssetType;
-  /** Listing currency. */
-  tradingCurrency: string;
-  priceSource: string;
-  priceSourceId: string | null;
-}
+export type { AssetRecord, LiveQuoteRecord };
 
 export interface PriceUpsert {
   assetId: string;
@@ -41,17 +28,6 @@ export interface FxUpsert {
   date: IsoDate;
   /** EUR per 1 unit of `currency`. */
   rateToEur: string;
-  source: string;
-}
-
-/** Mirrors a public.live_quotes row: the latest intraday quote of an asset. */
-export interface LiveQuoteRecord {
-  assetId: string;
-  price: string;
-  currency: string;
-  tradingDay: IsoDate;
-  quotedAt: string;
-  fetchedAt: string;
   source: string;
 }
 

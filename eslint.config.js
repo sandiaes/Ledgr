@@ -26,5 +26,11 @@ export default tseslint.config(
     files: ['scripts/import/src/console.ts', 'scripts/prices/src/console.ts'],
     rules: { 'no-console': 'off' },
   },
+  {
+    // Expo's CommonJS config files (Babel, Metro, Jest).
+    files: ['apps/mobile/*.js'],
+    languageOptions: { sourceType: 'commonjs', globals: { ...globals.node, ...globals.jest } },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
   prettier,
 );

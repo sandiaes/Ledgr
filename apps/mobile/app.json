@@ -2,8 +2,13 @@
   "expo": {
     "name": "Ledgr",
     "slug": "ledgr",
-    "version": "0.0.0",
+    "version": "0.1.0",
     "platforms": ["android"],
-    "android": { "package": "app.ledgr.mobile" }
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "app.ledgr.mobile"
+    },
+    "plugins": ["expo-secure-store"]
   }
 }

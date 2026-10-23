@@ -7,6 +7,7 @@ import {
   dayNumber,
   daysBetween,
   fromDayNumber,
+  localDate,
   minDate,
   yearOf,
 } from './dates';
@@ -43,5 +44,12 @@ describe('dates', () => {
     expect(compareDates('2024-01-02', '2024-01-01')).toBe(1);
     expect(compareDates('2024-01-01', '2024-01-01')).toBe(0);
     expect(minDate('2024-01-02', '2024-01-01')).toBe('2024-01-01');
+  });
+
+  it('takes "today" in the owner time zone', () => {
+    const at = (iso: string) => new Date(iso);
+    expect(localDate(at('2026-07-01T23:30:00Z'), 'Europe/Lisbon')).toBe('2026-07-02');
+    expect(localDate(at('2026-12-01T23:30:00Z'), 'Europe/Lisbon')).toBe('2026-12-01');
+    expect(localDate(at('2026-12-31T23:59:59Z'), 'Europe/Lisbon')).toBe('2026-12-31');
   });
 });
