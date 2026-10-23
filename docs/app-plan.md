@@ -1,7 +1,8 @@
 # Android app plan (Step 5)
 
-Status: **proposed** (Phase A), awaiting approval. Nothing here is built yet. KPI
-definitions are in `docs/kpis.md`; calculation assumptions in `docs/assumptions.md`.
+Status: **plan approved with decisions D1–D7 on 2026-10-23** (§9). Nothing here is built
+yet; slices start only when asked. KPI definitions are in `docs/kpis.md`; calculation
+assumptions in `docs/assumptions.md`.
 
 `apps/mobile`: Expo + React Native + TypeScript, Android only, run with Expo Go during
 development and installable as an APK built with EAS. All numbers come from
@@ -37,16 +38,18 @@ empty list); amounts never appear in error text.
 - **Header card**: total value (large), day change € and % (green/red), "as of" time.
   Indicators under it when they apply: "2 prices stale", "1 price pending", "CA factor
   41 days old" (tap → list of the assets concerned with their price dates).
-- **Gain row** (3 tiles): total gain (€, with "realized · unrealized · income − costs"
-  below), net invested, unrealized %.
+- **Gain card**: total gain (€) on top, and its components as separate lines that add up
+  to it (`docs/kpis.md` §1): realized, unrealized (€ and %), net income, other costs (shown
+  as a negative). Below: net invested.
 - **Returns card**: XIRR and TWR side by side, segmented Since start / YTD / 1Y; "not
   annualized" note where it applies. Tap → Performance.
 - **Chart**: value line and net-invested line, range chips 1M / 3M / YTD / 1Y / All; touch
   to scrub (date, value, net invested). Under it: value change and net-invested change for
   the range.
 - **Allocation donut** by type with legend (type, %, €). Tap → Allocation.
-- **Top movers**: two tabs Day / Total, 3 up and 3 down: ticker, name, € and %. Tap →
-  Position detail.
+- **Top movers**: two tabs Day / Total, 3 up and 3 down, ranked by € impact with the %
+  beside it: ticker, name, €, %. A small €/% chip switches the ranking to % (the same core
+  function with another sort key, so it is cheap). Tap → Position detail.
 
 ### Positions
 
@@ -81,19 +84,23 @@ Segmented **Type / Broker / Currency / Asset**: donut plus table (group, €, %)
 
 ### New transaction
 
-1. **Type**: Buy, Sell, Dividend as large buttons; "More" reveals Deposit, Withdrawal,
-   Interest. (Transfers, subscriptions and redemptions are not in this form.)
-2. **Form**:
+1. **Type**: Buy, Sell, Dividend as large buttons; "More" reveals Interest. Deposits and
+   withdrawals stay in the schema but are not in this form (they change no figure, D5);
+   transfers, certificado subscriptions and redemptions are not in it either (D7).
+2. **Form** (all amounts in EUR, as in the import):
    - Asset: searchable picker over existing assets (ticker, name, ISIN); "Add asset" at the
-     bottom. Not shown for Deposit / Withdrawal / Interest.
-   - Quantity (Buy, Sell), total value (all types; Dividend/Interest: "amount received"),
-     derived unit price shown read-only ("= 412.37 € per unit").
+     bottom. Not shown for Interest (cash interest has no asset).
+   - Buy / Sell: quantity and **total value** (€); the unit price is derived and shown
+     read-only ("= 412.37 € per unit").
+   - Dividend / Interest: **"Amount received"** (€, the net amount that arrived; no
+     withholding field, D6).
    - Date: default today, date picker, no future dates.
    - Broker / account: default by the rule below, changeable.
      **Sell**: only brokers holding units of the asset on the date are offered, each with
      "holds 3.5 · can sell 3.5"; the field shows an error above that.
-   - Fee (optional, default 0), currency fixed to EUR at fx 1 (as the import; foreign-currency
-     entry is not in scope).
+   - Fee (optional, default 0): Buy and Sell only. Dividend / Interest have none, since the
+     amount received is already net.
+   - Saved as currency EUR, `fx_rate_to_eur` 1 (foreign-currency rows are not in scope).
    - Validation messages inline; submit disabled until valid.
 3. **Confirm**: summary of the row, and the **resulting position** in that account and
    overall (units before → after, average cost, cost basis; for a sell the realized gain of
@@ -109,7 +116,9 @@ otherwise the account used by the most non-deleted rows of that type in the last
 **Add asset** (modal): name, type, ticker, ISIN (check digit verified), exchange (XNAS,
 XNYS, XASE, XETR, or none for crypto), listing currency (prefilled from the exchange and
 must match it, #26). Saved with `price_source = 'manual'`; the asset shows **"price
-pending"** (valued at its trade price, flagged) until a price arrives (§5, decision D3).
+pending"** (valued at its trade price, flagged) until the next `prices-daily` run resolves
+its symbol and fetches its closes (§5 "Symbol resolution in prices-daily", D3). If
+resolution fails, it stays "price pending" and the reason is in `job_runs`.
 
 ### Activity
 
@@ -118,7 +127,9 @@ quantity, total. Filter chips: asset, broker, type, date range. Tap → detail w
 **Edit** (the same form, prefilled, then confirm) and **Delete** (dialog naming the row;
 sets `deleted_at`). Both are re-validated against the whole ledger: an edit or delete that
 would make any later sale exceed its broker's holdings is refused, naming that sale.
-Imported month-level rows show "month only" next to the date.
+Imported month-level rows show "month only" next to the date. Rows of types the form does
+not offer (deposit, withdrawal, transfer, subscription, redemption) are listed and can be
+deleted, but not edited in the app.
 
 ### Certificados
 
@@ -161,7 +172,7 @@ hand-checkable numbers (a few lots, round prices), plus property tests (fast-che
 | `valueSeries` (`returns.ts`)                                       | value vs net invested points for a range, plus today's point                                                                                          | range boundaries (1M on 31 Mar → from 29/28 Feb)                                                                                                         |
 | `monthlyReturns`, `yearlyReturns`, `bestWorstMonth` (`returns.ts`) | the §kpis 5 tables                                                                                                                                    | 3 months by hand; yearly = product of months; MTD excluded from best/worst; "approx." flag                                                               |
 | `allocation` (exists)                                              | `account` dimension now uses exact per-account values                                                                                                 | existing tests + CA lots in two accounts                                                                                                                 |
-| `topPositions`, `topMovers` (`movers.ts`)                          | §kpis 6–7 rankings                                                                                                                                    | ties, "new" and zero-change exclusions                                                                                                                   |
+| `topPositions`, `topMovers` (`movers.ts`)                          | §kpis 6–7 rankings; `topMovers` ranks by € (default) or % (`by: 'eur' \| 'pct'`)                                                                      | € and % rankings differ on a hand example; ties; "new" and zero-change exclusions                                                                        |
 | `unitsHeld`, `maxDisposable` (`validation.ts`)                     | units per account on a date; the most that can be sold on that date without breaking a later sale                                                     | hold 10, later sell 6 → on an earlier date only 4 can be sold; property: `maxDisposable` = largest _q_ for which `runFifo` accepts the ledger + the sale |
 | `validateNewTransaction`, `validateLedgerChange` (`validation.ts`) | typed errors: quantity/value ≤ 0, future date, unknown asset, sell above the broker's holdings (incl. later sales), edit/delete breaking a later sale | one test per error; boundary: selling exactly `maxDisposable` passes, + 1e-18 fails                                                                      |
 | `previewTransaction` (`validation.ts`)                             | the confirm screen: units before/after per account and overall, average cost, cost basis, realized gain of the sale                                   | buy and sell examples by hand                                                                                                                            |
@@ -195,9 +206,12 @@ while FIFO stays pooled.
   match on.
 - Holdings: one row per asset as now, plus exact per-account lots, cost, value and
   unrealized (no more pro rata split). `accountQuantities` goes away (derived from lots).
-- **Pooled mode kept as an option** (`matching: 'pooled'`): it is the current code path
-  (the queue key and "transfers do not move lots"), about 20 lines, and it is what the
-  before/after comparison below needs. Not exposed in the app.
+- **Pooled mode only for a one-off comparison** (D2): `runFifo` keeps an internal
+  `matching: 'pooled'` option (the current code path: the queue key, and "transfers do not
+  move lots", about 20 lines), documented as "comparison only". Its only callers are the
+  one-off `pnpm prices fifo-compare` command and the tests. The app, snapshots and
+  value-now always use per-account FIFO; nothing in any UI offers pooled. Once you have
+  run the comparison, the command and the option can be deleted in a later step.
 - Totals: realized is Σ disposals and each disposal belongs to one account; open cost is
   Σ lots and each lot belongs to one account. So portfolio realized and unrealized equal
   the sum over accounts by construction; a property test checks it on random ledgers
@@ -219,10 +233,12 @@ brokers: every one of the 13 sells is of an asset held only at Degiro, there are
 transfers, and SXR8, the only asset at two brokers (Degiro 2024-04 to 2024-09, IBKR from
 2024-10), has **no sells**. So **no realized gain changes, before or after; nor does any
 cost basis or snapshot.** Before: realized as now. After: identical figures. What this
-cannot see is rows added to the database after the import; slice 5a therefore adds a
-read-only check to `pnpm prices report` that runs both modes on the live ledger and writes
-`fifo_compare.csv` (per disposal: pooled gain, per-account gain) to the git-ignored report
-folder, printing only the number of differing rows. I expect 0.
+cannot see is rows added to the database after the import; slice 5a therefore adds the
+read-only one-off command `pnpm prices fifo-compare`, which runs both modes on the live
+ledger and writes `fifo_compare.csv` (per disposal: pooled gain, per-account gain; per
+asset: pooled and per-account cost basis) to `prices-data/reports/<time>-fifo-compare/`
+(git-ignored), printing only the number of differing rows. I expect 0. A core test runs
+both modes on the fixture-shaped ledger and asserts identical results.
 
 **Sell form** (slice 5c): units held per broker for the chosen asset on the chosen date
 (`unitsHeld`), only brokers with units offered, and the limit is `maxDisposable`: the most
@@ -287,6 +303,33 @@ when the form opens; a duplicate-key error on retry (`23505` on the primary key)
 as "already saved" after re-reading that id. Edits are `update ... where id = ?`;
 deletes set `deleted_at`. New rows: `trade_date_precision 'day'`, currency EUR, fx 1. CA
 factors: insert only. Add asset: insert `assets`.
+
+**Symbol resolution in prices-daily** (D3, slice 5c). A step at the start of the
+`prices-daily` run, before prices are fetched:
+
+- Candidates: assets not deleted, not certificados, with `price_source = 'manual'` and the
+  ISIN and exchange the resolver needs (crypto: by its ticker rule). At most 5 per run, to
+  stay within the Edge Function's limits and OpenFIGI's 25 requests per minute; the rest
+  wait for the next day.
+- Each candidate goes through the same `resolveSymbols` code as `pnpm prices resolve`
+  (OpenFIGI ticker check, then the provider's symbol check; nothing is guessed). A
+  resolved symbol is written to `assets.price_source(_id)` and that asset's closes are
+  fetched in the same run (from 14 days before its first buy).
+- **A failure never breaks the price run**: each asset is resolved inside its own
+  try/catch with a time limit; an unresolved asset, a provider error or an OpenFIGI
+  outage becomes a `job_runs.issues` entry (`unresolved` with the reason, or `http_error`)
+  and the run continues with the other assets. Resolution problems alone make the run
+  `partial` at worst, never `failed`. Tests: OpenFIGI down, provider unknown symbol and a
+  throwing resolver each leave the other assets' prices fetched.
+- The app shows "price pending" for such an asset (trade price stand-in, #25) and the
+  issue's reason in its detail.
+- Snapshots for a backdated first buy older than the daily window (the 1st of the
+  previous month) still need `pnpm prices backfill --only prices,snapshots --from <date>`.
+- `docs/prices.md` gains a "Redeploying after an update" section (written in 5a for the
+  FIFO change, extended in 5c): `pnpm functions:build`, then the CLI deploy, **or**, if the
+  CLI is blocked on the company network, the Dashboard route (Edge Functions → the function
+  → edit, paste the single-file bundle, JWT verification off), then a hand-run with
+  `curl.exe` and the `job_runs` row to check.
 
 **Sanity checks** — where they live:
 
@@ -385,8 +428,9 @@ Each slice: short plan, implement, tests, `pnpm check`, commit and push, summary
 
 **5a — Foundation, login, lock, Dashboard**
 
-1. Core: FIFO per account (§4), assumptions #1/#21/#22, tests; `pnpm prices report`
-   writes `fifo_compare.csv`. You rebuild and redeploy the functions.
+1. Core: FIFO per account (§4), assumptions #1/#21/#22, tests; the one-off
+   `pnpm prices fifo-compare`; the "Redeploying after an update" section in
+   `docs/prices.md`. You rebuild and redeploy the functions.
 2. Core: `dailyFlows`, `twr` from-zero rule, `dayChange`, `periodReturns`, `valueSeries`,
    `topMovers`, `topPositions`, `reconcile`, `localDate`, `buildDashboard`; tests.
 3. `packages/client`: key check, MFA helpers, row mappers (market and desktop switched to
@@ -417,25 +461,24 @@ Core: `unitsHeld`, `maxDisposable`, `validateNewTransaction`, `validateLedgerCha
 Activity (filters, edit, soft delete), Certificados and factor update, full Settings.
 Component tests: sell above the broker's holdings is blocked; future date, zero and
 negative values are blocked; Save is disabled while saving and a double tap inserts one
-row; a retried insert with the same id does not duplicate. Plus D3 below.
+row; a retried insert with the same id does not duplicate. Plus symbol resolution in
+`prices-daily` (§5, D3) with its tests and the `docs/prices.md` redeploy steps.
 
-## 9. Decisions for you
+## 9. Decisions (approved 2026-10-23)
 
-- **D1 Total gain** includes net income and other costs (_R_ + _U_ + _I_ − _C_), so it
-  agrees with XIRR/TWR, which count dividends. The alternative is capital only (_R_ + _U_,
-  the gap in the value vs net-invested chart).
-- **D2 Pooled FIFO** kept as a core option for the comparison report only (recommended),
-  or removed.
-- **D3 "Price symbol resolves in the next daily job"**: today the daily `prices-daily`
-  function does not resolve symbols; only the local `pnpm prices resolve` does, and the
-  daily run reports `no_price_source`. To meet the requirement, 5c adds a resolve step to
-  `prices-daily` for assets still on `manual` with an ISIN and exchange (OpenFIGI without a
-  key, then the provider's symbol check, as the script does; a redeploy). Alternative:
-  keep resolving locally.
-- **D4 Movers** ranked by percentage (a small position can top the list), or by €.
-- **D5 Deposits and withdrawals** are recorded but change no KPI (cash is not tracked,
-  #19, #27). Interest without an asset counts as income.
-- **D6 Dividend / interest amount** entered as the amount received; no withholding field
-  (tax is out of scope), so `withholding_tax` stays empty on app-entered rows.
-- **D7 Not in the form**: transfers, certificado subscriptions and redemptions, foreign
-  currency rows (EUR at fx 1, as the import). They stay as they are today.
+- **D1 Total gain** = realized + unrealized + net income − other costs
+  (_R_ + _U_ + _I_ − _C_), and the dashboard shows each component on its own line.
+- **D2 Pooled FIFO** only as a one-off comparison (`pnpm prices fifo-compare` and a core
+  test); never in the app UI, snapshots or value-now (§4).
+- **D3 Symbol resolution** is added to `prices-daily` (§5); a resolution failure never
+  breaks the price run, and the app shows "price pending". `docs/prices.md` gets redeploy
+  steps with a Dashboard route for when the CLI fails on the company network.
+- **D4 Top movers** ranked by € impact with % beside it, plus a €/% ranking chip (cheap:
+  one sort key in `topMovers`).
+- **D5 Deposits and withdrawals** stay in the schema but are not in the New transaction
+  form. `docs/kpis.md` §0.1 states how net contributions, XIRR and TWR are built from buys
+  and sells while cash is not tracked.
+- **D6 Dividends and interest**: the net amount received, labeled "Amount received", no
+  withholding field (so `withholding_tax` stays empty on app-entered rows) and no fee.
+- **D7 Not in the form**: transfers, certificado subscriptions and redemptions, and
+  foreign-currency rows. Totals are entered in EUR (fx 1), as in the import.

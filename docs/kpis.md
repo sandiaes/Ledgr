@@ -1,7 +1,8 @@
 # KPI definitions (mobile and desktop apps)
 
-Exact definitions of every number the apps show. Status: **proposed** (Step 5, Phase A),
-awaiting approval. Each KPI is computed by a `packages/core` function (named in
+Exact definitions of every number the apps show. Status: **approved** 2026-10-23 with
+decisions D1–D7 (`docs/app-plan.md` §9); each definition becomes an entry in
+`docs/assumptions.md` when its slice is built. Each KPI is computed by a `packages/core` function (named in
 `docs/app-plan.md` §3); the apps only format and display the result. All amounts are EUR,
 `Decimal` end to end. JS numbers appear only at the chart boundary (pixel positions).
 
@@ -31,9 +32,11 @@ These are **performance** figures. Realized gains are not tax figures (assumptio
   | dividend, interest  | − (amount − withholding tax − fees) × fx  |
   | fee                 | + (amount + fees) × fx                    |
   | transfer            | + fees × fx (units stay in the portfolio) |
-  | deposit, withdrawal | 0 (cash is not tracked)                   |
+  | deposit, withdrawal | 0 (cash is not tracked, §0.1)             |
 
-  So income counts as return, fee rows count as a cost, and trades are neutral.
+  So income counts as return, fee rows count as a cost, and trades are neutral. Rows
+  entered in the app are EUR at fx 1; dividends and interest have no withholding and no
+  fee (the amount entered is what was received), so for them the flow is − amount.
 
 - **Net invested** _NI(d)_ (#24): Σ over _L(d)_ of acquisition cost (fees in) minus
   disposal proceeds (fees out). Stored as `portfolio_snapshots.net_contributions_eur`.
@@ -45,6 +48,51 @@ These are **performance** figures. Realized gains are not tax figures (assumptio
   factor more than 35 days old, aged from its month's 1st (#25).
 - **Display**: amounts rounded half-up to cents, percentages to 2 decimals, both with
   `Decimal.toFixed` (never floats). A division by zero shows "—", never 0.
+
+## 0.1 Without cash tracking: built from buys and sells
+
+Ledgr does not track cash (#19, #27): there is no broker cash balance, and deposit and
+withdrawal rows (kept in the schema, not offered in the app) change no figure. The
+boundary of the portfolio is therefore **the positions themselves**, and money crosses it
+only through the ledger's trades and income:
+
+- a **buy** (or subscription) is money put in: its cost, fees included;
+- a **sell** (or redemption) is money taken out: its proceeds, fees deducted. The
+  proceeds leave the portfolio, as if withdrawn the same day;
+- a **dividend or interest** is money paid out to you: return, not a contribution;
+- a **fee row** is money put in that buys nothing: a cost.
+
+From that:
+
+- **Net contributions** (net invested) _NI_ = Σ buy costs − Σ sell proceeds, to date. It
+  goes down on every sale, and is negative if sales have returned more than was ever put
+  in. It ignores income, so the gap _V_ − _NI_ is exactly the capital gain _R_ + _U_.
+- **XIRR**: the cash flows are −cost on each buy's date, +proceeds on each sell's date,
+  +amount on each dividend/interest date, −amount on each fee row's date, and +_V(T)_ today
+  (`investmentCashFlows`). No deposit is needed for it to be defined.
+- **TWR**: each day's flow _F(d)_ is the same set of rows with the opposite sign (buys +,
+  sells −, income −, fee rows +), and the day's return is (_V(d)_ − _F(d)_) ÷ _V(d−1)_ − 1.
+  A buy or sell therefore never shows up as a gain or loss in itself; only price moves,
+  income and fees do.
+
+Example (2025, one asset, no fees):
+
+| Date   | Row                  | Close | Units | _V_   | _F_    | _NI_  |
+| ------ | -------------------- | ----- | ----- | ----- | ------ | ----- |
+| 1 Jan  | buy 10 @ 100 = 1,000 | 100   | 10    | 1,000 | +1,000 | 1,000 |
+| 1 Jul  | buy 10 @ 120 = 1,200 | 120   | 20    | 2,400 | +1,200 | 2,200 |
+| 31 Dec | sell 5 @ 110 = 550   | 110   | 15    | 1,650 | −550   | 1,650 |
+
+- Gains: _R_ = 550 − 500 (the oldest 5 units, bought at 100) = 50; open cost =
+  5 × 100 + 10 × 120 = 1,700, _U_ = 1,650 − 1,700 = −50. _R_ + _U_ = 0 = _V_ − _NI_.
+- TWR: 1 Jan starts from zero, so the start-of-day rule gives 1,000 ÷ 1,000 − 1 = 0;
+  1 Jul: (2,400 − 1,200) ÷ 1,000 − 1 = +20%; 31 Dec: (1,650 + 550) ÷ 2,400 − 1 = −8.33%.
+  TWR = 1.2 × 11/12 − 1 = **+10%** (the asset's price went 100 → 110).
+- XIRR: −1,000 on 1 Jan, −1,200 on 1 Jul, +550 and +1,650 on 31 Dec. They sum to zero, so
+  XIRR = **0%**: more money was in the asset during the fall from 120 to 110 than during
+  the rise from 100 to 120.
+- Without the sale (_V_ = 2,200 on 31 Dec), _NI_ = 2,200 and both returns are the same:
+  selling moves money out, it does not create a return.
 
 ## 1. Totals
 
@@ -67,7 +115,9 @@ Identities (checked in core tests and at run time, §8):
 - Per account: Σ over accounts of _R_, _U_, cost basis and value equals the portfolio
   figure exactly; per-account _I_ and _C_ are the rows booked in that account.
 
-The dashboard shows _G_ with its parts: realized, unrealized, and "income − costs".
+Total gain includes income and costs (decision D1), so it agrees with XIRR and TWR, which
+count dividends as return. The dashboard shows _G_ and, on separate lines that add up to
+it, _R_, _U_ (€ and %), _I_ and −*C*.
 
 ## 2. Day change
 
@@ -175,13 +225,17 @@ of the 5 / 10 largest assets (core `concentration`).
 
 ## 7. Top movers
 
-- **Day**: open positions ranked by day change % (§2), 3 best (positive only) and 3 worst
-  (negative only). Positions opened today ("new") and positions with _D_a_ = 0 are left
-  out. Shown with € and %.
-- **Total**: open positions ranked by unrealized gain % (_U_a_ ÷ cost basis), 3 best and
-  3 worst. Shown with € and %.
+Ranked by **€ impact** (decision D4), with the % shown beside it:
 
-Ranking is by percentage, so a small position can rank first; the € amount is always shown.
+- **Day**: open positions ranked by day change € _D_a_ (§2), 3 best (positive only) and
+  3 worst (negative only). Positions with _D_a_ = 0 are left out. A position opened today
+  ranks by its € change and shows "new" instead of a %.
+- **Total**: open positions ranked by unrealized gain € _U_a_, 3 best (positive only) and
+  3 worst (negative only), with % = _U_a_ ÷ cost basis.
+
+Ties go to the larger position value, then the asset id. The €/% chip re-ranks the same
+lists by % (day: _D_a_ ÷ _V_a(Y)_, positions opened today left out; total: _U_a_ ÷ cost
+basis).
 
 ## 8. Positions, brokers, closed positions, certificados
 
