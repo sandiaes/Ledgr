@@ -2,8 +2,9 @@
 
 Status: **plan approved with decisions D1–D7 on 2026-10-23** (§9). **Slice 5a-core built
 2026-10-23** (`packages/core` and docs only, §8). **Slice 5a-app built 2026-10-23**
-(`apps/mobile` foundation, sign-in with MFA, lock, Dashboard; §8); 5b and 5c start only
-when asked. KPI definitions are in `docs/kpis.md`; calculation
+(`apps/mobile` foundation, sign-in with MFA, lock, Dashboard; §8). **Slice 5b built
+2026-10-23** (Positions, Position and Broker detail, Allocation, Performance, Closed
+positions; §8); 5c starts only when asked. KPI definitions are in `docs/kpis.md`; calculation
 assumptions in `docs/assumptions.md`.
 
 `apps/mobile`: Expo + React Native + TypeScript, Android only, run with Expo Go during
@@ -462,7 +463,13 @@ has one React; run steps in `docs/mobile-run.md`)
    the company-network workarounds, and the EAS APK build with the TLS-certificate
    workaround.
 
-**5b — Positions, brokers, allocation, performance, closed positions**
+**5b — Positions, brokers, allocation, performance, closed positions** (built 2026-10-23:
+core `positionDetail`, `assetTransactions`, `priceSeries`, `buildPositions`,
+`buildAllocation`, `buildPerformance` and a test that the brokers add up exactly to the
+portfolio; in the app a native stack above the tabs, account names in `['ledger']`, the
+`['prices', assetId]` history query, and component tests for sorting, filtering, the
+broker totals and hide-values on every new screen. Not built: buy/sell markers on the
+price chart, which the 5b request did not list)
 
 Core: `accountSummaries`, `positionDetail`, `closedPositions`, `monthlyReturns`,
 `yearlyReturns`, `bestWorstMonth`, `buildPositions`. App: Positions (four segments, search,

@@ -287,6 +287,25 @@ export interface ValueSeries {
 }
 
 /**
+ * First day of a chart range ending on `today` (docs/kpis.md §4); 'All' starts at `first`,
+ * the series' first point.
+ */
+export function rangeStart(range: SeriesRange, today: IsoDate, first: IsoDate): IsoDate {
+  switch (range) {
+    case '1M':
+      return addMonths(today, -1);
+    case '3M':
+      return addMonths(today, -3);
+    case 'YTD':
+      return `${yearOf(today) - 1}-12-31`;
+    case '1Y':
+      return addMonths(today, -12);
+    case 'All':
+      return first;
+  }
+}
+
+/**
  * Value vs net invested for a chart range (docs/kpis.md §4): one point per snapshot day in
  * the range, plus today's point (V(T), NI(T)).
  */
@@ -298,17 +317,7 @@ export function valueSeries(
   const sorted = snapshots
     .filter((s) => s.date < today.date)
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  const T = today.date;
-  const from =
-    range === '1M'
-      ? addMonths(T, -1)
-      : range === '3M'
-        ? addMonths(T, -3)
-        : range === 'YTD'
-          ? `${yearOf(T) - 1}-12-31`
-          : range === '1Y'
-            ? addMonths(T, -12)
-            : (sorted[0]?.date ?? T);
+  const from = rangeStart(range, today.date, sorted[0]?.date ?? today.date);
   const points = [...sorted.filter((s) => s.date >= from), today];
   const first = points[0] as ValueSnapshot;
   return {

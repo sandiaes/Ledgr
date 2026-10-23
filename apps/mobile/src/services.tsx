@@ -1,4 +1,4 @@
-import type { AssetRecord } from '@ledgr/client';
+import type { AccountRecord, AssetRecord } from '@ledgr/client';
 import type {
   CaFactor,
   CaSubscription,
@@ -30,6 +30,8 @@ export interface Services {
 export interface Ledger {
   transactions: Transaction[];
   assets: AssetRecord[];
+  /** Brokers, by name (soft-deleted ones included, so older rows keep a name). */
+  accounts: AccountRecord[];
   ca: { subscriptions: CaSubscription[]; factors: CaFactor[] };
 }
 
@@ -56,6 +58,8 @@ export interface DataApi {
    * without one in that window, and the live quotes. */
   market(today: IsoDate, heldAssetIds: readonly string[]): Promise<Market>;
   snapshots(): Promise<ValueSnapshot[]>;
+  /** One asset's whole price history (raw closes and split factors), for its chart. */
+  priceHistory(assetId: string): Promise<StoredPriceRow[]>;
   /** Refreshes due quotes server-side; null when value-now could not answer. */
   valueNow(): Promise<ValueNowTotals | null>;
 }

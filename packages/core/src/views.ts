@@ -1,11 +1,24 @@
-import { allocation, type AllocationSlice } from './allocation';
-import type { CaFactor, CaSubscription } from './certificados';
+import { accountSummaries, type AccountSummary } from './accounts';
+import {
+  allocation,
+  concentration,
+  type AllocationDimension,
+  type AllocationSlice,
+  type Concentration,
+} from './allocation';
+import type {
+  CaContext,
+  CaFactor,
+  CaSubscription,
+  CertificadoSubscriptionView,
+} from './certificados';
+import { closedPositions, type ClosedPosition } from './closed';
 import { compareDates, type IsoDate } from './dates';
 import { dayChange, type DayChange } from './daychange';
-import type { Decimal } from './decimal';
+import { ZERO, type Decimal } from './decimal';
 import { MissingValuationError } from './errors';
 import { gainsSummary, type GainsSummary } from './gains';
-import { computeHoldings } from './holdings';
+import { computeHoldings, type Holding, type HoldingAccount } from './holdings';
 import {
   createCaFactorLookup,
   createFxLookup,
@@ -14,6 +27,7 @@ import {
   type PriceRow,
 } from './lookups';
 import { topMovers, type TopMovers } from './movers';
+import { positionDetail, type PositionDetail } from './positions';
 import {
   createTradePriceLookup,
   splitAdjustPrices,
@@ -21,22 +35,26 @@ import {
   type StoredPriceRow,
 } from './prices';
 import {
+  bestWorstMonth,
+  monthlyReturns,
   periodReturns,
   valueSeries,
+  yearlyReturns,
+  type CalendarReturn,
   type PeriodReturn,
   type SeriesRange,
   type ValueSeries,
   type ValueSnapshot,
 } from './returns';
 import { reconcile, type ReconcileResult } from './sanity';
-import { buildSnapshot, type ValuationFlag } from './snapshot';
-import type { Asset, PriceLookup, Transaction } from './types';
+import { CHART_MAX_POINTS, thinSeries } from './series';
+import { buildSnapshot, type PortfolioSnapshot, type ValuationFlag } from './snapshot';
+import type { Asset, AssetType, PriceLookup, Transaction } from './types';
 
 export const SERIES_RANGES: readonly SeriesRange[] = ['1M', '3M', 'YTD', '1Y', 'All'];
-/** Chart series longer than this are thinned for drawing (docs/app-plan.md §5). */
-export const CHART_MAX_POINTS = 300;
 
-export interface DashboardInput {
+/** The fetched rows every screen's view is built from (docs/app-plan.md §5). */
+export interface PortfolioInput {
   /** T, the owner's local date (`localDate(now, 'Europe/Lisbon')`). */
   today: IsoDate;
   transactions: readonly Transaction[];
@@ -54,6 +72,8 @@ export interface DashboardInput {
   staleAfterDays?: number;
   caMaxAgeDays?: number;
 }
+
+export type DashboardInput = PortfolioInput;
 
 export interface DashboardFreshness {
   /** The newest price date used (live quotes count as their trading day). */
@@ -99,7 +119,7 @@ export interface DashboardView {
 }
 
 /** Some holding has no value (no FX rate for its currency): totals are shown as "—". */
-export interface DashboardUnvalued {
+export interface PortfolioUnvalued {
   status: 'unvalued';
   today: IsoDate;
   /** The day without a value (today or yesterday). */
@@ -109,15 +129,27 @@ export interface DashboardUnvalued {
   currencies: string[];
 }
 
-export type Dashboard = DashboardView | DashboardUnvalued;
+export type DashboardUnvalued = PortfolioUnvalued;
+export type Dashboard = DashboardView | PortfolioUnvalued;
+
+/** The portfolio valued at T: what every view starts from. */
+interface Valued {
+  status: 'ok';
+  holdings: Holding[];
+  snapshot: PortfolioSnapshot;
+  prices: PriceLookup;
+  ca: CaContext;
+  gains: GainsSummary;
+  /** Turns a MissingValuationError into the "unvalued" view. */
+  unvalued(date: IsoDate, assetIds: readonly string[]): PortfolioUnvalued;
+}
 
 /**
- * Everything the Dashboard shows, from the fetched rows (docs/app-plan.md §1, §5): the app
- * formats the result and does no arithmetic. Closes are split-adjusted and today's quotes
- * added (`withLiveQuotes`); an asset with no price at all is valued at its last trade price
- * and flagged "price pending", as in the snapshots (#25).
+ * Closes split-adjusted with today's quotes added (`withLiveQuotes`); an asset with no
+ * price at all is valued at its last trade price and flagged "price pending", as in the
+ * snapshots (#25). A holding without a value (no FX rate) gives the "unvalued" view.
  */
-export function buildDashboard(input: DashboardInput): Dashboard {
+function valuePortfolio(input: PortfolioInput): Valued | PortfolioUnvalued {
   const { today, transactions, assets } = input;
   const currencyOf = new Map(assets.map((a) => [a.id, a.tradingCurrency]));
   const quotes = input.liveQuotes.filter((q) => currencyOf.get(q.assetId) === q.currency);
@@ -129,7 +161,7 @@ export function buildDashboard(input: DashboardInput): Dashboard {
     subscriptions: input.ca.subscriptions,
     factors: createCaFactorLookup(input.ca.factors),
   };
-  const unvalued = (date: IsoDate, assetIds: readonly string[]): DashboardUnvalued => ({
+  const unvalued = (date: IsoDate, assetIds: readonly string[]): PortfolioUnvalued => ({
     status: 'unvalued',
     today,
     date,
@@ -142,13 +174,6 @@ export function buildDashboard(input: DashboardInput): Dashboard {
   const holdings = computeHoldings({ transactions, assets, asOf: today, prices, fx, ca });
   const missing = holdings.filter((h) => !h.marketValueEur).map((h) => h.assetId);
   if (missing.length > 0) return unvalued(today, missing);
-  let day: DayChange;
-  try {
-    day = dayChange({ transactions, assets, prices, fx, ca, today });
-  } catch (e) {
-    if (e instanceof MissingValuationError) return unvalued(e.date ?? today, e.assetIds);
-    throw e;
-  }
 
   const snapshot = buildSnapshot({
     date: today,
@@ -168,6 +193,39 @@ export function buildDashboard(input: DashboardInput): Dashboard {
     asOf: today,
     caSubscriptions: input.ca.subscriptions,
   });
+  return { status: 'ok', holdings, snapshot, prices, ca, gains, unvalued };
+}
+
+/** D(T) with the same price source as V(T); a day without a value gives "unvalued". */
+function dayChangeOf(input: PortfolioInput, v: Valued): DayChange | PortfolioUnvalued {
+  const { transactions, assets, today } = input;
+  const fx = createFxLookup(input.fx);
+  try {
+    return dayChange({ transactions, assets, prices: v.prices, fx, ca: v.ca, today });
+  } catch (e) {
+    if (e instanceof MissingValuationError) return v.unvalued(e.date ?? today, e.assetIds);
+    throw e;
+  }
+}
+
+/** The newest price date among the holdings valued by a price. */
+function newestPriceDate(snapshot: PortfolioSnapshot): IsoDate | null {
+  const priced = snapshot.valuationFlags.filter((f) => f.source === 'price');
+  return priced.map((f) => f.asOf).sort(compareDates)[priced.length - 1] ?? null;
+}
+
+/**
+ * Everything the Dashboard shows, from the fetched rows (docs/app-plan.md §1, §5): the app
+ * formats the result and does no arithmetic.
+ */
+export function buildDashboard(input: PortfolioInput): Dashboard {
+  const { today, transactions } = input;
+  const v = valuePortfolio(input);
+  if (v.status === 'unvalued') return v;
+  const day = dayChangeOf(input, v);
+  if ('status' in day) return day;
+  const { holdings, snapshot, gains } = v;
+
   const totalValueEur = snapshot.totalValueEur;
   const netInvestedEur = snapshot.netContributionsEur;
   const costBasisEur = snapshot.totalCostBasisEur;
@@ -205,7 +263,7 @@ export function buildDashboard(input: DashboardInput): Dashboard {
       pct: topMovers({ day, holdings, by: 'pct' }),
     },
     freshness: {
-      newestPriceDate: priced.map((f) => f.asOf).sort(compareDates)[priced.length - 1] ?? null,
+      newestPriceDate: newestPriceDate(snapshot),
       stalePrices: priced.filter((f) => f.stale),
       pendingPrices: flags.filter((f) => f.source === 'trade'),
       caFactor:
@@ -221,32 +279,279 @@ export function buildDashboard(input: DashboardInput): Dashboard {
   };
 }
 
+/** One row of the Positions list: a whole position, or one broker's units of it. */
+export interface PositionRow {
+  assetId: string;
+  assetType: AssetType;
+  /** Listing currency. */
+  currency: string;
+  /** Accounts holding units (just the broker's own in a broker's rows), by id. */
+  accountIds: string[];
+  units: Decimal;
+  valueEur: Decimal;
+  /** valueEur / V(T); null when V(T) is 0. */
+  weight: Decimal | null;
+  costBasisEur: Decimal;
+  unrealizedEur: Decimal;
+  /** unrealized / cost basis; null when the cost basis is 0. */
+  unrealizedPct: Decimal | null;
+  /** D_a (docs/kpis.md §2); null in a broker's rows (day change is per asset). */
+  dayChangeEur: Decimal | null;
+  /** D_a / V_a(Y); null when undefined or in a broker's rows. */
+  dayChangePct: Decimal | null;
+  openedToday: boolean;
+  /** How the asset is valued: `stale`, and source 'trade' for "price pending". */
+  valuation: ValuationFlag;
+  /** Certificados only (else null): the held subscriptions' factor. */
+  certificado: CertificadoFactor | null;
+}
+
+export interface CertificadoFactor {
+  /** EUR per unit when every held subscription has the same; else null (see the detail). */
+  unitValueEur: Decimal | null;
+  /** The oldest factor month among them; null when one has no factor yet. */
+  factorMonth: IsoDate | null;
+  subscriptions: number;
+}
+
+/** R, U, I, C, value, cost and G = R + U + I - C, for the portfolio or summed over brokers. */
+export interface PortfolioTotals {
+  valueEur: Decimal;
+  costBasisEur: Decimal;
+  unrealizedEur: Decimal;
+  realizedEur: Decimal;
+  incomeNetEur: Decimal;
+  otherCostsEur: Decimal;
+  /** G = realized + unrealized + income - other costs (decision D1). */
+  totalGainEur: Decimal;
+}
+
+/** A broker (account) with its own units of each position (the Broker detail rows). */
+export interface BrokerView extends AccountSummary {
+  /** Largest value first. */
+  positions: PositionRow[];
+}
+
+export interface PositionsView {
+  status: 'ok';
+  today: IsoDate;
+  empty: boolean;
+  newestPriceDate: IsoDate | null;
+  totals: PortfolioTotals;
+  /** Open positions, largest value first (ties by asset id). */
+  positions: PositionRow[];
+  /** Position detail of every open position, by asset id. */
+  details: Record<string, PositionDetail>;
+  /** Value and weight per asset type, largest first. */
+  types: AllocationSlice[];
+  /** Largest value first. */
+  brokers: BrokerView[];
+  /** The brokers' figures summed field by field. */
+  brokerTotals: PortfolioTotals;
+  /** brokerTotals equals totals exactly (FIFO per account, docs/kpis.md §1). */
+  brokersReconcile: boolean;
+  /** Fully closed positions, the latest sale first (docs/kpis.md §8). */
+  closed: ClosedPosition[];
+}
+
+export type Positions = PositionsView | PortfolioUnvalued;
+
+const TOTAL_FIELDS = [
+  'valueEur',
+  'costBasisEur',
+  'unrealizedEur',
+  'realizedEur',
+  'incomeNetEur',
+  'otherCostsEur',
+  'totalGainEur',
+] as const satisfies readonly (keyof PortfolioTotals)[];
+
 /**
- * At most `max` points for drawing a long series: the first and last points, and the
- * lowest and highest value of each bucket in between, in date order. The figures under a
- * chart always come from the full series.
+ * The Positions tab, its Position and Broker details and Closed positions (docs/app-plan.md
+ * §1, docs/kpis.md §8). Lots are FIFO per account, so every broker figure is a sum of
+ * parts belonging to one account and the brokers add up exactly to the portfolio.
  */
-export function thinSeries<T extends { valueEur: Decimal }>(
-  points: readonly T[],
-  max: number,
-): T[] {
-  if (max < 4) throw new RangeError('max must be at least 4');
-  if (points.length <= max) return [...points];
-  const last = points.length - 1;
-  const buckets = Math.floor((max - 2) / 2);
-  const size = Math.ceil((points.length - 2) / buckets);
-  const keep: number[] = [0];
-  for (let start = 1; start < last; start += size) {
-    const end = Math.min(start + size, last);
-    let lo = start;
-    let hi = start;
-    for (let i = start + 1; i < end; i++) {
-      const v = (points[i] as T).valueEur;
-      if (v.lt((points[lo] as T).valueEur)) lo = i;
-      if (v.gt((points[hi] as T).valueEur)) hi = i;
-    }
-    keep.push(...(lo === hi ? [lo] : lo < hi ? [lo, hi] : [hi, lo]));
+export function buildPositions(input: PortfolioInput): Positions {
+  const { today, transactions } = input;
+  const v = valuePortfolio(input);
+  if (v.status === 'unvalued') return v;
+  const day = dayChangeOf(input, v);
+  if ('status' in day) return day;
+  const { holdings, snapshot, gains, ca } = v;
+  const total = snapshot.totalValueEur;
+  const flags = new Map(snapshot.valuationFlags.map((f) => [f.assetId, f]));
+  const days = new Map(day.assets.map((a) => [a.assetId, a]));
+
+  const details: Record<string, PositionDetail> = {};
+  for (const h of holdings) {
+    details[h.assetId] = positionDetail({
+      transactions,
+      holding: h,
+      asOf: today,
+      portfolioValueEur: total,
+      day: days.get(h.assetId),
+      ca,
+      caMaxAgeDays: input.caMaxAgeDays,
+    });
   }
-  keep.push(last);
-  return keep.map((i) => points[i] as T);
+
+  const rowOf = (h: Holding, part?: HoldingAccount): PositionRow => {
+    const detail = details[h.assetId] as PositionDetail;
+    const valueEur = (part ? part.marketValueEur : h.marketValueEur) as Decimal;
+    const costBasisEur = part ? part.costBasisEur : h.costBasisEur;
+    const unrealizedEur = (part ? part.unrealizedGainEur : h.unrealizedGainEur) as Decimal;
+    const subs = detail.certificados.filter((s) => !part || s.accountId === part.accountId);
+    return {
+      assetId: h.assetId,
+      assetType: h.assetType,
+      currency: h.currency,
+      accountIds: part ? [part.accountId] : h.accounts.map((a) => a.accountId),
+      units: part ? part.quantity : h.quantity,
+      valueEur,
+      weight: total.isZero() ? null : valueEur.div(total),
+      costBasisEur,
+      unrealizedEur,
+      unrealizedPct: costBasisEur.isZero() ? null : unrealizedEur.div(costBasisEur),
+      dayChangeEur: part ? null : (detail.dayChange?.changeEur ?? null),
+      dayChangePct: part ? null : (detail.dayChange?.changePct ?? null),
+      openedToday: !part && (detail.dayChange?.openedToday ?? false),
+      valuation: flags.get(h.assetId) as ValuationFlag,
+      certificado: h.assetType === 'certificado_aforro' ? certificadoFactor(subs) : null,
+    };
+  };
+  const byValue = (a: PositionRow, b: PositionRow) =>
+    b.valueEur.comparedTo(a.valueEur) || a.assetId.localeCompare(b.assetId);
+
+  const brokers: BrokerView[] = accountSummaries({
+    transactions,
+    holdings,
+    asOf: today,
+    caSubscriptions: ca.subscriptions,
+  }).map((s) => ({
+    ...s,
+    positions: holdings
+      .flatMap((h) => h.accounts.filter((a) => a.accountId === s.accountId).map((a) => rowOf(h, a)))
+      .sort(byValue),
+  }));
+
+  const totals: PortfolioTotals = {
+    valueEur: total,
+    costBasisEur: snapshot.totalCostBasisEur,
+    unrealizedEur: gains.unrealizedEur,
+    realizedEur: gains.realizedEur,
+    incomeNetEur: gains.incomeNetEur,
+    otherCostsEur: gains.otherCostsEur,
+    totalGainEur: gains.totalReturnEur,
+  };
+  const brokerTotals = Object.fromEntries(
+    TOTAL_FIELDS.map((f) => [f, brokers.reduce((s, b) => s.plus(b[f]), ZERO)]),
+  ) as unknown as PortfolioTotals;
+
+  return {
+    status: 'ok',
+    today,
+    empty: transactions.length === 0,
+    newestPriceDate: newestPriceDate(snapshot),
+    totals,
+    positions: holdings.map((h) => rowOf(h)).sort(byValue),
+    details,
+    types: allocation(holdings, 'assetType'),
+    brokers,
+    brokerTotals,
+    brokersReconcile: TOTAL_FIELDS.every((f) => brokerTotals[f].eq(totals[f])),
+    closed: closedPositions(transactions, { asOf: today, caSubscriptions: ca.subscriptions }).sort(
+      (a, b) =>
+        (a.lastSale > b.lastSale ? -1 : a.lastSale < b.lastSale ? 1 : 0) ||
+        a.assetId.localeCompare(b.assetId),
+    ),
+  };
+}
+
+function certificadoFactor(subs: readonly CertificadoSubscriptionView[]): CertificadoFactor {
+  const first = subs[0];
+  const months = subs.map((s) => s.factorMonth);
+  return {
+    unitValueEur:
+      first && subs.every((s) => s.unitValueEur.eq(first.unitValueEur)) ? first.unitValueEur : null,
+    factorMonth:
+      months.length === 0 || months.includes(null)
+        ? null
+        : ((months as IsoDate[]).sort(compareDates)[0] as IsoDate),
+    subscriptions: subs.length,
+  };
+}
+
+export const ALLOCATION_DIMENSIONS: readonly AllocationDimension[] = [
+  'assetType',
+  'account',
+  'currency',
+  'asset',
+];
+
+export interface AllocationView {
+  status: 'ok';
+  today: IsoDate;
+  newestPriceDate: IsoDate | null;
+  totalValueEur: Decimal;
+  /** Per dimension, largest group first (docs/kpis.md §6). */
+  slices: Record<AllocationDimension, AllocationSlice[]>;
+  /** The 5 / 10 largest assets and their combined weight. */
+  top5: Concentration;
+  top10: Concentration;
+}
+
+export type Allocation = AllocationView | PortfolioUnvalued;
+
+/** The Allocation screen: by type, broker, listing currency and asset, top 5 / 10. */
+export function buildAllocation(input: PortfolioInput): Allocation {
+  const v = valuePortfolio(input);
+  if (v.status === 'unvalued') return v;
+  const { holdings, snapshot } = v;
+  return {
+    status: 'ok',
+    today: input.today,
+    newestPriceDate: newestPriceDate(snapshot),
+    totalValueEur: snapshot.totalValueEur,
+    slices: Object.fromEntries(
+      ALLOCATION_DIMENSIONS.map((d) => [d, allocation(holdings, d)]),
+    ) as Record<AllocationDimension, AllocationSlice[]>,
+    top5: concentration(holdings, 5),
+    top10: concentration(holdings, 10),
+  };
+}
+
+export interface PerformanceView {
+  status: 'ok';
+  today: IsoDate;
+  newestPriceDate: IsoDate | null;
+  /** Newest first, the current month (MTD) on top (docs/kpis.md §5). */
+  months: CalendarReturn[];
+  /** Newest first, the current year (YTD) on top. */
+  years: CalendarReturn[];
+  /** Among completed months; null when none has a return. */
+  best: CalendarReturn | null;
+  worst: CalendarReturn | null;
+}
+
+export type Performance = PerformanceView | PortfolioUnvalued;
+
+/** The Performance screen: monthly and yearly returns, contributions vs market gains. */
+export function buildPerformance(input: PortfolioInput): Performance {
+  const v = valuePortfolio(input);
+  if (v.status === 'unvalued') return v;
+  const returns = {
+    transactions: input.transactions,
+    snapshots: input.snapshots,
+    today: input.today,
+    valueTodayEur: v.snapshot.totalValueEur,
+  };
+  const months = monthlyReturns(returns);
+  return {
+    status: 'ok',
+    today: input.today,
+    newestPriceDate: newestPriceDate(v.snapshot),
+    months,
+    years: yearlyReturns(returns),
+    ...bestWorstMonth(months),
+  };
 }

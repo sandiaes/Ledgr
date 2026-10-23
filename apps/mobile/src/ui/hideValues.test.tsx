@@ -1,7 +1,7 @@
 import { dec, localDate } from '@ledgr/core';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { AppRoot } from '../AppRoot';
-import { TIME_ZONE } from '../data/useDashboard';
+import { TIME_ZONE } from '../data/usePortfolio';
 import { ServicesProvider } from '../services';
 import { SettingsProvider } from '../settings/SettingsProvider';
 import { fakeAuth, fakeData, fakeServices, sampleLedger } from '../test/fakes';

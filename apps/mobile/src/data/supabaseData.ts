@@ -1,4 +1,6 @@
 import {
+  ACCOUNT_COLUMNS,
+  accountFromRow,
   assertAal2,
   ASSET_COLUMNS,
   assetFromRow,
@@ -39,7 +41,7 @@ export function createSupabaseData(sb: SupabaseClient): DataApi {
 
   return {
     async ledger() {
-      const [transactions, assets, subscriptions, factors] = await Promise.all([
+      const [transactions, assets, accounts, subscriptions, factors] = await Promise.all([
         all('transactions', (f, t) =>
           sb
             .from('transactions')
@@ -52,6 +54,9 @@ export function createSupabaseData(sb: SupabaseClient): DataApi {
         ),
         all('assets', (f, t) =>
           sb.from('assets').select(ASSET_COLUMNS).is('deleted_at', null).order('id').range(f, t),
+        ),
+        all('accounts', (f, t) =>
+          sb.from('accounts').select(ACCOUNT_COLUMNS).order('id').range(f, t),
         ),
         all('ca_subscriptions', (f, t) =>
           sb
@@ -73,6 +78,7 @@ export function createSupabaseData(sb: SupabaseClient): DataApi {
       return {
         transactions: transactions.map(transactionFromRow),
         assets: assets.map(assetFromRow),
+        accounts: accounts.map(accountFromRow),
         ca: {
           subscriptions: subscriptions.map(caSubscriptionFromRow),
           factors: factors.map(caFactorFromRow),
@@ -145,6 +151,18 @@ export function createSupabaseData(sb: SupabaseClient): DataApi {
           .range(f, t),
       );
       return rows.map(snapshotFromRow);
+    },
+
+    async priceHistory(assetId) {
+      const rows = await all('prices', (f, t) =>
+        sb
+          .from('prices')
+          .select(PRICE_COLUMNS)
+          .eq('asset_id', assetId)
+          .order('price_date')
+          .range(f, t),
+      );
+      return rows.map(priceFromRow);
     },
 
     async valueNow() {

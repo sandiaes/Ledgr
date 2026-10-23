@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { d, buy, dividend, expectDec, sell } from './test-utils';
+import { bestWorstMonth, monthlyReturns, yearlyReturns } from './returns';
+import {
+  d,
+  buy,
+  dividend,
+  expectDec,
+  fee,
+  interest,
+  sell,
+  subscribe,
+  transfer,
+} from './test-utils';
 import type { FxRow, PriceRow } from './lookups';
 import type { StoredPriceRow } from './prices';
 import type { ValueSnapshot } from './returns';
@@ -7,7 +18,19 @@ import { reconcile } from './sanity';
 import { computeHoldings } from './holdings';
 import { createFxLookup, createPriceLookup } from './lookups';
 import type { Asset } from './types';
-import { buildDashboard, thinSeries, type DashboardInput, type DashboardView } from './views';
+import { thinSeries } from './series';
+import {
+  buildAllocation,
+  buildDashboard,
+  buildPerformance,
+  buildPositions,
+  type AllocationView,
+  type DashboardInput,
+  type DashboardView,
+  type PerformanceView,
+  type PortfolioTotals,
+  type PositionsView,
+} from './views';
 
 const T = '2025-06-10';
 const assets: Asset[] = [
@@ -240,5 +263,237 @@ describe('thinSeries', () => {
 
   it('refuses a limit too small to keep both ends and a bucket', () => {
     expect(() => thinSeries(series(10), 3)).toThrow(RangeError);
+  });
+});
+
+// By hand (EUR), three brokers:
+//   A (ETF): degiro buys 10 @ 100, ibkr buys 5 @ 110; degiro sells 4 @ 120 (its own lot:
+//     realized 80); dividend 6 at degiro. Close 125 yesterday, quote 130 today:
+//     degiro 6 units cost 600 value 780 U 180; ibkr 5 units cost 550 value 650 U 100.
+//     D_A = 1430 - 1375 = 55 (4%).
+//   B (USD stock) at ibkr: 5 @ 20 USD, fx 0.9 -> cost 90; close 25 USD four days old
+//     (stale) -> 112.5, U 22.5.
+//   C (crypto) at degiro: buy 2 @ 50, sell 2 @ 40 -> closed, realized -20.
+//   CA1 at aforronet: 1000 units @ 1, factor 1.02 from May (40 days old, stale) -> 1020.
+//   Fee 3 at ibkr, interest 2 at degiro (no asset).
+//   V 2562.5, cost 2240, U 322.5, R 60, I 8, C 3, G 387.5.
+//   degiro: V 780, cost 600, U 180, R 60, I 8, C 0, G 248.
+//   ibkr: V 762.5, cost 640, U 122.5, R 0, I 0, C 3, G 119.5.
+//   aforronet: V 1020, cost 1000, U 20, G 20.
+const brokerAssets: Asset[] = [
+  { id: 'A', assetType: 'etf', tradingCurrency: 'EUR' },
+  { id: 'B', assetType: 'stock', tradingCurrency: 'USD' },
+  { id: 'C', assetType: 'crypto', tradingCurrency: 'EUR' },
+  { id: 'CA1', assetType: 'certificado_aforro', tradingCurrency: 'EUR' },
+];
+function brokerInput(over: Partial<DashboardInput> = {}): DashboardInput {
+  return {
+    today: T,
+    transactions: [
+      buy('2025-01-02', 'A', '10', '100', { account: 'degiro' }),
+      subscribe('2025-01-15', 'CA1', '1000', '1', { id: 'ca-sub', account: 'aforronet' }),
+      buy('2025-02-03', 'A', '5', '110', { account: 'ibkr' }),
+      buy('2025-03-03', 'B', '5', '20', { account: 'ibkr', currency: 'USD', fx: '0.9' }),
+      buy('2025-04-01', 'C', '2', '50', { account: 'degiro' }),
+      sell('2025-05-02', 'A', '4', '120', { account: 'degiro' }),
+      dividend('2025-05-15', '6', { asset: 'A', account: 'degiro' }),
+      sell('2025-05-20', 'C', '2', '40', { account: 'degiro' }),
+      fee('2025-06-01', '3', { account: 'ibkr' }),
+      interest('2025-06-02', '2', { account: 'degiro' }),
+    ],
+    assets: brokerAssets,
+    prices: [close('A', '2025-06-09', '125'), close('B', '2025-06-06', '25', 'USD')],
+    liveQuotes: [quote('A', T, '130')],
+    fx: [usd('2025-06-06', '0.9')],
+    ca: {
+      subscriptions: [{ id: 's1', seriesId: 'E', transactionId: 'ca-sub' }],
+      factors: [{ subscriptionId: 's1', month: '2025-05-01', factor: d('1.02') }],
+    },
+    snapshots: [snap('2025-04-30', '2100', '2080'), snap('2025-05-31', '2500', '2160')],
+    ...over,
+  };
+}
+const positionsOk = (i: DashboardInput) => {
+  const v = buildPositions(i);
+  expect(v.status).toBe('ok');
+  return v as PositionsView;
+};
+const FIELDS: (keyof PortfolioTotals)[] = [
+  'valueEur',
+  'costBasisEur',
+  'unrealizedEur',
+  'realizedEur',
+  'incomeNetEur',
+  'otherCostsEur',
+  'totalGainEur',
+];
+
+describe('buildPositions', () => {
+  it('lists open positions by value with weight, gain, day change and badges', () => {
+    const v = positionsOk(brokerInput());
+    expect(v.positions.map((p) => p.assetId)).toEqual(['A', 'CA1', 'B']);
+    const [a, ca, b] = v.positions;
+    expectDec(a?.units, '11');
+    expectDec(a?.valueEur, '1430');
+    expectDec(a?.weight, d('1430').div('2562.5'));
+    expectDec(a?.unrealizedEur, '280');
+    expectDec(a?.unrealizedPct, d('280').div('1150'));
+    expectDec(a?.dayChangeEur, '55');
+    expectDec(a?.dayChangePct, '0.04');
+    expect(a?.accountIds).toEqual(['degiro', 'ibkr']);
+    expect(a?.certificado).toBeNull();
+    expect(b?.valuation).toMatchObject({ source: 'price', stale: true, asOf: '2025-06-06' });
+    expectDec(b?.dayChangeEur, '0');
+
+    // Certificados: units, latest factor and value.
+    expectDec(ca?.units, '1000');
+    expectDec(ca?.valueEur, '1020');
+    expectDec(ca?.certificado?.unitValueEur, '1.02');
+    expect(ca?.certificado).toMatchObject({ factorMonth: '2025-05-01', subscriptions: 1 });
+    expect(ca?.valuation).toMatchObject({ source: 'factor', stale: true });
+
+    expect(v.types.map((t) => [t.key, t.valueEur.toString()])).toEqual([
+      ['etf', '1430'],
+      ['certificado_aforro', '1020'],
+      ['stock', '112.5'],
+    ]);
+    expect(v.newestPriceDate).toBe(T);
+  });
+
+  it('gives the totals and each broker with its own units', () => {
+    const v = positionsOk(brokerInput());
+    const t = v.totals;
+    expectDec(t.valueEur, '2562.5');
+    expectDec(t.costBasisEur, '2240');
+    expectDec(t.unrealizedEur, '322.5');
+    expectDec(t.realizedEur, '60');
+    expectDec(t.incomeNetEur, '8');
+    expectDec(t.otherCostsEur, '3');
+    expectDec(t.totalGainEur, '387.5');
+
+    expect(v.brokers.map((b) => b.accountId)).toEqual(['aforronet', 'degiro', 'ibkr']);
+    const degiro = v.brokers[1];
+    expectDec(degiro?.valueEur, '780');
+    expectDec(degiro?.weight, d('780').div('2562.5'));
+    expectDec(degiro?.realizedEur, '60');
+    expectDec(degiro?.incomeNetEur, '8');
+    expectDec(degiro?.totalGainEur, '248');
+    const ibkr = v.brokers[2];
+    expectDec(ibkr?.otherCostsEur, '3');
+    expectDec(ibkr?.totalGainEur, '119.5');
+    expect(ibkr?.positions.map((p) => p.assetId)).toEqual(['A', 'B']);
+    const ibkrA = ibkr?.positions[0];
+    expectDec(ibkrA?.units, '5');
+    expectDec(ibkrA?.valueEur, '650');
+    expectDec(ibkrA?.unrealizedEur, '100');
+    expect(ibkrA?.accountIds).toEqual(['ibkr']);
+    expect(ibkrA?.dayChangeEur).toBeNull();
+  });
+
+  it('broker figures add up exactly to the portfolio totals', () => {
+    const v = positionsOk(brokerInput());
+    expect(v.brokersReconcile).toBe(true);
+    for (const f of FIELDS) {
+      const sum = v.brokers.reduce((s, b) => s.plus(b[f]), d('0'));
+      expectDec(sum, v.totals[f]);
+      expectDec(v.brokerTotals[f], v.totals[f]);
+    }
+    // And each broker's rows add up to the broker.
+    for (const b of v.brokers) {
+      expectDec(
+        b.positions.reduce((s, p) => s.plus(p.valueEur), d('0')),
+        b.valueEur,
+      );
+    }
+  });
+
+  it('still adds up exactly with a transfer, thirds and an FX rate', () => {
+    const v = positionsOk(
+      brokerInput({
+        transactions: [
+          ...brokerInput().transactions,
+          transfer('2025-06-03', 'A', '1.5', 'ibkr', { account: 'degiro', fees: '0.7' }),
+          buy('2025-06-04', 'B', '0.333333333333333333', '21', {
+            account: 'degiro',
+            currency: 'USD',
+            fx: '0.91',
+          }),
+        ],
+        liveQuotes: [quote('A', T, '133.333333333333333333')],
+        fx: [usd('2025-06-06', '0.912345')],
+      }),
+    );
+    expect(v.brokersReconcile).toBe(true);
+    for (const f of FIELDS) expectDec(v.brokerTotals[f], v.totals[f]);
+  });
+
+  it('gives each open position its detail, and closed positions apart', () => {
+    const v = positionsOk(brokerInput());
+    const a = v.details.A;
+    expectDec(a?.realizedEur, '80');
+    expectDec(a?.incomeEur, '6');
+    expectDec(a?.dayChange?.changeEur, '55');
+    expect(a?.accounts.map((l) => [l.accountId, l.units.toString()])).toEqual([
+      ['degiro', '6'],
+      ['ibkr', '5'],
+    ]);
+    const ca = v.details.CA1;
+    expect(ca?.price).toBeNull();
+    expect(ca?.certificados).toHaveLength(1);
+    expectDec(ca?.certificados[0]?.unitValueEur, '1.02');
+    expect(Object.keys(v.details).sort()).toEqual(['A', 'B', 'CA1']);
+
+    expect(v.closed.map((c) => c.assetId)).toEqual(['C']);
+    expectDec(v.closed[0]?.realizedEur, '-20');
+    expectDec(v.closed[0]?.realizedPct, '-0.2');
+  });
+
+  it('reports a currency without an FX rate instead of wrong rows', () => {
+    const v = buildPositions(brokerInput({ fx: [] }));
+    expect(v).toMatchObject({ status: 'unvalued', assetIds: ['B'], currencies: ['USD'] });
+  });
+});
+
+describe('buildAllocation', () => {
+  it('groups by type, broker, currency and asset, with top 5 / 10', () => {
+    const v = buildAllocation(brokerInput()) as AllocationView;
+    expect(v.status).toBe('ok');
+    expectDec(v.totalValueEur, '2562.5');
+    const keys = (dim: keyof AllocationView['slices']) =>
+      v.slices[dim].map((s) => [s.key, s.valueEur.toString()]);
+    expect(keys('account')).toEqual([
+      ['aforronet', '1020'],
+      ['degiro', '780'],
+      ['ibkr', '762.5'],
+    ]);
+    expect(keys('currency')).toEqual([
+      ['EUR', '2450'],
+      ['USD', '112.5'],
+    ]);
+    expect(keys('asset').map(([k]) => k)).toEqual(['A', 'CA1', 'B']);
+    expect(keys('assetType')).toHaveLength(3);
+    expect(v.top5.top).toHaveLength(3);
+    expectDec(v.top5.topWeight, '1');
+    expectDec(v.top10.topWeight, '1');
+  });
+});
+
+describe('buildPerformance', () => {
+  it('composes the monthly and yearly tables and the best / worst month', () => {
+    const i = brokerInput();
+    const v = buildPerformance(i) as PerformanceView;
+    expect(v.status).toBe('ok');
+    const returns = {
+      transactions: i.transactions,
+      snapshots: i.snapshots,
+      today: T,
+      valueTodayEur: d('2562.5'),
+    };
+    const months = monthlyReturns(returns);
+    expect(v.months).toEqual(months);
+    expect(v.years).toEqual(yearlyReturns(returns));
+    expect({ best: v.best, worst: v.worst }).toEqual(bestWorstMonth(months));
+    expect(v.months[0]).toMatchObject({ period: '2025-06', current: true });
+    expect(v.years.map((y) => y.period)).toEqual(['2025']);
   });
 });
