@@ -1,7 +1,9 @@
 # Android app plan (Step 5)
 
 Status: **plan approved with decisions D1–D7 on 2026-10-23** (§9). **Slice 5a-core built
-2026-10-23** (`packages/core` and docs only, §8); the rest starts only when asked. KPI definitions are in `docs/kpis.md`; calculation
+2026-10-23** (`packages/core` and docs only, §8). **Slice 5a-app built 2026-10-23**
+(`apps/mobile` foundation, sign-in with MFA, lock, Dashboard; §8); 5b and 5c start only
+when asked. KPI definitions are in `docs/kpis.md`; calculation
 assumptions in `docs/assumptions.md`.
 
 `apps/mobile`: Expo + React Native + TypeScript, Android only, run with Expo Go during
@@ -437,7 +439,10 @@ do from 5a step 2: `reconcile`, `localDate`, `buildDashboard`; from 5b/5c: `posi
 `buildPositions`, the validation and input functions, `factorChange`, `mostUsedAccount`.
 After it: rebuild and redeploy the functions (`docs/prices.md`, "After a core change").
 
-**5a — Foundation, login, lock, Dashboard**
+**5a — Foundation, login, lock, Dashboard** (5a-app built 2026-10-23: steps 2–6 below;
+`reconcile`, `localDate`, `buildDashboard` and `thinSeries` in core; `packages/client`;
+the app on Expo SDK 58 with React 19.3, desktop moved to React 19.3 too so the workspace
+has one React; run steps in `docs/mobile-run.md`)
 
 1. Core: FIFO per account (§4), assumptions #1/#21/#22, tests; the one-off
    `pnpm prices fifo-compare`; the "Redeploying after an update" section in

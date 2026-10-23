@@ -2,3 +2,9 @@ packages:
   - apps/*
   - packages/*
   - scripts/*
+
+# One React for the whole workspace (Expo SDK 58 pins 19.3.0): two copies break hooks in
+# the hoisted node_modules that Metro and Jest resolve from.
+overrides:
+  react: 19.3.0
+  react-dom: 19.3.0
