@@ -10,9 +10,16 @@ import type {
   PortfolioSnapshot,
   StoredPriceRow,
   Transaction,
+  ValueSnapshot,
 } from '@ledgr/core';
 
 export type { AssetRecord, LiveQuoteRecord };
+
+/** A stored public.portfolio_snapshots row as the checks read it: value, NI and flags. */
+export interface StoredSnapshot extends ValueSnapshot {
+  /** How each holding was valued that day (empty for rows written before the flags). */
+  flags: { assetId: string; source: string; asOf: IsoDate; ageDays: number; stale: boolean }[];
+}
 
 export interface PriceUpsert {
   assetId: string;
@@ -74,6 +81,8 @@ export interface JobsDb {
   upsertPrices(rows: readonly PriceUpsert[]): Promise<void>;
   /** Insert or overwrite on (user_id, currency, rate_date). */
   upsertFx(rows: readonly FxUpsert[]): Promise<void>;
+  /** Every stored snapshot, oldest first. */
+  loadSnapshots(): Promise<StoredSnapshot[]>;
   /** Insert or overwrite on (user_id, snapshot_date). */
   upsertSnapshots(rows: readonly PortfolioSnapshot[]): Promise<void>;
   recordRun(run: JobRunRecord): Promise<void>;
@@ -117,4 +126,22 @@ export function snapshotRow(s: PortfolioSnapshot): Record<string, unknown> {
       stale: f.stale,
     })),
   };
+}
+
+/** valuation_flags jsonb -> flags; anything unreadable is left out. */
+export function parseValuationFlags(raw: unknown): StoredSnapshot['flags'] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((f: Record<string, unknown>) =>
+    f && typeof f.asset_id === 'string'
+      ? [
+          {
+            assetId: f.asset_id,
+            source: String(f.source),
+            asOf: String(f.as_of),
+            ageDays: Number(f.age_days),
+            stale: f.stale === true,
+          },
+        ]
+      : [],
+  );
 }

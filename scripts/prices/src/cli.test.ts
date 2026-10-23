@@ -247,3 +247,53 @@ describe('run', () => {
     expect(h.out.at(-1)).toBe('No asset with ticker NOPE.');
   });
 });
+
+describe('twr-check', () => {
+  // Buy 1,000 of A on 1 Jan and 1,000 more on 3 Jan. The 3 Jan snapshot holds 1,500 (the new
+  // units at a stand-in price), so that day's step is -50% and the next +33.33%: TWR -33.33%,
+  // although nothing was lost (XIRR 0%).
+  function seeded() {
+    const db = new MemoryDb();
+    db.assets = [{ ...seed().assets[0]!, id: 'a', ticker: 'AAA', assetType: 'etf' }];
+    db.transactions = [
+      tx('buy', '2024-01-01', 'a', '10', '100', 't1'),
+      tx('buy', '2024-01-03', 'a', '10', '100', 't2'),
+    ];
+    const flag = (date: string, source = 'price', stale = false) => [
+      { asset_id: 'a', source, as_of: date, age_days: 0, stale },
+    ];
+    const values: [string, string, string, ReturnType<typeof flag>][] = [
+      ['2024-01-01', '1000', '1000', flag('2024-01-01')],
+      ['2024-01-02', '1000', '1000', flag('2024-01-02')],
+      ['2024-01-03', '1500', '2000', flag('2024-01-03', 'trade', true)],
+      ['2024-01-04', '2000', '2000', flag('2024-01-04')],
+      ['2024-01-05', '2000', '2000', flag('2024-01-05')],
+    ];
+    for (const [date, value, ni, flags] of values) {
+      db.snapshots.set(date, {
+        snapshot_date: date,
+        total_value_eur: value,
+        net_contributions_eur: ni,
+        valuation_flags: flags,
+      });
+    }
+    return db;
+  }
+
+  it('prints the period figures, writes the steps with the most effect first, and no amounts', async () => {
+    const db = seeded();
+    const h = harness(db);
+    expect(await run(['twr-check'], h.deps)).toBe(0);
+    expect(h.out[0]).toBe('Since start to 2024-01-05 (last snapshot): TWR -33.33%, XIRR 0.00%.');
+    expect(h.out[1]).toBe('5 daily steps; 2 moved TWR by more than 20% in a single step.');
+    expect(h.out.join('\n')).not.toMatch(/1000|1500|2000\b/);
+    const [path, content] = [...h.files].find(([p]) => p.endsWith('twr-steps.csv'))!;
+    expect(path).toMatch(/twr-check\/twr-steps\.csv$/);
+    const lines = content.replace('﻿', '').trim().split('\r\n');
+    expect(lines[1]).toBe(
+      '1,2024-01-02,2024-01-03,-50.00%,100.00%,buy:1,0,AAA (trade 2024-01-03 stale),1',
+    );
+    expect(lines[2]).toBe('2,2024-01-03,2024-01-04,33.33%,0.00%,,0,,0');
+    expect(db.writes).toEqual({ prices: 0, fx: 0, snapshots: 0 });
+  });
+});

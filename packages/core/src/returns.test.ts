@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { investmentCashFlows } from './cashflows';
 import { Decimal } from './decimal';
 import {
+  twrSteps,
   bestWorstMonth,
   monthlyReturns,
   periodReturns,
@@ -248,5 +249,37 @@ describe('monthlyReturns and yearlyReturns', () => {
     const mar = gap.find((m) => m.period === '2024-03')!;
     expect([feb.return, feb.missing, feb.marketGainEur]).toEqual([null, 'snapshot-missing', null]);
     expect([mar.return, mar.missing]).toEqual([null, 'snapshot-missing']);
+  });
+});
+
+describe('twrSteps', () => {
+  // Buy 1,000 on 2022-06-01 (worth 1,000 that evening), 1,500 on 2022-12-31; buy 500 more on
+  // 2023-03-01 (worth 2,100 that evening); 2,000 on T = 2023-06-01.
+  const transactions = [buy('2022-06-01', 'A', '10', '100'), buy('2023-03-01', 'A', '5', '100')];
+  const snapshots = [
+    snap('2022-06-01', '1000', '1000'),
+    snap('2022-12-31', '1500', '1000'),
+    snap('2023-03-01', '2100', '1500'),
+  ];
+  const input = { transactions, snapshots, today: '2023-06-01', valueTodayEur: d('2000') };
+
+  it('lists each step with its flow; the product is the period TWR', () => {
+    const steps = twrSteps(input, 'sinceStart')!;
+    expect(steps.map((s) => [s.from, s.date, s.fromZero, s.flowEur.toString()])).toEqual([
+      ['2022-05-31', '2022-06-01', true, '1000'],
+      ['2022-06-01', '2022-12-31', false, '0'],
+      ['2022-12-31', '2023-03-01', false, '500'],
+      ['2023-03-01', '2023-06-01', false, '0'],
+    ]);
+    expectDec(steps[2]!.return, d('1600').div('1500').minus(1)); // (2,100 - 500) / 1,500 - 1
+    const product = steps.reduce((g, s) => g.times(s.return.plus(1)), d('1')).minus(1);
+    const twr = byPeriod(periodReturns(input)).sinceStart!.twr;
+    if (!twr.ok) throw new Error('expected a TWR');
+    expectDec(product, twr.cumulative);
+  });
+
+  it('is null without rows or without the start snapshot', () => {
+    expect(twrSteps({ ...input, transactions: [] }, 'sinceStart')).toBeNull();
+    expect(twrSteps({ ...input, snapshots: [] }, 'ytd')).toBeNull();
   });
 });
