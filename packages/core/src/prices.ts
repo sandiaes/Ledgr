@@ -75,7 +75,7 @@ export function createTradePriceLookup(transactions: readonly Transaction[]): Pr
   return createPriceLookup([...last.values()]);
 }
 
-/** A run of days on which an asset was held (pooled across accounts). */
+/** A run of days on which an asset was held (units summed over all accounts). */
 export interface HoldingPeriod {
   assetId: string;
   /** First day with units > 0. */
@@ -86,7 +86,7 @@ export interface HoldingPeriod {
 
 /**
  * When each asset was held, from the ledger alone. Transfers move units between accounts
- * and do not change the pooled quantity. A period closed and reopened on the same day
+ * and do not change the total quantity. A period closed and reopened on the same day
  * stays one period.
  */
 export function holdingPeriods(

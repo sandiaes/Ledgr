@@ -16,7 +16,6 @@ const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 process.exitCode = await run(process.argv.slice(2), {
   envPath: `${repoRoot}scripts/prices/.env`,
   reportsRoot: `${repoRoot}prices-data/reports`,
-  fixturesRoot: `${repoRoot}fixtures`,
   resolveArg: (p) => resolve(process.cwd(), p),
   readText: (p) => readFile(p, 'utf8').catch(() => null),
   writeFile: (p, content) => writeFile(p, content, 'utf8'),

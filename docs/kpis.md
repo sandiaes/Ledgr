@@ -46,8 +46,8 @@ These are **performance** figures. Realized gains are not tax figures (assumptio
 - **Lots**: FIFO **per account** (decision D2, assumption #1). A sale consumes the oldest
   open lots _of its own account_, and selling more than that account holds is an error; a
   transfer moves the sender's oldest lots, with their dates and cost, to the receiving
-  account. Pooled FIFO exists only in the one-off `pnpm prices fifo-compare`, never in an
-  app.
+  account. (Lots were pooled across accounts before 2026-10-23; a comparison on the live
+  ledger found no figure that changed.)
 - **Stale**: a close more than 3 days old, or a trade-price stand-in (#25); a certificado
   factor more than 35 days old, aged from its month's 1st (#25).
 - **Display**: amounts rounded half-up to cents, percentages to 2 decimals, both with
