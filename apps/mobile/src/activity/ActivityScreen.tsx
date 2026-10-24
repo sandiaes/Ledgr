@@ -1,5 +1,6 @@
 import { assetScope, transactionRows, type AssetTransactionRow } from '@ledgr/core';
-import { memo, useMemo, useState } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
+import { memo, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, SectionList, StyleSheet, View } from 'react-native';
 import { errorCode } from '../auth/errors';
 import { useLedger, useToday } from '../data/usePortfolio';
@@ -59,6 +60,8 @@ export function ActivityScreen() {
   const excludeTypes = useExcludeTypes();
   const [chosen, setFilters] = useState<ActivityFilters>(NO_ACTIVITY_FILTERS);
   const [open, setOpen] = useState(false);
+  const listRef = useRef<SectionList<AssetTransactionRow, MonthSection>>(null);
+  useScrollToTop(listRef);
   const all = useMemo(() => {
     if (!ledger.data) return [];
     const scope = assetScope({ assets: ledger.data.assets, excludeTypes });
@@ -122,6 +125,7 @@ export function ActivityScreen() {
         </View>
       ) : null}
       <SectionList<AssetTransactionRow, MonthSection>
+        ref={listRef}
         testID="activity-list"
         sections={sections}
         keyExtractor={(r) => r.id}

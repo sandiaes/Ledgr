@@ -9,11 +9,9 @@ Settings, symbol resolution in `prices-daily`; §8). **Slice 5d built 2026-10-24
 (the app-wide "Include certificados de aforro" toggle, §10; plan approved the same day with
 the recommendations of §10.5). **Slice 5e built 2026-10-24** (the Return calculator under
 More, "Return calculator" below and `docs/kpis.md` §11). **UI overhaul (U1–U3) planned
-2026-10-24**: Phase A approved with decisions D1–D6 (§11, `docs/design.md`). **Slice U1 built
-2026-10-24** (design system, shared header, drawer shell, tab bar, Dashboard): the navigation
-tree and the Dashboard text of §1 below are updated to it; Positions, Allocation, Performance,
-Activity, New transaction, the Calculator, Certificados and the sign-in screens still look as
-described until U2 and U3. KPI definitions are in `docs/kpis.md`; calculation assumptions in
+2026-10-24**: Phase A approved with decisions D1–D6 (§11, `docs/design.md`). **Slices U1, U2 and U3 built
+2026-10-24** (design system, shared header, drawer, tab bar and every screen): the navigation
+tree and the screen texts of §1 below are updated to them. KPI definitions are in `docs/kpis.md`; calculation assumptions in
 `docs/assumptions.md`.
 
 `apps/mobile`: Expo + React Native + TypeScript, Android only, run with Expo Go during
@@ -106,10 +104,12 @@ Segmented **Type / Broker / Currency / Asset**: donut plus table (group, €, %)
 
 ### New transaction
 
-(After slice U3, §11: only Buy and Sell by default, Dividend and Interest when switched on in
-the drawer, no "More" button, and the Fee field hidden for new rows.)
+(Slice U3, §11: Buy and Sell only by default; Dividend, Interest and the Fee field appear
+only when switched on in the drawer. Validation, the confirm screen and the double-submit
+protection are as described here.)
 
-1. **Type**: Buy, Sell, Dividend as large buttons; "More" reveals Interest. Deposits and
+1. **Type**: a segmented control with Buy and Sell, plus Dividend and Interest when switched
+   on in the drawer (a type switched off while selected falls back to Buy). Deposits and
    withdrawals stay in the schema but are not in this form (they change no figure, D5);
    transfers, certificado subscriptions and redemptions are not in it either (D7).
 2. **Form** (all amounts in EUR, as in the import):
@@ -123,8 +123,10 @@ the drawer, no "More" button, and the Fee field hidden for new rows.)
    - Broker / account: default by the rule below, changeable.
      **Sell**: only brokers holding units of the asset on the date are offered, each with
      "holds 3.5 · can sell 3.5"; the field shows an error above that.
-   - Fee (optional, default 0): Buy and Sell only. Dividend / Interest have none, since the
-     amount received is already net.
+   - Fee (optional, default 0): Buy and Sell only, and only while the drawer's Fee switch is
+     on (hidden, it is saved as 0). Edit also shows it for a row that already has a fee, so
+     saving never drops it. Dividend / Interest have none, since the amount received is
+     already net.
    - Saved as currency EUR, `fx_rate_to_eur` 1 (foreign-currency rows are not in scope).
    - Validation messages inline; submit disabled until valid.
 3. **Confirm**: summary of the row, and the **resulting position** in that account and
@@ -186,14 +188,15 @@ above 0), a stacked chart of contributed vs growth and a year-by-year table.
 
 ### Drawer (was More / Settings)
 
-(Slice U1, §11: More is gone; these settings are in the side drawer, which U3 restyles, and the
-Return calculator is a tab.)
+(Slices U1 and U3, §11: More is gone; these settings are in the side drawer and the Return
+calculator is a tab.)
 
-Appearance (System default, Light, Dark; saved in AsyncStorage with the other toggles, applied
+Appearance (System, Light, Dark; Dark on a new install; saved in AsyncStorage with the other toggles, applied
 before the first screen renders; System follows the phone live; every colour comes from
 `apps/mobile/src/ui/theme.ts`, and a test fails on any colour value elsewhere), biometric lock
 (on/off, lock after 0 / 1 / 5 / 15 minutes in the background), hide values
-(on/off), block screenshots (on/off), last price update and last snapshot (time and status
+(on/off), the **New transaction options** (Dividend, Interest, Fee: three switches, all off by
+default, kept across restarts), block screenshots (on/off), a link to Certificados, last price update and last snapshot (time and status
 from `job_runs`), sign out, app version (and the Supabase project ref, so a wrong `.env`
 is visible).
 
@@ -691,7 +694,7 @@ Edge Function needs redeploying.
 | Positions (all segments), Broker / Position detail | scoped views; the type filter offers only in-scope types; a detail opened for something no longer in scope says so instead of crashing      |
 | Allocation, Performance, Closed positions          | scoped views (through `PortfolioScreen`)                                                                                                    |
 | `activity/ActivityScreen.tsx`, `listing.ts`        | `transactionRows(…, scope)`; the asset, broker and type chips offer only what the scoped rows contain; the note at the top                  |
-| Certificados, Factor update, New transaction, Edit | unchanged (whole ledger), reachable from More as today                                                                                      |
+| Certificados, Factor update, New transaction, Edit | unchanged (whole ledger), reachable from the drawer (Certificados) and the New tab                                                          |
 
 ### 10.4 App-wide state
 
@@ -771,11 +774,11 @@ lock screens.
 
 Decisions, approved 2026-10-24 (details in `docs/design.md` §10):
 
-| #   | Decision                                                                                                                                                                                                                       |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| D1  | Header "Total result": total gain _G_ € and the TWR Since start (cumulative) %.                                                                                                                                                |
-| D2  | Privacy masks every amount, unit count **and percentage** ("•••••"), app-wide, through one `Amount` component; one switch (the existing `hideValues`), persisted.                                                              |
-| D3  | Amounts in pt-PT order: `14.250,50 €`; other currencies `412,37 USD`. Numeric dates `24/10/2026`. Formatting stays string-based on `Decimal` (no `Intl`).                                                                      |
-| D4  | Chart return per range: market gain € and TWR %; "All" starts the day before the first row in scope (`docs/kpis.md` §4.1).                                                                                                     |
-| D5  | No Fee transaction type. The Fee field is hidden in New transaction (new Buy/Sell rows saved with fee 0, as an empty field is today); Edit shows it only for rows that already have a fee. Drawer toggles: Dividend, Interest. |
-| D6  | Dark is the default appearance for new installs; saved settings are not migrated.                                                                                                                                              |
+| #   | Decision                                                                                                                                                                                                                                                                                                        |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Header "Total result": total gain _G_ € and the TWR Since start (cumulative) %.                                                                                                                                                                                                                                 |
+| D2  | Privacy masks every amount, unit count **and percentage** ("•••••"), app-wide, through one `Amount` component; one switch (the existing `hideValues`), persisted.                                                                                                                                               |
+| D3  | Amounts in pt-PT order: `14.250,50 €`; other currencies `412,37 USD`. Numeric dates `24/10/2026`. Formatting stays string-based on `Decimal` (no `Intl`).                                                                                                                                                       |
+| D4  | Chart return per range: market gain € and TWR %; "All" starts the day before the first row in scope (`docs/kpis.md` §4.1).                                                                                                                                                                                      |
+| D5  | No Fee transaction type. The Fee field is shown only while the drawer's Fee switch is on (hidden, new Buy/Sell rows are saved with fee 0, as an empty field is today); Edit also shows it for rows that already have a fee. Drawer switches: Dividend, Interest, Fee (changed in U3 from "Dividend, Interest"). |
+| D6  | Dark is the default appearance for new installs; saved settings are not migrated.                                                                                                                                                                                                                               |

@@ -1,6 +1,7 @@
 import type { Decimal, ProjectionRow } from '@ledgr/core';
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { BarChart } from 'react-native-gifted-charts';
+import { T } from '../ui/T';
 import { space, type Colors } from '../ui/theme';
 import { useColors, useStyles } from '../ui/ThemeProvider';
 
@@ -38,7 +39,7 @@ export function GrowthChart({ rows }: { rows: readonly ProjectionRow[] }) {
       <BarChart
         stackData={stackData}
         barWidth={16}
-        spacing={10}
+        spacing={14}
         width={Math.max(width - 4 * space.lg - 8, 120)}
         height={180}
         hideYAxisText
@@ -49,9 +50,15 @@ export function GrowthChart({ rows }: { rows: readonly ProjectionRow[] }) {
         initialSpacing={4}
       />
       <View style={styles.legend}>
-        <Text style={[styles.small, { color: colors.contributions }]}>■ Contributed</Text>
-        <Text style={[styles.small, { color: colors.gain }]}>■ Growth</Text>
-        <Text style={[styles.small, { color: colors.loss }]}>■ Loss</Text>
+        <T variant="caption" style={{ color: colors.contributions }}>
+          ■ Contributed
+        </T>
+        <T variant="caption" tone="gain">
+          ■ Growth
+        </T>
+        <T variant="caption" tone="loss">
+          ■ Loss
+        </T>
       </View>
     </View>
   );
@@ -59,7 +66,6 @@ export function GrowthChart({ rows }: { rows: readonly ProjectionRow[] }) {
 
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
-    axis: { fontSize: 9, color: colors.muted },
+    axis: { fontSize: 12, color: colors.faint },
     legend: { flexDirection: 'row', gap: space.md, marginTop: space.sm },
-    small: { fontSize: 12 },
   });

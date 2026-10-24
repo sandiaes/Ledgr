@@ -13,16 +13,18 @@ import {
   type ReturnChoice,
 } from '@ledgr/core';
 import { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { usePortfolio } from '../data/usePortfolio';
 import { formatDate } from '../format';
 import { useHideValues } from '../settings/SettingsProvider';
 import { Amount, MASK } from '../ui/Amount';
-import { Money, Pct } from '../ui/Money';
-import { Button, Card, Field, Line, Segmented } from '../ui/parts';
+import { Button, Field, Line } from '../ui/parts';
 import { PortfolioScreen } from '../ui/PortfolioScreen';
+import { Section } from '../ui/Section';
+import { SegmentedControl } from '../ui/SegmentedControl';
 import { IncludeCertificadosSwitch } from '../ui/Scope';
-import { space, type Colors } from '../ui/theme';
+import { T } from '../ui/T';
+import { radius, space, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 import { GrowthChart } from './GrowthChart';
 import { problemText } from './messages';
@@ -132,7 +134,7 @@ function Calculator(props: {
 
   return (
     <>
-      <Card title="Your numbers">
+      <Section title="Your numbers">
         <Field
           label="Starting value (€)"
           hint={hidden ? 'Values are hidden.' : 'Your portfolio value now.'}
@@ -171,7 +173,7 @@ function Calculator(props: {
           onChangeText={(customReturn) => change({ returnMode: 'custom', customReturn })}
           error={error('annualReturn')}
         />
-        <Segmented
+        <SegmentedControl
           options={sources}
           value={mode}
           onChange={(picked) =>
@@ -192,7 +194,7 @@ function Calculator(props: {
           onChangeText={(monthlyContribution) => change({ monthlyContribution })}
           error={error('monthlyContribution')}
         />
-        <Segmented
+        <SegmentedControl
           options={[
             { value: 'end', label: 'End of month' },
             { value: 'start', label: 'Start of month' },
@@ -213,50 +215,53 @@ function Calculator(props: {
           kind="plain"
           onPress={() => props.setEdits(() => ({}))}
         />
-      </Card>
+      </Section>
 
       {result.ok ? (
         <>
-          <Card title="Result" testID="projection-result">
-            <Line label="Ending value" strong>
-              <Money value={result.projection.endingValue} style={styles.strong} />
-            </Line>
+          <Section title="Result" testID="projection-result">
+            <T variant="sub" tone="muted">
+              Ending value
+            </T>
+            <Amount value={result.projection.endingValue} variant="title1" style={styles.hero} />
             <Line label="Total contributed">
-              <Money value={result.projection.totalContributed} />
+              <Amount value={result.projection.totalContributed} variant="body" />
             </Line>
             <Line label="Total growth">
-              <Money value={result.projection.totalGrowth} sign colored />
+              <Amount value={result.projection.totalGrowth} sign tone variant="body" />
             </Line>
             <Line label="Growth share of ending value">
-              <Pct value={result.projection.growthShare} />
+              <Amount kind="pct" value={result.projection.growthShare} variant="body" />
             </Line>
             {result.projection.endingValueReal ? (
               <Line label="Ending value in today's money">
-                <Money value={result.projection.endingValueReal} />
+                <Amount value={result.projection.endingValueReal} variant="body" />
               </Line>
             ) : null}
-          </Card>
+          </Section>
           {result.projection.rows.length > 0 ? (
             <>
-              <Card title="Contributed and growth, by year">
+              <Section title="Contributed and growth, by year">
                 <GrowthChart rows={result.projection.rows} />
-              </Card>
-              <Card title="Year by year">
+              </Section>
+              <Section title="Year by year">
                 {result.projection.rows.map((r) => (
                   <YearRow key={r.months} row={r} />
                 ))}
-              </Card>
+              </Section>
             </>
           ) : null}
         </>
       ) : (
-        <Card>
-          <Text style={styles.muted}>Fix the fields above to see the projection.</Text>
-        </Card>
+        <Section>
+          <T variant="sub" tone="muted">
+            Fix the fields above to see the projection.
+          </T>
+        </Section>
       )}
-      <Text style={styles.footnote}>
+      <T variant="caption" tone="muted" style={styles.footnote}>
         A projection from the numbers above, not a forecast: real returns are not constant.
-      </Text>
+      </T>
     </>
   );
 }
@@ -272,29 +277,29 @@ function ReturnSource(props: {
   const year = props.today.slice(0, 4);
   if (!source) {
     return (
-      <Text style={styles.note} testID="return-source">
+      <T variant="caption" tone="muted" style={styles.note} testID="return-source">
         {props.defaults.defaultSource === null
           ? 'No return could be computed from your history yet (the annualized TWR needs a year of history). Enter the return you expect.'
           : 'Your own figure.'}
-      </Text>
+      </T>
     );
   }
   const name = source.source === 'xirr' ? 'XIRR since start' : 'TWR since start, annualized';
   const warn = returnOutsideWarningRange(source.rate);
   return (
     <>
-      <Text style={styles.note} testID="return-source">
+      <T variant="caption" tone="muted" style={styles.note} testID="return-source">
         {name}: <Amount kind="pct" value={source.rate} /> a year, from{' '}
         {formatDate(source.from, year)} to {formatDate(source.to, year)} ({source.days} days).
         {source.shortHistory
           ? ' Less than a year of history: this is a short period turned into an annual rate.'
           : ''}
-      </Text>
+      </T>
       {warn ? (
-        <Text style={styles.warning} testID="return-warning">
+        <T variant="caption" tone="warning" style={styles.warning} testID="return-warning">
           This return is outside {RETURN_WARNING_RANGE.minPct}% to +{RETURN_WARNING_RANGE.maxPct}% a
           year. Check it before relying on the projection.
-        </Text>
+        </T>
       ) : null}
     </>
   );
@@ -311,14 +316,18 @@ function YearRow({ row }: { row: ProjectionRow }) {
   return (
     <View style={styles.row} testID="projection-row">
       <View style={styles.rowHead}>
-        <Text style={styles.rowName}>{rowLabel(row)}</Text>
-        <Money value={row.balance} style={styles.rowName} />
+        <T variant="headline">{rowLabel(row)}</T>
+        <Amount value={row.balance} variant="headline" />
       </View>
       <View style={styles.figures}>
-        <Text style={styles.small}>contributed</Text>
-        <Money value={row.contributed} style={styles.smallText} />
-        <Text style={styles.small}>· growth</Text>
-        <Money value={row.growth} sign colored style={styles.smallText} />
+        <T variant="caption" tone="muted">
+          contributed
+        </T>
+        <Amount value={row.contributed} variant="caption" />
+        <T variant="caption" tone="muted">
+          · growth
+        </T>
+        <Amount value={row.growth} sign tone variant="caption" />
       </View>
     </View>
   );
@@ -330,32 +339,23 @@ const makeStyles = (colors: Colors) =>
     scope: { paddingTop: space.md },
     pair: { flexDirection: 'row', gap: space.md },
     half: { flex: 1 },
-    strong: { fontSize: 16, fontWeight: '700', color: colors.text },
-    note: { color: colors.muted, fontSize: 12, marginBottom: space.md },
+    hero: { marginBottom: space.md },
+    note: { marginBottom: space.md },
     warning: {
-      color: colors.warningText,
       backgroundColor: colors.warningBg,
-      fontSize: 12,
       padding: space.sm,
-      borderRadius: 8,
+      borderRadius: radius.sm,
       overflow: 'hidden',
       marginBottom: space.md,
     },
-    muted: { color: colors.muted, fontSize: 13 },
-    footnote: {
-      color: colors.muted,
-      fontSize: 12,
-      marginHorizontal: space.lg,
-      marginBottom: space.md,
-    },
+    footnote: { marginHorizontal: space.lg, marginBottom: space.xl },
     row: {
+      minHeight: 56,
+      justifyContent: 'center',
       paddingVertical: space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
+      borderBottomColor: colors.divider,
     },
     rowHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-    rowName: { fontSize: 14, fontWeight: '600', color: colors.text },
     figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline', flexWrap: 'wrap' },
-    small: { color: colors.muted, fontSize: 12 },
-    smallText: { fontSize: 12, color: colors.text },
   });

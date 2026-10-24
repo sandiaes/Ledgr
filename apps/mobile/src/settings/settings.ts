@@ -4,10 +4,14 @@ export type AppearancePreference = (typeof APPEARANCES)[number];
 export const LOCK_TIMEOUTS = [0, 1, 5, 15] as const;
 export type LockTimeout = (typeof LOCK_TIMEOUTS)[number];
 
-/** The extra transaction types the New transaction form offers besides Buy and Sell. */
-export interface NewTxTypes {
+/**
+ * What the New transaction form offers beyond Buy and Sell: the Dividend and Interest types
+ * and the Fee field. Each is a switch in the drawer.
+ */
+export interface NewTxOptions {
   dividend: boolean;
   interest: boolean;
+  fee: boolean;
 }
 
 /** The toggles kept on the device (AsyncStorage). Never any financial data. */
@@ -29,8 +33,8 @@ export interface Settings {
   includeCertificados: boolean;
   /** Theme: Dark by default on a new install; System follows the phone. */
   appearance: AppearancePreference;
-  /** Dividend and Interest in the New transaction form, both off by default. */
-  newTxTypes: NewTxTypes;
+  /** Dividend, Interest and Fee in the New transaction form, all off by default. */
+  newTxOptions: NewTxOptions;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -40,7 +44,7 @@ export const DEFAULT_SETTINGS: Settings = {
   blockScreenshots: true,
   includeCertificados: true,
   appearance: 'dark',
-  newTxTypes: { dividend: false, interest: false },
+  newTxOptions: { dividend: false, interest: false, fee: false },
 };
 
 export const SETTINGS_KEY = 'ledgr.settings.v1';
@@ -55,10 +59,9 @@ export function parseSettings(raw: unknown): Settings {
   const stored = !!raw && typeof raw === 'object';
   const r = (stored ? raw : {}) as Record<string, unknown>;
   const bool = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
-  const types = (r.newTxTypes && typeof r.newTxTypes === 'object' ? r.newTxTypes : {}) as Record<
-    string,
-    unknown
-  >;
+  const options = (
+    r.newTxOptions && typeof r.newTxOptions === 'object' ? r.newTxOptions : {}
+  ) as Record<string, unknown>;
   return {
     lockEnabled: typeof r.lockEnabled === 'boolean' ? r.lockEnabled : null,
     lockTimeoutMinutes: LOCK_TIMEOUTS.includes(r.lockTimeoutMinutes as LockTimeout)
@@ -72,9 +75,10 @@ export function parseSettings(raw: unknown): Settings {
       : stored
         ? 'system'
         : DEFAULT_SETTINGS.appearance,
-    newTxTypes: {
-      dividend: bool(types.dividend, DEFAULT_SETTINGS.newTxTypes.dividend),
-      interest: bool(types.interest, DEFAULT_SETTINGS.newTxTypes.interest),
+    newTxOptions: {
+      dividend: bool(options.dividend, DEFAULT_SETTINGS.newTxOptions.dividend),
+      interest: bool(options.interest, DEFAULT_SETTINGS.newTxOptions.interest),
+      fee: bool(options.fee, DEFAULT_SETTINGS.newTxOptions.fee),
     },
   };
 }

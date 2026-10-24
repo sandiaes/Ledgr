@@ -19,17 +19,21 @@ import {
   type TransactionForm,
   type TransactionIssue,
 } from '@ledgr/core';
+import { useScrollToTop } from '@react-navigation/native';
 import { useMutation } from '@tanstack/react-query';
-import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type ComponentRef } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { errorCode } from '../auth/errors';
 import { useLedger, useRefreshAfterWrite, useToday } from '../data/usePortfolio';
 import { formatDate } from '../format';
 import { useServices, type Ledger } from '../services';
 import { assetLabel, assetName, brokerLabel, useNames, type Names } from '../ui/labels';
 import { Amount } from '../ui/Amount';
-import { Money, Units } from '../ui/Money';
-import { Banner, Button, Card, Chip, Field, FieldError, Line } from '../ui/parts';
+import { Banner, Button, Chip, Field, FieldError, Line } from '../ui/parts';
+import { Section } from '../ui/Section';
+import { SegmentedControl } from '../ui/SegmentedControl';
+import { T } from '../ui/T';
+import { useSettings } from '../settings/SettingsProvider';
 import { space, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 import { AddAssetForm } from './AddAssetForm';
@@ -70,7 +74,12 @@ export function TransactionFlow(props: {
       </ScrollView>
     );
   }
-  if (!ledger.data) return <Text style={styles.status}>Loading…</Text>;
+  if (!ledger.data)
+    return (
+      <T variant="sub" tone="muted" style={styles.status}>
+        Loading…
+      </T>
+    );
   return <Flow {...props} ledger={ledger.data} />;
 }
 
@@ -103,7 +112,9 @@ function Flow(props: {
   const [accountPicked, setAccountPicked] = useState(original !== undefined);
   const [touched, setTouched] = useState<ReadonlySet<TransactionField>>(new Set());
   const [step, setStep] = useState<Step>('form');
-  const [more, setMore] = useState(original?.type === 'interest');
+  const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
+  useScrollToTop(scroll);
+  const { newTxOptions: options } = useSettings().settings;
 
   const accountIds = useMemo(
     () => ledger.accounts.filter((a) => !a.deleted).map((a) => a.id),
@@ -134,9 +145,13 @@ function Flow(props: {
       }),
     [ledger.transactions, form.type, form.assetId, today, accountIds, date],
   );
+  // The Fee field is the drawer's switch; an edit also shows it for a row that has a fee, so
+  // saving it never drops the stored fee. Hidden, the fee is empty, which is saved as 0.
+  const feeShown = trade && (options.fee || (original !== undefined && !original.fees.isZero()));
   const effective: TransactionForm = {
     ...form,
     accountId: accountPicked ? form.accountId : defaultAccount,
+    fee: feeShown ? form.fee : '',
   };
 
   // FIFO over the ledger on every change: a few hundred rows, well under a millisecond.
@@ -182,6 +197,18 @@ function Flow(props: {
     }));
     setAccountPicked(false);
   };
+
+  // A type switched off in the drawer while it is selected falls back to Buy.
+  const types: FormTransactionType[] = [
+    'buy',
+    'sell',
+    ...(options.dividend ? (['dividend'] as const) : []),
+    ...(options.interest ? (['interest'] as const) : []),
+  ];
+  const typeOffered = original !== undefined || types.includes(form.type);
+  useEffect(() => {
+    if (!typeOffered) chooseType('buy');
+  }, [typeOffered]);
 
   if ('crashed' in check) {
     return (
@@ -243,199 +270,188 @@ function Flow(props: {
   })();
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      {props.notice}
-      {step === 'confirm' && !check.ok ? (
-        <Banner tone="warning">The ledger changed: check the form again.</Banner>
-      ) : null}
-      <Card>
-        {original ? (
-          <Text style={styles.heading}>
-            Edit {FORM_TYPE_LABELS[original.type as FormTransactionType]}
-          </Text>
-        ) : (
-          <>
-            <View style={styles.types}>
-              {(['buy', 'sell', 'dividend'] as const).map((t) => (
-                <TypeButton
-                  key={t}
-                  type={t}
-                  selected={form.type === t}
-                  onPress={() => chooseType(t)}
-                />
-              ))}
-            </View>
-            {more ? (
-              <View style={styles.types}>
-                <TypeButton
-                  type="interest"
-                  selected={form.type === 'interest'}
-                  onPress={() => chooseType('interest')}
-                />
-              </View>
-            ) : (
-              <Button
-                label="More"
-                kind="plain"
-                accessibilityLabel="More types"
-                onPress={() => setMore(true)}
-              />
-            )}
-          </>
-        )}
-        {shown('type').length > 0 ? (
-          <FieldError>{issueText(shown('type')[0] as TransactionIssue)}</FieldError>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'android' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        ref={scroll}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        {props.notice}
+        {step === 'confirm' && !check.ok ? (
+          <Banner tone="warning">The ledger changed: check the form again.</Banner>
         ) : null}
-      </Card>
-
-      <Card>
-        {form.type === 'interest' ? null : (
-          <AssetPicker
-            assets={offered}
-            selected={asset}
-            onSelect={(assetId) => {
-              update('asset', { assetId });
-              if (!original) setAccountPicked(false);
-            }}
-            onAddAsset={sell || original ? undefined : () => setStep('asset')}
-            error={
-              shown('asset').length > 0
-                ? issueText(shown('asset')[0] as TransactionIssue)
-                : undefined
-            }
-            emptyText={sell ? 'You hold nothing to sell on this date.' : 'No assets yet: add one.'}
-          />
-        )}
-
-        {trade ? (
-          <Field
-            label="Quantity"
-            value={form.quantity}
-            onChangeText={(quantity) => update('quantity', { quantity })}
-            keyboardType="decimal-pad"
-            placeholder="0"
-            error={fieldError('quantity')}
-          />
-        ) : null}
-
-        <Field
-          label={trade ? 'Total value (€)' : 'Amount received (€)'}
-          value={form.total}
-          onChangeText={(total) => update('total', { total })}
-          keyboardType="decimal-pad"
-          placeholder="0.00"
-          hint={
-            form.type === 'buy'
-              ? 'Enter the EUR amount your broker actually charged for the units, without the fee.'
-              : sell
-                ? 'Enter the EUR amount your broker actually paid you for the units, before the fee.'
-                : 'The net amount that arrived, in EUR.'
-          }
-          error={fieldError('total')}
-        />
-        {unitPrice ? (
-          <View style={styles.inline}>
-            <Text style={styles.muted}>=</Text>
-            <Amount
-              value={unitPrice}
-              currency="EUR"
-              dp={unitPrice.lt(1) ? 6 : 2}
-              style={styles.muted}
+        <Section>
+          {original ? (
+            <T variant="headline">Edit {FORM_TYPE_LABELS[original.type as FormTransactionType]}</T>
+          ) : (
+            <SegmentedControl
+              accessibilityLabel="Type"
+              options={types.map((t) => ({
+                value: t,
+                label: FORM_TYPE_LABELS[t],
+                accessibilityLabel: `Type ${FORM_TYPE_LABELS[t]}`,
+              }))}
+              value={form.type}
+              onChange={chooseType}
             />
-            <Text style={styles.muted}>per unit</Text>
-          </View>
-        ) : null}
+          )}
+          {shown('type').length > 0 ? (
+            <FieldError>{issueText(shown('type')[0] as TransactionIssue)}</FieldError>
+          ) : null}
+        </Section>
 
-        <DateField
-          value={form.date}
-          today={today}
-          onChange={(d) => update('date', { date: d })}
-          error={fieldError('date')}
-        />
+        <Section>
+          {form.type === 'interest' ? null : (
+            <AssetPicker
+              assets={offered}
+              selected={asset}
+              onSelect={(assetId) => {
+                update('asset', { assetId });
+                if (!original) setAccountPicked(false);
+              }}
+              onAddAsset={sell || original ? undefined : () => setStep('asset')}
+              error={
+                shown('asset').length > 0
+                  ? issueText(shown('asset')[0] as TransactionIssue)
+                  : undefined
+              }
+              emptyText={
+                sell ? 'You hold nothing to sell on this date.' : 'No assets yet: add one.'
+              }
+            />
+          )}
 
-        <Text style={styles.label}>Broker</Text>
-        {sell ? (
-          form.assetId ? (
-            sellable.length === 0 ? (
-              <Text style={styles.muted}>No broker holds units of this asset on this date.</Text>
+          <DateField
+            value={form.date}
+            today={today}
+            onChange={(d) => update('date', { date: d })}
+            error={fieldError('date')}
+          />
+
+          <T variant="overline" tone="muted" style={styles.label}>
+            Broker
+          </T>
+          {sell ? (
+            form.assetId ? (
+              sellable.length === 0 ? (
+                <T variant="sub" tone="muted" style={styles.gap}>
+                  No broker holds units of this asset on this date.
+                </T>
+              ) : (
+                <View style={styles.chips}>
+                  {sellable.map((a) => (
+                    <Chip
+                      key={a.accountId}
+                      selected={effective.accountId === a.accountId}
+                      onPress={() => {
+                        setAccountPicked(true);
+                        update('account', { accountId: a.accountId });
+                      }}
+                      accessibilityLabel={`Broker ${brokerLabel(names, a.accountId)}`}
+                      label={
+                        <View style={styles.inline}>
+                          <T variant="sub">{brokerLabel(names, a.accountId)} · holds</T>
+                          <Amount kind="units" variant="sub" value={a.held} />
+                          <T variant="sub">· can sell</T>
+                          <Amount kind="units" variant="sub" value={a.available} />
+                        </View>
+                      }
+                    />
+                  ))}
+                </View>
+              )
             ) : (
-              <View style={styles.chips}>
-                {sellable.map((a) => (
-                  <Chip
-                    key={a.accountId}
-                    selected={effective.accountId === a.accountId}
-                    onPress={() => {
-                      setAccountPicked(true);
-                      update('account', { accountId: a.accountId });
-                    }}
-                    accessibilityLabel={`Broker ${brokerLabel(names, a.accountId)}`}
-                    label={
-                      <View style={styles.inline}>
-                        <Text style={styles.chipText}>
-                          {brokerLabel(names, a.accountId)} · holds
-                        </Text>
-                        <Units value={a.held} style={styles.chipText} />
-                        <Text style={styles.chipText}>· can sell</Text>
-                        <Units value={a.available} style={styles.chipText} />
-                      </View>
-                    }
-                  />
-                ))}
-              </View>
+              <T variant="sub" tone="muted" style={styles.gap}>
+                Choose the asset first.
+              </T>
             )
           ) : (
-            <Text style={styles.muted}>Choose the asset first.</Text>
-          )
-        ) : (
-          <View style={styles.chips}>
-            {ledger.accounts
-              .filter((a) => !a.deleted)
-              .map((a) => (
-                <Chip
-                  key={a.id}
-                  label={a.name}
-                  selected={effective.accountId === a.id}
-                  accessibilityLabel={`Broker ${a.name}`}
-                  onPress={() => {
-                    setAccountPicked(true);
-                    update('account', { accountId: a.id });
-                  }}
-                />
-              ))}
-          </View>
-        )}
-        {fieldError('account') ? <FieldError>{fieldError('account')}</FieldError> : null}
+            <View style={styles.chips}>
+              {ledger.accounts
+                .filter((a) => !a.deleted)
+                .map((a) => (
+                  <Chip
+                    key={a.id}
+                    label={a.name}
+                    selected={effective.accountId === a.id}
+                    accessibilityLabel={`Broker ${a.name}`}
+                    onPress={() => {
+                      setAccountPicked(true);
+                      update('account', { accountId: a.id });
+                    }}
+                  />
+                ))}
+            </View>
+          )}
+          {fieldError('account') ? <FieldError>{fieldError('account')}</FieldError> : null}
 
-        {trade ? (
+          {trade ? (
+            <Field
+              label="Quantity"
+              value={form.quantity}
+              onChangeText={(quantity) => update('quantity', { quantity })}
+              keyboardType="decimal-pad"
+              placeholder="0"
+              error={fieldError('quantity')}
+            />
+          ) : null}
+
           <Field
-            label="Fee (€, optional)"
-            value={form.fee}
-            onChangeText={(fee) => update('fee', { fee })}
+            label={trade ? 'Total value (€)' : 'Amount received (€)'}
+            value={form.total}
+            onChangeText={(total) => update('total', { total })}
             keyboardType="decimal-pad"
             placeholder="0.00"
-            error={fieldError('fee')}
+            hint={
+              form.type === 'buy'
+                ? 'Enter the EUR amount your broker actually charged for the units, without the fee.'
+                : sell
+                  ? 'Enter the EUR amount your broker actually paid you for the units, before the fee.'
+                  : 'The net amount that arrived, in EUR.'
+            }
+            error={fieldError('total')}
           />
-        ) : null}
+          {unitPrice ? (
+            <View style={styles.inline}>
+              <T variant="sub" tone="muted">
+                =
+              </T>
+              <Amount
+                value={unitPrice}
+                currency="EUR"
+                dp={unitPrice.lt(1) ? 6 : 2}
+                variant="sub"
+                style={styles.mutedFigure}
+              />
+              <T variant="sub" tone="muted">
+                per unit
+              </T>
+            </View>
+          ) : null}
 
-        {shown('ledger').map((i) => (
-          <FieldError key={i.code}>
-            <IssueText issue={i} names={names} date={date} />
-          </FieldError>
-        ))}
-        <Button label="Review" onPress={() => setStep('confirm')} disabled={!check.ok} />
-      </Card>
-    </ScrollView>
-  );
-}
+          {feeShown ? (
+            <Field
+              label="Fee (€, optional)"
+              value={form.fee}
+              onChangeText={(fee) => update('fee', { fee })}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              error={fieldError('fee')}
+            />
+          ) : null}
 
-function TypeButton(props: { type: FormTransactionType; selected: boolean; onPress(): void }) {
-  return (
-    <Chip
-      label={FORM_TYPE_LABELS[props.type]}
-      selected={props.selected}
-      onPress={props.onPress}
-      accessibilityLabel={`Type ${FORM_TYPE_LABELS[props.type]}`}
-    />
+          {shown('ledger').map((i) => (
+            <FieldError key={i.code}>
+              <IssueText issue={i} names={names} date={date} />
+            </FieldError>
+          ))}
+          <Button label="Review" onPress={() => setStep('confirm')} disabled={!check.ok} />
+        </Section>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -477,31 +493,32 @@ function DateField(props: {
   );
 }
 
-/** An issue's text; the units in it go through <Units>, so hiding values masks them. */
+/**
+ * An issue's text, in the colour of the error around it; the units in it go through
+ * <Amount kind="units">, so hiding values masks them.
+ */
 function IssueText(props: { issue: TransactionIssue; names: Names; date: IsoDate }) {
-  const styles = useStyles(makeStyles);
   const { issue, names } = props;
   if (issue.code === 'exceeds_holdings') {
     return (
-      <Text style={styles.error}>
+      <Text>
         More than {brokerLabel(names, issue.accountId)} can sell on {formatDate(props.date)}: holds{' '}
-        <Units value={issue.held} style={styles.error} /> · can sell{' '}
-        <Units value={issue.available} style={styles.error} />
+        <Amount kind="units" value={issue.held} /> · can sell{' '}
+        <Amount kind="units" value={issue.available} />
         {issue.available.lt(issue.held) ? ' (a later sale needs the rest)' : ''}.
       </Text>
     );
   }
   if (issue.field === 'ledger') {
     return (
-      <Text style={styles.error}>
-        This would leave the sale of <Units value={issue.requested} style={styles.error} />{' '}
+      <Text>
+        This would leave the sale of <Amount kind="units" value={issue.requested} />{' '}
         {assetLabel(names, issue.assetId)} at {brokerLabel(names, issue.accountId)} on{' '}
-        {formatDate(issue.date)} with only <Units value={issue.available} style={styles.error} />{' '}
-        units.
+        {formatDate(issue.date)} with only <Amount kind="units" value={issue.available} /> units.
       </Text>
     );
   }
-  return <Text style={styles.error}>{issueText(issue)}</Text>;
+  return <Text>{issueText(issue)}</Text>;
 }
 
 function Confirm(props: {
@@ -556,38 +573,38 @@ function Confirm(props: {
   const year = props.today.slice(0, 4);
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Card title={original ? 'Check the change' : 'Check and save'}>
+      <Section title={original ? 'Check the change' : 'Check and save'}>
         <Line label="Type" strong>
-          <Text style={styles.value}>{FORM_TYPE_LABELS[row.type as FormTransactionType]}</Text>
+          <T variant="body">{FORM_TYPE_LABELS[row.type as FormTransactionType]}</T>
         </Line>
         {row.assetId ? (
           <Line label="Asset">
-            <Text style={styles.value}>
+            <T variant="body">
               {assetLabel(names, row.assetId)} · {assetName(names, row.assetId)}
-            </Text>
+            </T>
           </Line>
         ) : null}
         <Line label="Broker">
-          <Text style={styles.value}>{brokerLabel(names, row.accountId)}</Text>
+          <T variant="body">{brokerLabel(names, row.accountId)}</T>
         </Line>
         <Line label="Date">
-          <Text style={styles.value}>{formatDate(row.tradeDate, year)}</Text>
+          <T variant="body">{formatDate(row.tradeDate, year)}</T>
         </Line>
         {row.quantity && row.unitPrice ? (
           <>
             <Line label="Quantity">
-              <Units value={row.quantity} style={styles.value} />
+              <Amount kind="units" value={row.quantity} variant="body" />
             </Line>
             <Line label="Unit price">
               <Amount
                 value={row.unitPrice}
                 currency="EUR"
                 dp={row.unitPrice.lt(1) ? 6 : 2}
-                style={styles.value}
+                variant="body"
               />
             </Line>
             <Line label="Fee">
-              <Money value={row.fees} style={styles.value} />
+              <Amount value={row.fees} variant="body" />
             </Line>
           </>
         ) : null}
@@ -601,25 +618,25 @@ function Confirm(props: {
           }
           strong
         >
-          <Money value={preview.totalEur} style={styles.strong} />
+          <Amount value={preview.totalEur} variant="headline" />
         </Line>
         {asset && pricePending(asset) ? (
-          <Text style={styles.note}>
+          <T variant="caption" tone="muted" style={styles.note}>
             Price pending: valued at this trade price until the daily price run finds its symbol.
-          </Text>
+          </T>
         ) : null}
-      </Card>
+      </Section>
 
       {preview.account && preview.overall ? (
-        <Card title="Resulting position">
+        <Section title="Resulting position">
           <Figures title={`At ${brokerLabel(names, row.accountId)}`} figures={preview.account} />
           <Figures title="All brokers" figures={preview.overall} />
           {preview.realizedGainEur ? (
             <Line label="Realized gain of this sale" strong>
-              <Money value={preview.realizedGainEur} sign colored style={styles.strong} />
+              <Amount value={preview.realizedGainEur} sign tone variant="headline" />
             </Line>
           ) : null}
-        </Card>
+        </Section>
       ) : null}
 
       {mutation.error ? (
@@ -645,23 +662,27 @@ function Figures(props: {
   const pair = (render: (f: PositionFigures) => ReactNode) => (
     <>
       {render(before)}
-      <Text style={styles.muted}>→</Text>
+      <T variant="sub" tone="muted">
+        →
+      </T>
       {render(after)}
     </>
   );
-  const avg = (v: Decimal | null) => <Amount value={v} currency="EUR" style={styles.value} />;
+  const avg = (v: Decimal | null) => <Amount value={v} currency="EUR" variant="body" />;
   return (
     <View style={styles.block} testID="resulting-position">
-      <Text style={styles.subheading}>{props.title}</Text>
+      <T variant="sub" tone="muted" style={styles.subheading}>
+        {props.title}
+      </T>
       <Line label="Units">
         {pair((f) => (
-          <Units value={f.units} style={styles.value} />
+          <Amount kind="units" value={f.units} variant="body" />
         ))}
       </Line>
       <Line label="Average cost">{pair((f) => avg(f.averageCostEur))}</Line>
       <Line label="Cost basis">
         {pair((f) => (
-          <Money value={f.costBasisEur} style={styles.value} />
+          <Amount value={f.costBasisEur} variant="body" />
         ))}
       </Line>
     </View>
@@ -670,15 +691,14 @@ function Figures(props: {
 
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
+    flex: { flex: 1 },
     content: { paddingTop: space.md, paddingBottom: space.xl },
-    status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
-    heading: { fontSize: 17, fontWeight: '700', color: colors.text },
-    subheading: { fontSize: 13, fontWeight: '600', color: colors.muted, marginBottom: 2 },
-    types: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap', marginBottom: space.xs },
-    label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
+    status: { textAlign: 'center', marginTop: space.xl },
+    subheading: { fontWeight: '600', marginBottom: 2 },
+    label: { marginBottom: space.xs },
+    gap: { marginBottom: space.md },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.md },
     dateChips: { marginTop: -space.sm },
-    chipText: { fontSize: 13, color: colors.text },
     inline: {
       flexDirection: 'row',
       gap: 4,
@@ -686,11 +706,8 @@ const makeStyles = (colors: Colors) =>
       flexWrap: 'wrap',
       marginBottom: space.md,
     },
-    muted: { fontSize: 13, color: colors.muted },
-    value: { fontSize: 14, color: colors.text },
-    strong: { fontSize: 15, fontWeight: '700', color: colors.text },
-    error: { fontSize: 13, color: colors.loss },
-    note: { fontSize: 12, color: colors.muted, marginTop: space.sm },
+    mutedFigure: { color: colors.muted },
+    note: { marginTop: space.sm },
     block: { marginBottom: space.sm },
     buttons: { marginHorizontal: space.lg },
   });

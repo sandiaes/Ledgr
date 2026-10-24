@@ -1,8 +1,8 @@
 # Mobile UI overhaul: design system and plan
 
-Status: **Phase A approved 2026-10-24 with the decisions in §10. Slices U1 and U2 built
-2026-10-24** (what differs from the text below is in "Built in U1" and "Built in U2"); U3 is
-not built.
+Status: **final. Phase A approved 2026-10-24 with the decisions in §10; slices U1, U2 and U3
+built 2026-10-24.** Where the build differs from the text below, "Built in U1", "Built in U2"
+and "Built in U3" say so, and the text of §6 and §7 has been brought to the built state.
 This is a restyle and restructure of `apps/mobile`: no financial calculation
 changes, and the UI language stays English. The one new figure (the chart's period return,
 §6.1) is a combination of figures core already computes; it is defined in `docs/kpis.md`
@@ -10,18 +10,17 @@ changes, and the UI language stays English. The one new figure (the chart's peri
 
 Contents: 1 principles · 2 colour tokens · 3 typography · 4 spacing, radii, motion ·
 5 icons · 6 shared components · 7 screens (text wireframes) · 8 slices U1–U3 · 9 risks and
-checks · 10 decisions to confirm.
+checks · 10 decisions.
 
 ## Built in U1 (2026-10-24)
 
 Everything in §8 U1 is built. Where the build differs from the text of this document:
 
-- **Drawer content.** The drawer holds the controls of the old Settings screen as they were
-  (Appearance, Privacy, Security, Data, Certificados, Sign out, version), under the section
-  titles of §6.2, so sign-out, the lock and the theme stay reachable until U3 restyles them.
-  "New transaction options" is a placeholder line until U3. The content is built the first time
-  the drawer opens (the job runs are not fetched before). Its privacy switch is labelled
-  "Hide amounts" and is the eye's switch.
+- **Drawer content.** The drawer holds the controls of the old Settings screen (Appearance,
+  Privacy, Security, Data, Certificados, Sign out, version) under the section titles of §6.2;
+  U3 added the New transaction options. The content is built the first time the drawer opens
+  (the job runs are not fetched before). Its privacy switch is labelled "Hide amounts" and is
+  the eye's switch.
 - **Closed positions** is no longer a route of its own: it was the same list as Positions ›
   Closed, which stays.
 - **Pushed screens** show the header in back mode plus a `title2` title in the content (the
@@ -29,13 +28,13 @@ Everything in §8 U1 is built. Where the build differs from the text of this doc
 - **`Badge`** text is `muted` on `pressed`, not `faint`: `faint` on `pressed` is 4.3:1 in the
   light theme. The contrast test checks `faint` on `background`, `surface` and `raised`, and
   `muted` on `pressed`.
-- **Segment changes** are not animated (the header and the skeleton are; "Remove animations"
-  is respected). Re-pressing the current tab does not scroll to the top (not asked for in U1).
+- **Segment changes and re-pressing a tab** were not animated / did not scroll in U1; both
+  arrived in U3 (see "Built in U3").
 - **The "+" button**: 56 dp circle with a 4 dp ring in the screen colour; the ring's edge is
   12 dp above the bar, so 48 dp of the circle is inside the bar, which is where Android
   delivers touches.
-- **Settings**: `newTxTypes` is parsed and defaulted (both off), not used until U3. A new
-  install starts in Dark; settings stored without an Appearance read as System (no migration).
+- **Settings**: a new install starts in Dark; settings stored without an Appearance read as
+  System (no migration). (`newTxTypes`, parsed but unused in U1, became `newTxOptions` in U3.)
 - **Tests added**: formatter, theme contrast (all three grounds), header, drawer, Android back
   order, tab bar, one dashboard build, top movers layout, chart return, privacy on every
   screen, and two source scans (no colour value outside `theme.ts`, no amount formatter outside
@@ -80,6 +79,49 @@ below:
 - **Tests**: the Allocation row tests read the row's label at index 0 instead of 1 (the
   colour dot is now a view, not a text). New: masked and unmasked list row and chart tooltip,
   the lists' states and pull to refresh, signed Activity totals, distinct chart colours.
+
+## Built in U3 (2026-10-24)
+
+Everything in §8 U3 is built; no figure, validation rule or calculation changed. Where the
+build differs from the text below:
+
+- **New transaction options are three switches: Dividend, Interest and Fee** (settings key
+  `newTxOptions`, all off by default, saved with the other toggles so they survive a restart).
+  This **replaces D5's "Fee field hidden always"** (§10): Fee is still not a transaction type;
+  its switch shows the Fee field on Buy and Sell. Hidden, a typed fee is not sent (the row is
+  saved with fee 0, as an empty field is). Edit shows the field when the switch is on **or**
+  the row being edited already has a fee, so saving never drops a stored fee.
+- **The form** is a `SegmentedControl` (Buy, Sell, and Dividend / Interest when on; each
+  segment keeps its `Type …` accessibility label), then asset, date, broker, quantity, total
+  value, fee and Review in the order of §7.5. A type switched off in the drawer while selected
+  falls back to Buy. The form sits in a `KeyboardAvoidingView` (padding) under the header;
+  the tab bar already hides with the keyboard. Validation, the confirm screen, the client UUID
+  and double-submit protection are untouched. Add asset, the asset picker, Confirm and the
+  Resulting position use `Section`, `T` and `Amount`.
+- **Calculator** (tab): restyled only. The result starts with the ending value as a `title1`
+  hero; the year table is rows with hairlines; the chart stays a `BarChart` in a section
+  (its labels are `caption` size, bar gap widened to fit them). Behaviour, defaults, the
+  certificados switch and the masked inputs are as before.
+- **Certificados and Monthly factors**: restyled only (sections, `T`, `Amount`; the month
+  stepper uses 48 dp chevron buttons; Save sits in a keyboard-avoiding scroll view).
+- **Sign in, MFA, lock, start-up error**: wordmark, `title1` title, `body` text, 48 dp inputs
+  and buttons; MFA's code field has 28 sp tabular digits. aal1 handling and the biometric / PIN
+  behaviour are the same code.
+- **Segment changes animate**: the selected tint of every `SegmentedControl` slides to the new
+  segment in 160 ms (a native-driver `translateX`), and jumps when the phone's "Remove
+  animations" is on. Until the track has been measured (and in tests) the selected segment
+  carries the tint itself.
+- **Re-pressing the current tab scrolls it to the top** on Dashboard, Positions, Activity,
+  Calculator and New transaction (`useScrollToTop`; pushed screens are unaffected).
+- **Removed**: `ui/Money.tsx` (`Money`, `Units`, `Pct`), `Card` and `Segmented` in `ui/parts`;
+  the "More" button and its state in the form. `Field`, `Button`, `Banner`, `Line` stay in
+  `ui/parts`, restyled with tokens and the type scale.
+- **Tests added**: the three options show and hide their option, are the defaults (Buy and
+  Sell only), persist across a restart and fall back to Buy; the drawer's appearance, privacy
+  and security switches persist and apply; no More route and the Calculator tab is reachable;
+  privacy masks the Calculator, Certificados, Monthly factors and the New transaction form.
+  The existing New transaction tests run with the three options on, because they exercise
+  Dividend, Interest and Fee; one line in them (opening "More types") went with the button.
 
 ## 1. Principles
 
@@ -299,7 +341,7 @@ for SDK 58; installed with `npx expo install` so the versions match). **No nativ
 needed.** Alternative if you prefer no new dependency: a hand-rolled drawer on `Animated` +
 `PanResponder`, which is less smooth and needs its own back handling; I do not recommend it.
 
-Content (U1 ships the shell with today's Settings content moved in as is; U3 restyles it):
+Content (final):
 
 ```
 ┌────────────────────────────┐
@@ -314,6 +356,7 @@ Content (U1 ships the shell with today's Settings content moved in as is; U3 res
 │ NEW TRANSACTION OPTIONS    │
 │ Dividend              [ ]  │
 │ Interest              [ ]  │
+│ Fee                   [ ]  │
 │ ────────────────────────── │
 │ SECURITY                   │
 │ App lock              [●]  │
@@ -341,7 +384,7 @@ top edge (by translation, not a shadow; a 4 dp ring in `background` separates it
 bar), no label, `accessibilityLabel="New transaction"`, `accessibilityRole="button"`, a 56 dp
 touch target. Labels: Dashboard, Positions, Activity, Calculator. `tabBarHideOnKeyboard` so
 the keyboard gets the room on the form. Re-pressing the current tab scrolls its list to the
-top.
+top (built in U3).
 
 ### 6.4 `Amount` (and the formatter)
 
@@ -399,7 +442,8 @@ Apple Inc. · 5 units                       +3,21%
 
 Replaces `Segmented`: a pill track in `pressed`, the selected segment as `accentSoft` with
 `text` label 600; 36 dp tall (48 dp touch area), equal-width segments, `accessibilityRole
-="tab"`. Used for ranges, periods, Positions views, Appearance.
+="tab"`. Used for ranges, periods, Positions views, Appearance and the transaction type. The
+tint slides to the chosen segment in 160 ms (it jumps with "Remove animations").
 
 ### 6.8 `Chip`
 
@@ -525,47 +569,56 @@ OCTOBER 2026                                       ← sticky section header
 Transaction detail: rows, then Edit (primary) and Delete (text button in `loss`); dialogs
 restyled on `raised`. Behaviour unchanged.
 
-### 7.5 New transaction (U3)
+### 7.5 New transaction
 
 ```
 as of 14:05
 [  Buy  |  Sell  ]                      ← default: only these two
 [  Buy  |  Sell  |  Dividend  |  Interest  ]   ← with both switched on
-ASSET           AAPL · Apple Inc.            ›
-DATE            24/10/2026
-BROKER          Degiro                       ▾
+ASSET           AAPL · Apple Inc.            Change
+DATE            24/10/2026        [Today] [− 1 day]
+BROKER          [Degiro] [IBKR]
 QUANTITY        [ 5            ]
 TOTAL VALUE (€) [ 1.000,00     ]   = 200,00 € per unit
+FEE (€, optional) [          ]        ← only with the Fee switch on
 [            Review            ]        ← disabled until valid
 ```
 
-The "More" button goes away; Dividend and Interest appear only when switched on in the
-drawer (each persisted, both off by default). There is no Fee type (§10 D5). If a type is switched off while selected, the
-form falls back to Buy. Validation, the confirm screen (summary + resulting position) and
-double-submit protection (client UUID, disabled Save with spinner) stay exactly as they are;
-only their styling changes. **The Fee field is hidden** for new rows (§10 D5): it is saved as 0, exactly as when the
-field is left empty today. Edit shows it only for a row that already has a fee, so editing
-never drops a stored fee. The form is a
-`ScrollView` with `keyboardShouldPersistTaps` and the tab bar hidden while the keyboard is up.
+There is no "More" button: Dividend and Interest appear only when switched on in the drawer,
+and the Fee field only with the Fee switch (each persisted, all off by default). There is no
+Fee type (§10 D5). If a type is switched off while selected, the form falls back to Buy.
+Validation (no sale above what the chosen broker holds at the date, positive quantity and
+value, no future dates), the confirm screen (summary + resulting position) and double-submit
+protection (client UUID, disabled Save with spinner) are exactly as before; only their styling
+changed. Hidden, the Fee is saved as 0, as an empty field is. Edit shows the Fee field for a
+row that already has a fee even when the switch is off, so editing never drops a stored fee.
+The form is a `ScrollView` (`keyboardShouldPersistTaps`) in a `KeyboardAvoidingView`, with the
+tab bar hidden while the keyboard is up, so every field stays reachable under the header.
 
-### 7.6 Calculator (U3)
+### 7.6 Calculator
 
-Now a tab (the Return calculator; it leaves More and appears nowhere else). Inputs as a
-compact form, then the hero ending value `title1`, the result rows, the stacked chart in a
-`ChartFrame` and the year table. It keeps its own "Include certificados" switch (as today).
-Amount inputs and results go through `Amount` / `useMaskedText`.
+The Return calculator, the fifth tab (it appears nowhere else). Its own "Include
+certificados" switch on top, the "Your numbers" form (starting value, years and extra months,
+expected return with its XIRR / TWR / Custom source, monthly contribution and timing,
+inflation, Reset), then the result with the ending value as a `title1` hero and the result
+rows, the stacked chart and the year table. Amount inputs and results go through `Amount` and
+mask with privacy (the masked inputs are read-only).
 
-### 7.7 Certificados, Factor update (U3)
+### 7.7 Certificados, Factor update
 
-Reached from the drawer link. Rows per subscription (series · month, value, gain, factor
-age badge in `loss` when > 35 days); "Update factors ›". Factor update: one input row per
-subscription with last month's factor and the live change; Save as a full-width button.
+Reached from the drawer link. Rows per subscription (series · month, value, units, factor,
+gain, factor age with a `loss` badge when over 35 days); "Update factors". Factor update:
+a month stepper (this month, earlier months), one input row per subscription with last
+month's factor and the live change, Save as a full-width button. A month already recorded is
+read-only.
 
-### 7.8 Sign in, MFA, lock, startup error (U3)
+### 7.8 Sign in, MFA, lock, startup error
 
-Centered single column on `background`: wordmark "Ledgr" (text, no logo), title, fields,
-primary button; errors inline. MFA: one 6-digit field with large tabular digits. Lock: the
-wordmark, "Unlock" button, the reason line. Startup error: `ErrorState`.
+Centered single column on `background`: wordmark "Ledgr" in the accent, `title1` title,
+fields, primary button; errors inline. MFA: one 6-digit field with large tabular digits.
+Lock: the wordmark, "Ledgr is locked", "Unlock" and "Sign out", the reason line after an
+attempt. The aal1 gate (every aal1 session lands on the code prompt) and the biometric / PIN
+behaviour are unchanged.
 
 ### 7.9 Long lists and small phones
 
@@ -593,8 +646,8 @@ the app is usable between slices.
 - `format.ts`: pt-PT separators and numeric dates (§6.4); its tests updated.
 - `ui/`: `T`, `Amount` (+ `useMaskedText`, `MASK = '•••••'`), `Section`, `ListRow`,
   `SegmentedControl`, `Chip`/`Badge`, `ChartFrame`, `Skeleton`, `EmptyState`, `ErrorState`;
-  `PortfolioScreen` restyled; old `Money`/`Units` become thin wrappers until U2/U3 migrate
-  their callers, then are deleted.
+  `PortfolioScreen` restyled; old `Money`/`Units` became thin wrappers until U3 migrated
+  their last callers and deleted them.
 - Navigation: Root stack → Drawer (one route) → layout (`TopBar` + Tabs); custom `TabBar`
   with the center "+"; tabs Dashboard, Positions, New, Activity, Calculator; `MoreScreen` and
   the `ReturnCalculator` stack route removed; `Settings` route removed (its content moves to
@@ -615,12 +668,13 @@ Restyle with `Section`, `ListRow`, `SegmentedControl`, `ChartFrame`, skeletons a
 Broker detail, Asset transactions and Transaction detail restyled with them. Behaviour,
 filters, sorting and figures unchanged; existing tests kept green.
 
-### U3 — drawer content, New transaction, Calculator, Certificados, sign-in, MFA, lock
+### U3 — drawer content, New transaction, Calculator, Certificados, sign-in, MFA, lock (built)
 
-Drawer restyled into its final sections (§6.2); New transaction type selector driven by the
-drawer toggles (Dividend, Interest), the Fee field hidden (§10 D5); Calculator as a tab; Certificados and Factor
-update; sign-in, MFA, no-authenticator, lock and startup error screens. `Money`/`Units` and
-`Card`/`Segmented` deleted once unused. `docs/app-plan.md` §1 updated to the new navigation.
+Drawer content in its final sections (§6.2) with the three New transaction switches;
+New transaction type selector and Fee field driven by them; Calculator restyled as a tab;
+Certificados and Factor update; sign-in, MFA, no-authenticator, lock and startup error
+screens; animated segment changes; scroll-to-top on re-pressing a tab. `Money`/`Units`/`Pct`
+and `Card`/`Segmented` deleted. `docs/app-plan.md` §1 updated.
 
 ## 9. Risks and how each is checked
 
@@ -647,16 +701,16 @@ update; sign-in, MFA, no-authenticator, lock and startup error screens. `Money`/
   before the symbol); other currencies by code after the amount, `412,37 USD`.
 - **D4 The chart's "All" range** starts the day before the first row in scope (as Since
   start); the other ranges start at their first chart point. `docs/kpis.md` §4.1, approved.
-- **D5 No Fee type; the Fee field is hidden.** A filled Fee field is saved
+- **D5 No Fee type; the Fee field is optional.** A filled Fee field is saved
   (`transactions.fees`) and changes the buy's cost, the sell's proceeds, net invested,
-  realized gain and the returns; left empty it is saved as 0. Since it will not be used:
-  - New transaction no longer shows the field; new Buy and Sell rows are saved with fee 0,
-    the same row an empty field produces today. Core validation is unchanged (an empty fee
-    is already valid).
-  - Edit shows the field only when the row being edited already has a non-zero fee (imported
-    rows can), so an edit never silently drops a stored fee; there it works as today.
-  - The drawer's New transaction options are **Dividend and Interest** only (both off by
-    default); there is no Fee toggle and no fee transaction type in the form.
-  - Not deleted outright, because existing rows carry fees and Edit must keep them.
+  realized gain and the returns; left empty it is saved as 0.
+  - Originally (Phase A) the field was hidden for good. **Revised in U3** at the owner's
+    request: the drawer's New transaction options are **Dividend, Interest and Fee** (all off
+    by default, persisted), and the Fee switch shows the field on Buy and Sell.
+  - With the switch off, new Buy and Sell rows are saved with fee 0, the same row an empty
+    field produces. Core validation is unchanged (an empty fee is already valid).
+  - Edit shows the field when the switch is on or the row already has a non-zero fee (imported
+    rows can), so an edit never silently drops a stored fee.
+  - There is still no fee transaction type in the form.
 - **D6 Dark is the default for new installs only.** A phone with saved settings keeps its
   saved Appearance (no migration); the owner picks Dark in the drawer.

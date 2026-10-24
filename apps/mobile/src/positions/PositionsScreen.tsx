@@ -7,6 +7,7 @@ import {
   type PositionRow,
   type PositionsView,
 } from '@ledgr/core';
+import { useScrollToTop } from '@react-navigation/native';
 import { useMemo, useRef, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, View } from 'react-native';
 import { usePortfolio } from '../data/usePortfolio';
@@ -89,6 +90,7 @@ function Positions({
   const [chosen, setFilters] = useState<Filters>(NO_FILTERS);
   const [panel, setPanel] = useState<'sort' | 'filter' | null>(null);
   const list = useRef<SectionList<Item, Group>>(null);
+  useScrollToTop(list);
   const options = useMemo(() => filterOptions(view, names), [view, names]);
   const filters = useMemo(() => offeredFilters(chosen, options), [chosen, options]);
 
