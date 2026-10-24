@@ -243,3 +243,14 @@ describe('writes', () => {
     expect(await screen.findByText('Two-factor code')).toBeOnTheScreen();
   });
 });
+
+describe('sign in', () => {
+  it('names its fields for a screen reader, not only by placeholder', async () => {
+    const { auth } = fakeAuth({ signedIn: false });
+    await render(
+      <AppRoot services={fakeServices({ auth, data: fakeData(sampleLedger(today)) })} />,
+    );
+    expect(await screen.findByLabelText('Email')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Password')).toBeOnTheScreen();
+  });
+});

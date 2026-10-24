@@ -24,7 +24,7 @@ import { Field } from '../ui/parts';
 import { NothingInScope, ScopeNote } from '../ui/Scope';
 import { SkeletonRows } from '../ui/Skeleton';
 import { T } from '../ui/T';
-import { radius, space, type Colors } from '../ui/theme';
+import { radius, space, TOUCH_TARGET, type Colors } from '../ui/theme';
 import { useColors, useStyles } from '../ui/ThemeProvider';
 import {
   ACTIVITY_ICONS,
@@ -300,7 +300,7 @@ const ActivityRow = memo(function ActivityRow(props: {
   return (
     <ListRow
       testID="activity-row"
-      accessibilityLabel={`${TRANSACTION_TYPE_LABELS[r.type]} ${what} ${r.date}`}
+      accessibilityLabel={`${TRANSACTION_TYPE_LABELS[r.type]} ${what} ${formatDate(r.date, props.year)}`}
       onPress={() => navigation.navigate('TransactionDetail', { id: r.id })}
       last={props.last}
       leading={
@@ -342,7 +342,7 @@ const makeStyles = (colors: Colors) =>
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.divider,
     },
-    clear: { minHeight: 32, justifyContent: 'center' },
+    clear: { minHeight: TOUCH_TARGET, justifyContent: 'center' },
     // Opaque, so the rows do not show through while it is pinned.
     monthHead: {
       paddingHorizontal: space.lg,

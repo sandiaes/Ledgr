@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Badge } from '../positions/PositionRowView';
 import { Button, Field } from '../ui/parts';
 import { T } from '../ui/T';
-import { space, type Colors } from '../ui/theme';
+import { space, TOUCH_TARGET, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 
 const MAX_SHOWN = 8;
@@ -59,7 +59,12 @@ export function AssetPicker(props: {
               {a.isin ? ` · ${a.isin}` : ''}
             </T>
           </View>
-          <Pressable onPress={() => setOpen(true)} accessibilityRole="button" hitSlop={8}>
+          <Pressable
+            onPress={() => setOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Change asset"
+            style={styles.change}
+          >
             <T variant="headline" tone="accent">
               Change
             </T>
@@ -128,6 +133,7 @@ const makeStyles = (colors: Colors) =>
     selected: { flexDirection: 'row', alignItems: 'center', gap: space.md },
     flex: { flex: 1 },
     error: { marginTop: space.xs },
+    change: { minHeight: TOUCH_TARGET, justifyContent: 'center' },
     option: {
       minHeight: 48,
       justifyContent: 'center',

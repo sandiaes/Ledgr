@@ -4,7 +4,7 @@ import { ActivityIndicator, KeyboardAvoidingView, StyleSheet, View } from 'react
 import { useServices } from '../services';
 import { Button, Input } from '../ui/parts';
 import { T } from '../ui/T';
-import { space, type Colors } from '../ui/theme';
+import { CODE_LETTER_SPACING, space, type as typography, type Colors } from '../ui/theme';
 import { useColors, useStyles } from '../ui/ThemeProvider';
 import { useGate } from './AuthGate';
 import { errorCode } from './errors';
@@ -73,6 +73,7 @@ export function SignInScreen() {
       <Input
         style={styles.input}
         placeholder="Email"
+        accessibilityLabel="Email"
         autoCapitalize="none"
         autoComplete="email"
         keyboardType="email-address"
@@ -82,6 +83,7 @@ export function SignInScreen() {
       <Input
         style={styles.input}
         placeholder="Password"
+        accessibilityLabel="Password"
         secureTextEntry
         autoComplete="password"
         value={password}
@@ -195,9 +197,8 @@ const makeStyles = (colors: Colors) =>
     text: { marginBottom: space.md },
     input: { marginBottom: space.md },
     code: {
-      fontSize: 28,
-      lineHeight: 34,
-      letterSpacing: 6,
+      ...typography.title1,
+      letterSpacing: CODE_LETTER_SPACING,
       textAlign: 'center',
       fontVariant: ['tabular-nums'],
     },

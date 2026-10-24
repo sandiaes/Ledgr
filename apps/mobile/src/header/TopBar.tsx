@@ -41,7 +41,6 @@ function IconButton(props: {
       onPress={props.onPress}
       accessibilityRole="button"
       accessibilityLabel={props.label}
-      hitSlop={4}
       style={styles.iconButton}
     >
       <Icon name={props.icon} />
@@ -277,7 +276,7 @@ const makeStyles = (colors: Colors) =>
     },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: TOUCH_TARGET },
     valueRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-    scope: { marginTop: -2 },
+    scope: { marginTop: -space.hairline },
     // Over the screen, under the bar: `top` is set from the safe-area inset.
     panel: {
       position: 'absolute',
@@ -290,5 +289,5 @@ const makeStyles = (colors: Colors) =>
     },
     body: { padding: space.lg, gap: space.lg },
     figures: { flexDirection: 'row', gap: space.lg },
-    figure: { flex: 1, gap: 2 },
+    figure: { flex: 1, gap: space.hairline },
   });

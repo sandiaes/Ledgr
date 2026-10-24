@@ -88,3 +88,6 @@ export function formatDateTime(ms: number, thisYear?: string): string {
   const day = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
   return `${formatDate(day, thisYear)} ${formatTime(ms)}`;
 }
+
+/** Decimals of a unit price: 6 under 1 € so a cheap coin's price is not rounded away, else 2. */
+export const unitPriceDp = (price: Decimal): number => (price.lt(1) ? 6 : 2);

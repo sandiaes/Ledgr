@@ -25,7 +25,7 @@ import { Section } from '../ui/Section';
 import { SegmentedControl } from '../ui/SegmentedControl';
 import { useSliceColors } from '../ui/sliceColors';
 import { T } from '../ui/T';
-import { radius, space, type Colors } from '../ui/theme';
+import { radius, space, TOUCH_TARGET, weight, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 import { AllocationDonut } from './AllocationDonut';
 import { CHART_HEIGHT, ValueChart } from './ValueChart';
@@ -412,10 +412,10 @@ export function ReconcileBanner({ view }: { view: DashboardView }) {
 
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
-    bold: { fontWeight: '600' },
+    bold: { fontWeight: weight.semibold },
     faintText: { color: colors.faint },
     notes: { marginHorizontal: space.lg, marginBottom: space.lg },
-    noteList: { marginTop: space.xs, gap: 2 },
+    noteList: { marginTop: space.xs, gap: space.hairline },
     line: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -430,7 +430,7 @@ const makeStyles = (colors: Colors) =>
       marginVertical: space.sm,
     },
     columns: { flexDirection: 'row' },
-    column: { flex: 1, gap: 2 },
+    column: { flex: 1, gap: space.hairline },
     gap: { marginTop: space.sm },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
     // The value line is solid and the net invested line dashed, as in the chart.
@@ -451,5 +451,10 @@ const makeStyles = (colors: Colors) =>
     legendAmount: { color: colors.muted },
     moverControls: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
     units: { flexDirection: 'row', gap: space.xs },
-    more: { marginTop: space.sm, alignSelf: 'flex-end', minHeight: 32, justifyContent: 'center' },
+    more: {
+      marginTop: space.sm,
+      alignSelf: 'flex-end',
+      minHeight: TOUCH_TARGET,
+      justifyContent: 'center',
+    },
   });

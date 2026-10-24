@@ -91,5 +91,5 @@ export function BrokerDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  hero: { paddingHorizontal: space.lg, marginBottom: space.xl, gap: 2 },
+  hero: { paddingHorizontal: space.lg, marginBottom: space.xl, gap: space.hairline },
 });

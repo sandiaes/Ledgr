@@ -22,7 +22,7 @@ import { PortfolioScreen, type ListFrame } from '../ui/PortfolioScreen';
 import { SegmentedControl } from '../ui/SegmentedControl';
 import { SkeletonRows } from '../ui/Skeleton';
 import { T } from '../ui/T';
-import { radius, space, type Colors } from '../ui/theme';
+import { radius, space, TOUCH_TARGET, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 import { ClosedItem } from './ClosedList';
 import {
@@ -484,5 +484,5 @@ const makeStyles = (colors: Colors) =>
       justifyContent: 'space-between',
       alignItems: 'center',
     },
-    clear: { alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' },
+    clear: { alignSelf: 'flex-start', minHeight: TOUCH_TARGET, justifyContent: 'center' },
   });

@@ -1,5 +1,6 @@
 import { addDays, dec, localDate, type Transaction } from '@ledgr/core';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { StyleSheet, type TextStyle, type ViewStyle } from 'react-native';
 import { AppRoot } from '../AppRoot';
 import { TIME_ZONE } from '../data/usePortfolio';
 import { formatDate } from '../format';
@@ -7,6 +8,7 @@ import { fakeAuth, fakeData, fakeServices, portfolioLedger } from '../test/fakes
 import { AMOUNT_TEXT } from '../test/leaks';
 import { goToNew } from '../test/nav';
 import { MASK } from '../ui/Amount';
+import { themes, type as type_ } from '../ui/theme';
 import type { Settings } from '../settings/settings';
 
 jest.mock('react-native-gifted-charts', () => ({
@@ -107,6 +109,36 @@ describe('New transaction: validation', () => {
     await type('Quantity', '5');
     expect(screen.queryByText(/can sell on/)).toBeNull();
     expect(review()).toBeEnabled();
+  });
+
+  it('shows the oversell message in the error colour and size of the field error around it', async () => {
+    await openNew({ appearance: 'dark' });
+    await fireEvent.press(screen.getByLabelText('Type Sell'));
+    await fireEvent.press(screen.getByLabelText('Pick VWCE'));
+    await type('Quantity', '11');
+    await type('Total value (€)', '1650');
+    // The message is nested text: it takes its colour from the loss-coloured text around it
+    // (nothing in it sets one), in either theme.
+    let node: ReturnType<typeof screen.getByText> | null = screen.getByText(
+      /More than Degiro can sell on/,
+    );
+    let colour: unknown;
+    let size: unknown;
+    for (; node && colour === undefined; node = node.parent) {
+      const style = StyleSheet.flatten(node.props.style) as TextStyle | undefined;
+      colour = style?.color;
+      size = size ?? style?.fontSize;
+    }
+    expect(colour).toBe(themes.dark.loss);
+    expect(size).toBe(type_.sub.fontSize);
+  });
+
+  it('names the asset change button and makes it a 48 dp target', async () => {
+    await openNew();
+    await fireEvent.press(screen.getByLabelText('Pick VWCE'));
+    const change = screen.getByLabelText('Change asset');
+    const style = StyleSheet.flatten(change.props.style) as ViewStyle;
+    expect(style.minHeight).toBeGreaterThanOrEqual(48);
   });
 
   it('a backdated sale cannot take units a later sale needs', async () => {
@@ -336,39 +368,48 @@ describe('Activity', () => {
   const listed = () =>
     screen.getAllByTestId('activity-row').map((r) => r.props.accessibilityLabel as string);
 
+  it('reads a row’s date the way the row shows it, not as an ISO date', async () => {
+    await openActivity();
+    const labels = listed();
+    expect(labels.some((l) => /\d{4}-\d{2}-\d{2}/.test(l))).toBe(false);
+    expect(labels).toContain(
+      `Buy VWCE ${formatDate('2025-04-01', String(new Date().getFullYear()))}`,
+    );
+  });
+
   it('lists every row newest first, by month, and filters by type, broker, asset and date', async () => {
     await openActivity();
     expect(listed()).toEqual([
-      'Fee Cash 2025-07-01',
-      'Dividend VWCE 2025-06-20',
-      'Sell MSFT 2025-06-02',
-      'Buy BTC 2025-05-02',
-      'Buy VWCE 2025-04-01',
-      'Buy AAPL 2025-03-03',
-      'Buy MSFT 2025-02-03',
-      'Subscription Certificados de Aforro E 2025-01-15',
-      'Buy VWCE 2025-01-02',
+      'Fee Cash 01/07/2025',
+      'Dividend VWCE 20/06/2025',
+      'Sell MSFT 02/06/2025',
+      'Buy BTC 02/05/2025',
+      'Buy VWCE 01/04/2025',
+      'Buy AAPL 03/03/2025',
+      'Buy MSFT 03/02/2025',
+      'Subscription Certificados de Aforro E 15/01/2025',
+      'Buy VWCE 02/01/2025',
     ]);
     expect(screen.getByText('Jun 2025')).toBeOnTheScreen();
 
     await fireEvent.press(screen.getByText('Filter'));
     await fireEvent.press(screen.getByLabelText('Type: Buy'));
     await fireEvent.press(screen.getByLabelText('Broker: IBKR'));
-    expect(listed()).toEqual(['Buy VWCE 2025-04-01', 'Buy AAPL 2025-03-03', 'Buy MSFT 2025-02-03']);
+    expect(listed()).toEqual(['Buy VWCE 01/04/2025', 'Buy AAPL 03/03/2025', 'Buy MSFT 03/02/2025']);
     expect(screen.getByText('Filter (2)')).toBeOnTheScreen();
     await fireEvent.press(screen.getByLabelText('Pick VWCE'));
-    expect(listed()).toEqual(['Buy VWCE 2025-04-01']);
+    expect(listed()).toEqual(['Buy VWCE 01/04/2025']);
     await fireEvent.press(screen.getByText('Clear filters'));
 
     await fireEvent.press(screen.getByText('From – to'));
     await type('From', '2025-03-01');
     await type('To', '2025-05-31');
-    expect(listed()).toEqual(['Buy BTC 2025-05-02', 'Buy VWCE 2025-04-01', 'Buy AAPL 2025-03-03']);
+    expect(listed()).toEqual(['Buy BTC 02/05/2025', 'Buy VWCE 01/04/2025', 'Buy AAPL 03/03/2025']);
   });
 
   it('delete is refused when a later sale needs the units, naming that sale', async () => {
     const { data } = await openActivity();
-    await fireEvent.press(screen.getByLabelText('Buy MSFT 2025-02-03'));
+    await fireEvent.press(screen.getByLabelText('Buy MSFT 03/02/2025'));
     await fireEvent.press(await screen.findByText('Delete'));
     expect(screen.getByText('Delete this row?')).toBeOnTheScreen();
     expect(screen.getByText(/It cannot be deleted: the sale of/)).toBeOnTheScreen();
@@ -381,19 +422,19 @@ describe('Activity', () => {
 
   it('delete asks first, then the row leaves the list and every figure', async () => {
     const { data } = await openActivity();
-    await fireEvent.press(screen.getByLabelText('Dividend VWCE 2025-06-20'));
+    await fireEvent.press(screen.getByLabelText('Dividend VWCE 20/06/2025'));
     await fireEvent.press(await screen.findByText('Delete'));
     expect(screen.getByText('Dividend · VWCE · Degiro · 20/06/2025')).toBeOnTheScreen();
     expect(data.deleteTransaction).not.toHaveBeenCalled(); // only after the confirmation
     await fireEvent.press(screen.getAllByText('Delete').at(-1)!);
     await waitFor(() => expect(data.deleteTransaction).toHaveBeenCalledWith('d1'));
-    await waitFor(() => expect(screen.queryByLabelText('Dividend VWCE 2025-06-20')).toBeNull());
+    await waitFor(() => expect(screen.queryByLabelText('Dividend VWCE 20/06/2025')).toBeNull());
     expect(data.rows().some((t) => t.id === 'd1')).toBe(false);
   });
 
   it('edit uses the same form, prefilled, and updates the same row', async () => {
     const { data } = await openActivity();
-    await fireEvent.press(screen.getByLabelText('Buy VWCE 2025-04-01'));
+    await fireEvent.press(screen.getByLabelText('Buy VWCE 01/04/2025'));
     await fireEvent.press(await screen.findByText('Edit'));
     expect(await screen.findByText('Edit Buy')).toBeOnTheScreen();
     expect(screen.getByLabelText('Quantity')).toHaveDisplayValue('5');
@@ -420,7 +461,7 @@ describe('Activity', () => {
 
   it('rows the form cannot show exactly (here USD at fx 0.9) can be deleted, not edited', async () => {
     await openActivity();
-    await fireEvent.press(screen.getByLabelText('Buy AAPL 2025-03-03'));
+    await fireEvent.press(screen.getByLabelText('Buy AAPL 03/03/2025'));
     expect(await screen.findByText(/not edited in the app/)).toBeOnTheScreen();
     expect(screen.queryByText('Edit')).toBeNull();
     expect(screen.getByText('Delete')).toBeOnTheScreen();
@@ -441,7 +482,7 @@ describe('Activity', () => {
     await render(<AppRoot services={fakeServices({ auth, data: fakeData(fixture) })} />);
     await screen.findByText('Total gain');
     await fireEvent.press(screen.getByText('Activity'));
-    await fireEvent.press(await screen.findByLabelText('Buy VWCE 2025-01-02'));
+    await fireEvent.press(await screen.findByLabelText('Buy VWCE 02/01/2025'));
     await fireEvent.press(await screen.findByText('Edit'));
     await type('Quantity', '5');
     await type('Total value (€)', '500');

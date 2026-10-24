@@ -2,7 +2,7 @@ import type { Decimal, ProjectionRow } from '@ledgr/core';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { BarChart } from 'react-native-gifted-charts';
 import { T } from '../ui/T';
-import { space, type Colors } from '../ui/theme';
+import { space, type as typography, type Colors } from '../ui/theme';
 import { useColors, useStyles } from '../ui/ThemeProvider';
 
 /** Decimal -> number for bar heights only; no amount is drawn (axes hidden). */
@@ -66,6 +66,6 @@ export function GrowthChart({ rows }: { rows: readonly ProjectionRow[] }) {
 
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
-    axis: { fontSize: 12, color: colors.faint },
+    axis: { fontSize: typography.caption.fontSize, color: colors.faint },
     legend: { flexDirection: 'row', gap: space.md, marginTop: space.sm },
   });
