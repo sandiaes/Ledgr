@@ -6,12 +6,20 @@ import { assetLabel, assetName, type Names } from '../ui/labels';
 import { Amount, Money, Pct, Units } from '../ui/Money';
 import { colors, space } from '../ui/theme';
 
-export function Badge({ text, tone = 'warning' }: { text: string; tone?: 'warning' | 'muted' }) {
-  return (
-    <Text style={[styles.badge, tone === 'muted' ? styles.badgeMuted : styles.badgeWarning]}>
-      {text}
-    </Text>
-  );
+export function Badge({
+  text,
+  tone = 'warning',
+}: {
+  text: string;
+  tone?: 'warning' | 'muted' | 'danger';
+}) {
+  const toneStyle =
+    tone === 'muted'
+      ? styles.badgeMuted
+      : tone === 'danger'
+        ? styles.badgeDanger
+        : styles.badgeWarning;
+  return <Text style={[styles.badge, toneStyle]}>{text}</Text>;
 }
 
 /** "price pending", "stale" or "factor old" for a row's valuation. */
@@ -117,4 +125,5 @@ const styles = StyleSheet.create({
   },
   badgeWarning: { backgroundColor: colors.warningBg, color: colors.warningText },
   badgeMuted: { backgroundColor: colors.background, color: colors.muted },
+  badgeDanger: { backgroundColor: colors.errorBg, color: colors.loss },
 });

@@ -73,8 +73,9 @@ terminal to reload, `Ctrl+C` to stop.
 What you should see: Sign in → **Two-factor code** (every sign-in, a 6-digit code from your
 authenticator) → Dashboard. On the first sign-in the app lock is turned on if the phone has
 a screen lock or fingerprint; from then on Ledgr asks for it when it opens and after 1
-minute in the background (More → Security to change it). Screenshots are blocked by default
-(More → Block screenshots). The eye icon at the top hides every amount.
+minute in the background (More → Settings → Security to change it). Screenshots are
+blocked by default (More → Settings → Block screenshots). The eye icon at the top hides
+every amount.
 
 After changing `.env`, restart with `npx expo start --clear` (the values are built into the
 bundle).
@@ -231,5 +232,5 @@ eas build --platform android --profile preview
 | "That code did not work"                                         | Use the current code; check the phone's clock is set automatically.                                                                              |
 | App lock switch is greyed out                                    | Set a screen lock (PIN, pattern or fingerprint) on the phone.                                                                                    |
 | "live prices unavailable" under the total                        | value-now did not answer; the dashboard uses the latest stored quotes and closes.                                                                |
-| "Figures do not reconcile: … value-now … differs"                | The deployed functions run an older core: redeploy them (`docs/prices.md`, "After a core change").                                               |
+| "Figures do not reconcile: … value-now … differs"                | The deployed functions run an older core: redeploy them (`docs/prices.md`, "Redeploying after an update").                                       |
 | Screenshots come out black                                       | That is screenshot blocking; turn it off in More if you need one.                                                                                |

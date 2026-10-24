@@ -48,6 +48,8 @@ export interface Issue {
   date?: IsoDate;
   provider?: string;
   status?: number;
+  /** Symbol resolution: why an asset stays "price pending" (ids and tickers, no values). */
+  reason?: string;
 }
 
 export type JobName = 'fx' | 'prices' | 'snapshots' | 'resolve';

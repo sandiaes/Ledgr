@@ -138,7 +138,10 @@ export async function handleJob(
 
   const run = await runRecorded(ctx, job, () => {
     if (job === 'fx') return runFx(ctx, { from });
-    if (job === 'prices') return runPrices(ctx, { mode: 'daily', from });
+    if (job === 'prices') {
+      const openFigiKey = env.OPENFIGI_API_KEY?.trim() || undefined;
+      return runPrices(ctx, { mode: 'daily', from, resolve: { openFigiKey } });
+    }
     return runSnapshots(ctx, { from, to: addDays(today, -1) });
   });
   return json(run.status === 'failed' ? 500 : 200, {

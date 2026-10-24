@@ -252,3 +252,80 @@ export function certificadoSubscriptions(input: {
       a.subscriptionId.localeCompare(b.subscriptionId),
   );
 }
+
+/** The factor update screen's change vs the previous factor (docs/kpis.md §8). */
+export interface FactorChange {
+  /** next - previous, EUR per unit; null without a previous factor. */
+  perUnitEur: Decimal | null;
+  /** units x (next - previous): the subscription's value change. */
+  valueEur: Decimal | null;
+  /** next / previous - 1. */
+  pct: Decimal | null;
+  /** A decrease is warned about, not blocked. */
+  decreased: boolean;
+}
+
+export function factorChange(input: {
+  previous: Decimal | null;
+  next: Decimal;
+  units: Decimal;
+}): FactorChange {
+  const { previous, next, units } = input;
+  if (!previous) return { perUnitEur: null, valueEur: null, pct: null, decreased: false };
+  const perUnitEur = next.minus(previous);
+  return {
+    perUnitEur,
+    valueEur: units.times(perUnitEur),
+    pct: next.div(previous).minus(ONE),
+    decreased: perUnitEur.isNegative(),
+  };
+}
+
+/** One input of the factor update screen. */
+export interface FactorUpdateLine {
+  subscriptionId: string;
+  seriesId: string;
+  accountId: string;
+  subscribedOn: IsoDate;
+  /** Units held today. */
+  units: Decimal;
+  /** The latest factor of an earlier month ("last month"), or null. */
+  previous: CaFactor | null;
+  /** The factor already recorded for `month`: shown read-only (rows are immutable). */
+  recorded: CaFactor | null;
+}
+
+/**
+ * The subscriptions held on `today`, each with its latest factor before `month` and the one
+ * already recorded for `month` (the 1st of a month, not after today's month).
+ */
+export function factorUpdateLines(input: {
+  transactions: readonly Transaction[];
+  subscriptions: readonly CaSubscription[];
+  factors: readonly CaFactor[];
+  month: IsoDate;
+  today: IsoDate;
+}): FactorUpdateLine[] {
+  const { month, today } = input;
+  assertIsoDate(month);
+  if (!month.endsWith('-01')) throw new RangeError(`Factor month ${month} is not a 1st`);
+  if (month > today) throw new RangeError(`Factor month ${month} is after today`);
+  const held = certificadoSubscriptions({
+    transactions: input.transactions,
+    asOf: today,
+    ca: { subscriptions: input.subscriptions, factors: () => null },
+  });
+  return held.map((s) => {
+    const own = input.factors.filter((f) => f.subscriptionId === s.subscriptionId);
+    const earlier = own.filter((f) => f.month < month).sort((a, b) => (a.month < b.month ? 1 : -1));
+    return {
+      subscriptionId: s.subscriptionId,
+      seriesId: s.seriesId,
+      accountId: s.accountId,
+      subscribedOn: s.subscribedOn,
+      units: s.units,
+      previous: earlier[0] ?? null,
+      recorded: own.find((f) => f.month === month) ?? null,
+    };
+  });
+}

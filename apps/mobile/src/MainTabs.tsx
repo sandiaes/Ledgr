@@ -3,7 +3,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { ComponentProps } from 'react';
+import { ActivityScreen } from './activity/ActivityScreen';
+import { TransactionDetailScreen } from './activity/TransactionDetailScreen';
 import { AllocationScreen } from './allocation/AllocationScreen';
+import { CertificadosScreen } from './certificados/CertificadosScreen';
+import { FactorUpdateScreen } from './certificados/FactorUpdateScreen';
 import { DashboardScreen } from './dashboard/DashboardScreen';
 import type { RootStackParams } from './navigation';
 import { PerformanceScreen } from './performance/PerformanceScreen';
@@ -13,7 +17,9 @@ import { ClosedPositionsScreen } from './positions/ClosedPositionsScreen';
 import { PositionDetailScreen } from './positions/PositionDetailScreen';
 import { PositionsScreen } from './positions/PositionsScreen';
 import { MoreScreen } from './screens/MoreScreen';
-import { PlaceholderScreen } from './screens/PlaceholderScreen';
+import { SettingsScreen } from './settings/SettingsScreen';
+import { EditTransactionScreen } from './transactions/EditTransactionScreen';
+import { NewTransactionScreen } from './transactions/NewTransactionScreen';
 import { EyeButton } from './ui/EyeButton';
 import { colors } from './ui/theme';
 
@@ -25,9 +31,6 @@ const icon =
   ({ color, size }: { color: string; size: number }) => (
     <Ionicons name={name} color={color} size={size} />
   );
-
-const NewTransactionScreen = () => <PlaceholderScreen title="New transaction" />;
-const ActivityScreen = () => <PlaceholderScreen title="Activity" />;
 
 const theme = {
   ...DefaultTheme,
@@ -102,6 +105,27 @@ export function MainTabs() {
           name="ClosedPositions"
           component={ClosedPositionsScreen}
           options={{ title: 'Closed positions' }}
+        />
+        <Stack.Screen
+          name="TransactionDetail"
+          component={TransactionDetailScreen}
+          options={{ title: 'Transaction' }}
+        />
+        <Stack.Screen
+          name="EditTransaction"
+          component={EditTransactionScreen}
+          options={{ title: 'Edit transaction' }}
+        />
+        <Stack.Screen name="Certificados" component={CertificadosScreen} />
+        <Stack.Screen
+          name="FactorUpdate"
+          component={FactorUpdateScreen}
+          options={{ title: 'Monthly factors' }}
+        />
+        <Stack.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{ headerRight: undefined }}
         />
       </Stack.Navigator>
     </NavigationContainer>

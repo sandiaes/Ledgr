@@ -1,5 +1,6 @@
 export * from './accounts';
 export * from './allocation';
+export * from './assetInput';
 export * from './cashflows';
 export * from './certificados';
 export * from './closed';
@@ -12,6 +13,7 @@ export * from './fifo';
 export * from './gains';
 export * from './holdings';
 export * from './income';
+export * from './input';
 export * from './ledger';
 export * from './lookups';
 export * from './movers';

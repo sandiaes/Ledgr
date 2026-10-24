@@ -5,6 +5,7 @@ export * from './http';
 export * from './jobs/common';
 export * from './jobs/fx';
 export * from './jobs/prices';
+export * from './jobs/resolve';
 export * from './jobs/snapshots';
 export * from './live';
 export * from './openfigi';

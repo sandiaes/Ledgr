@@ -61,6 +61,16 @@ describe('public API', () => {
       'buildAllocation',
       'buildPerformance',
       'twrSteps',
+      'parseDecimalInput',
+      'unitPriceFromTotal',
+      'validateNewTransaction',
+      'validateLedgerChange',
+      'previewTransaction',
+      'mostUsedAccount',
+      'sellableAccounts',
+      'validateNewAsset',
+      'factorChange',
+      'factorUpdateLines',
     ]) {
       expect(core, name).toHaveProperty(name);
     }

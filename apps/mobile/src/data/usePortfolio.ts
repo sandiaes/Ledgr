@@ -6,7 +6,7 @@ import {
   type PortfolioInput,
   type StoredPriceRow,
 } from '@ledgr/core';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { errorCode } from '../auth/errors';
 import { useServices, type Ledger, type Market } from '../services';
@@ -57,11 +57,7 @@ export function usePortfolio<V>(build: (input: PortfolioInput) => V): PortfolioR
     queryFn: () => api.valueNow(),
     staleTime: 5 * MINUTE,
   });
-  const ledger = useQuery({
-    queryKey: ['ledger'],
-    queryFn: () => api.ledger(),
-    staleTime: 60 * MINUTE,
-  });
+  const ledger = useLedger();
   const snapshots = useQuery({
     queryKey: ['snapshots'],
     queryFn: () => api.snapshots(),
@@ -136,4 +132,38 @@ export function usePriceHistory(assetId: string, enabled: boolean) {
     enabled,
     staleTime: 60 * MINUTE,
   });
+}
+
+/** The ledger alone (forms, Activity, Certificados): the same cached query as every screen. */
+export function useLedger() {
+  const { data: api } = useServices();
+  return useQuery({
+    queryKey: ['ledger'],
+    queryFn: () => api.ledger(),
+    staleTime: 60 * MINUTE,
+  });
+}
+
+/** The owner's today (Europe/Lisbon). */
+export const useToday = (): IsoDate => localDate(new Date(), TIME_ZONE);
+
+/**
+ * After a save: the ledger, the market data (held assets may change) and value-now are
+ * fetched again, so every figure that depends on the ledger follows (docs/app-plan.md §5).
+ */
+export function useRefreshAfterWrite(): () => Promise<void> {
+  const client = useQueryClient();
+  return useCallback(async () => {
+    await Promise.all(
+      [['ledger'], ['market'], ['valueNow']].map((queryKey) =>
+        client.invalidateQueries({ queryKey }),
+      ),
+    );
+  }, [client]);
+}
+
+/** The newest price and snapshot runs (Settings). */
+export function useJobRuns() {
+  const { data: api } = useServices();
+  return useQuery({ queryKey: ['jobRuns'], queryFn: () => api.jobRuns(), staleTime: 5 * MINUTE });
 }

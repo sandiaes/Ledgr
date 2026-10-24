@@ -4,6 +4,7 @@
 import {
   dec,
   type AssetType,
+  type Decimal,
   type CaFactor,
   type CaSubscription,
   type FxRow,
@@ -44,6 +45,15 @@ export interface LiveQuoteRecord {
 export interface AccountRecord {
   id: string;
   name: string;
+  /** Soft-deleted: kept so older rows keep a name, never offered for new rows. */
+  deleted?: boolean;
+}
+
+/** A certificado series' code and name (public.ca_series), for labels. */
+export interface CaSeriesRecord {
+  id: string;
+  code: string;
+  name: string;
 }
 
 const str = (v: unknown) => (v === null || v === undefined ? null : String(v));
@@ -64,10 +74,19 @@ export const assetFromRow = (r: Row): AssetRecord => ({
   priceSourceId: str(r.price_source_id),
 });
 
-export const ACCOUNT_COLUMNS = 'id,name';
+export const ACCOUNT_COLUMNS = 'id,name,deleted_at';
 
 export const accountFromRow = (r: Row): AccountRecord => ({
   id: String(r.id),
+  name: String(r.name),
+  ...(r.deleted_at ? { deleted: true } : {}),
+});
+
+export const CA_SERIES_COLUMNS = 'id,code,name';
+
+export const caSeriesFromRow = (r: Row): CaSeriesRecord => ({
+  id: String(r.id),
+  code: String(r.code),
   name: String(r.name),
 });
 
@@ -92,6 +111,48 @@ export const transactionFromRow = (r: Row): Transaction => ({
   withholdingTax: decOrNull(r.withholding_tax),
   transferToAccountId: str(r.transfer_to_account_id),
   ...(r.trade_date_precision === 'month' ? { tradeDatePrecision: 'month' as const } : {}),
+});
+
+/** numeric(38,18) text for a write: exact and never in exponent notation. */
+const numeric = (v: Decimal | null | undefined) => (v ? v.toFixed() : null);
+
+/**
+ * A ledger row as PostgREST columns, for the app's inserts and updates (the id is the
+ * client-generated one; user_id is set by the database from the session).
+ */
+export function transactionToRow(tx: Transaction): Row {
+  return {
+    id: tx.id,
+    account_id: tx.accountId,
+    asset_id: tx.assetId,
+    type: tx.type,
+    trade_date: tx.tradeDate,
+    trade_date_precision: tx.tradeDatePrecision ?? 'day',
+    quantity: numeric(tx.quantity),
+    unit_price: numeric(tx.unitPrice),
+    amount: numeric(tx.amount),
+    fees: tx.fees.toFixed(),
+    currency: tx.currency,
+    fx_rate_to_eur: tx.fxRateToEur.toFixed(),
+    ca_subscription_id: tx.caSubscriptionId ?? null,
+    withholding_tax: numeric(tx.withholdingTax),
+    transfer_to_account_id: tx.transferToAccountId ?? null,
+  };
+}
+
+/** Mirrors the newest public.job_runs row of a job: when it finished and how it went. */
+export interface JobRunSummary {
+  job: string;
+  status: 'ok' | 'partial' | 'failed';
+  finishedAt: string;
+}
+
+export const JOB_RUN_COLUMNS = 'job,status,finished_at';
+
+export const jobRunFromRow = (r: Row): JobRunSummary => ({
+  job: String(r.job),
+  status: r.status as JobRunSummary['status'],
+  finishedAt: String(r.finished_at),
 });
 
 export const PRICE_COLUMNS = 'asset_id,price_date,close::text,currency,split_factor::text';

@@ -10,6 +10,11 @@ export type RootStackParams = {
   Allocation: undefined;
   Performance: undefined;
   ClosedPositions: undefined;
+  TransactionDetail: { id: string };
+  EditTransaction: { id: string };
+  Certificados: undefined;
+  FactorUpdate: undefined;
+  Settings: undefined;
 };
 
 export const useRootNavigation = () => useNavigation<NativeStackNavigationProp<RootStackParams>>();

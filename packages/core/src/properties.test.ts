@@ -14,7 +14,7 @@ import { createFxLookup, createPriceLookup } from './lookups';
 import { buy, d, deposit, dividend, expectClose, fee, sell, transfer } from './test-utils';
 import { twr } from './twr';
 import type { Asset, Transaction } from './types';
-import { maxDisposable } from './validation';
+import { maxDisposable, unitsHeld, validateNewTransaction } from './validation';
 import { xirr } from './xirr';
 
 const START = '2024-01-01';
@@ -275,6 +275,45 @@ describe('properties', () => {
           expect(() => runFifo([...txs, sale(max.plus('1e-18'))])).toThrow(
             InsufficientHoldingsError,
           );
+        },
+      ),
+    );
+  });
+
+  it('the sell form accepts exactly maxDisposable and refuses 1e-18 more', () => {
+    fc.assert(
+      fc.property(
+        ledgerArb,
+        fc.integer({ min: 0, max: 59 }),
+        fc.integer({ min: 0, max: 5 }),
+        ({ txs }, day, pick) => {
+          const date = addDays(START, day);
+          const accountId = ACCOUNTS[pick % 2]!;
+          const assetId = ASSETS[pick % 3]!.id;
+          const max = maxDisposable(txs, { accountId, assetId, date });
+          const check = (quantity: Decimal) =>
+            validateNewTransaction({
+              form: {
+                type: 'sell',
+                accountId,
+                assetId,
+                date,
+                quantity: quantity.toFixed(),
+                total: '100',
+                fee: '',
+              },
+              id: 'new-sale',
+              ledger: { transactions: txs, assets: ASSETS, accountIds: ACCOUNTS },
+              today: addDays(START, 59),
+            });
+          if (max.gt(0)) expect(check(max).ok).toBe(true);
+          const over = check(max.plus('1e-18'));
+          expect(over.ok).toBe(false);
+          expect(over.issues.map((i) => i.code)).toEqual([
+            max.gt(0) || unitsHeld(txs, { accountId, assetId, date }).gt(0)
+              ? 'exceeds_holdings'
+              : 'no_units',
+          ]);
         },
       ),
     );
