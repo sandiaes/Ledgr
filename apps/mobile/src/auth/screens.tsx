@@ -1,8 +1,9 @@
 import { verifyCode } from '@ledgr/client';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, StyleSheet, View } from 'react-native';
 import { useServices } from '../services';
 import { Button, Input } from '../ui/parts';
+import { T } from '../ui/T';
 import { space, type Colors } from '../ui/theme';
 import { useColors, useStyles } from '../ui/ThemeProvider';
 import { useGate } from './AuthGate';
@@ -13,10 +14,12 @@ function Screen(props: { title: string; children: ReactNode }) {
   return (
     <KeyboardAvoidingView behavior="height" style={styles.screen}>
       <View style={styles.box}>
-        <Text style={styles.brand}>Ledgr</Text>
-        <Text style={styles.title} accessibilityRole="header">
+        <T variant="title2" tone="accent" style={styles.brand}>
+          Ledgr
+        </T>
+        <T variant="title1" accessibilityRole="header" style={styles.title}>
           {props.title}
-        </Text>
+        </T>
         {props.children}
       </View>
     </KeyboardAvoidingView>
@@ -38,10 +41,12 @@ export function StartupErrorScreen({ problem }: { problem: string }) {
   const styles = useStyles(makeStyles);
   return (
     <Screen title="Cannot start">
-      <Text style={styles.text}>{problem}</Text>
-      <Text style={styles.hint}>
+      <T variant="body" style={styles.text}>
+        {problem}
+      </T>
+      <T variant="sub" tone="muted">
         Fix apps/mobile/.env (or the EAS environment variables) and restart. See docs/mobile-run.md.
-      </Text>
+      </T>
     </Screen>
   );
 }
@@ -83,7 +88,11 @@ export function SignInScreen() {
         onChangeText={setPassword}
         onSubmitEditing={submit}
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? (
+        <T variant="sub" tone="loss" style={styles.error}>
+          {error}
+        </T>
+      ) : null}
       <Button
         label={busy ? 'Signing in…' : 'Sign in'}
         onPress={submit}
@@ -122,7 +131,9 @@ export function MfaChallengeScreen({ factorId }: { factorId: string }) {
 
   return (
     <Screen title="Two-factor code">
-      <Text style={styles.text}>Enter the 6-digit code from your authenticator app.</Text>
+      <T variant="body" style={styles.text}>
+        Enter the 6-digit code from your authenticator app.
+      </T>
       <Input
         style={[styles.input, styles.code]}
         placeholder="123456"
@@ -134,7 +145,11 @@ export function MfaChallengeScreen({ factorId }: { factorId: string }) {
         onSubmitEditing={submit}
         accessibilityLabel="Authenticator code"
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? (
+        <T variant="sub" tone="loss" style={styles.error}>
+          {error}
+        </T>
+      ) : null}
       <Button label={busy ? 'Checking…' : 'Verify'} onPress={submit} disabled={busy} />
       <Button label="Sign out" kind="plain" onPress={signOut} />
     </Screen>
@@ -147,11 +162,11 @@ export function NoAuthenticatorScreen() {
   const { signOut } = useGate();
   return (
     <Screen title="Set up two-factor sign-in first">
-      <Text style={styles.text}>
+      <T variant="body" style={styles.text}>
         This account has no authenticator app enrolled, so Ledgr cannot show any data. Enroll one on
         the desktop page (Ledgr desktop → sign in → scan the QR code → verify a code), then sign in
         here again.
-      </Text>
+      </T>
       <Button label="Sign out" onPress={signOut} />
     </Screen>
   );
@@ -162,7 +177,9 @@ export function GateErrorScreen({ code }: { code: string }) {
   const { evaluate, signOut } = useGate();
   return (
     <Screen title="Cannot check your sign-in">
-      <Text style={styles.text}>Ledgr could not reach the server ({code}).</Text>
+      <T variant="body" style={styles.text}>
+        Ledgr could not reach the server ({code}).
+      </T>
       <Button label="Try again" onPress={evaluate} />
       <Button label="Sign out" kind="plain" onPress={signOut} />
     </Screen>
@@ -173,11 +190,16 @@ const makeStyles = (colors: Colors) =>
   StyleSheet.create({
     screen: { flex: 1, justifyContent: 'center', backgroundColor: colors.background },
     box: { padding: space.xl },
-    brand: { fontSize: 15, fontWeight: '700', color: colors.accent, marginBottom: space.sm },
-    title: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: space.lg },
-    text: { fontSize: 15, color: colors.text, lineHeight: 21, marginBottom: space.md },
-    hint: { fontSize: 13, color: colors.muted },
-    input: { paddingVertical: space.md, marginBottom: space.md },
-    code: { fontSize: 24, letterSpacing: 6, textAlign: 'center' },
-    error: { color: colors.loss, marginBottom: space.sm },
+    brand: { marginBottom: space.sm },
+    title: { marginBottom: space.lg },
+    text: { marginBottom: space.md },
+    input: { marginBottom: space.md },
+    code: {
+      fontSize: 28,
+      lineHeight: 34,
+      letterSpacing: 6,
+      textAlign: 'center',
+      fontVariant: ['tabular-nums'],
+    },
+    error: { marginBottom: space.sm },
   });

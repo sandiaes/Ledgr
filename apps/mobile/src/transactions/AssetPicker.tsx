@@ -1,8 +1,9 @@
 import type { AssetRecord } from '@ledgr/client';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Badge } from '../positions/PositionRowView';
 import { Button, Field } from '../ui/parts';
+import { T } from '../ui/T';
 import { space, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 
@@ -45,22 +46,30 @@ export function AssetPicker(props: {
     const a = props.selected;
     return (
       <View style={styles.block}>
-        <Text style={styles.label}>Asset</Text>
+        <T variant="overline" tone="muted" style={styles.label}>
+          Asset
+        </T>
         <View style={styles.selected}>
           <View style={styles.flex}>
-            <Text style={styles.ticker}>
+            <T variant="headline">
               {a.ticker || a.name} {pricePending(a) ? <Badge text="price pending" /> : null}
-            </Text>
-            <Text style={styles.muted} numberOfLines={1}>
+            </T>
+            <T variant="sub" tone="muted" numberOfLines={1}>
               {a.name}
               {a.isin ? ` · ${a.isin}` : ''}
-            </Text>
+            </T>
           </View>
           <Pressable onPress={() => setOpen(true)} accessibilityRole="button" hitSlop={8}>
-            <Text style={styles.link}>Change</Text>
+            <T variant="headline" tone="accent">
+              Change
+            </T>
           </Pressable>
         </View>
-        {props.error ? <Text style={styles.error}>{props.error}</Text> : null}
+        {props.error ? (
+          <T variant="sub" tone="loss" style={styles.error}>
+            {props.error}
+          </T>
+        ) : null}
       </View>
     );
   }
@@ -74,7 +83,11 @@ export function AssetPicker(props: {
         autoCapitalize="none"
         error={props.error}
       />
-      {props.assets.length === 0 ? <Text style={styles.muted}>{props.emptyText}</Text> : null}
+      {props.assets.length === 0 ? (
+        <T variant="sub" tone="muted">
+          {props.emptyText}
+        </T>
+      ) : null}
       {matches.slice(0, MAX_SHOWN).map((a) => (
         <Pressable
           key={a.id}
@@ -87,17 +100,19 @@ export function AssetPicker(props: {
           accessibilityLabel={`Pick ${a.ticker || a.name}`}
           style={styles.option}
         >
-          <Text style={styles.ticker}>
+          <T variant="headline">
             {a.ticker || a.name} {pricePending(a) ? <Badge text="price pending" /> : null}
-          </Text>
-          <Text style={styles.muted} numberOfLines={1}>
+          </T>
+          <T variant="sub" tone="muted" numberOfLines={1}>
             {a.name}
             {a.isin ? ` · ${a.isin}` : ''}
-          </Text>
+          </T>
         </Pressable>
       ))}
       {matches.length > MAX_SHOWN ? (
-        <Text style={styles.muted}>{matches.length - MAX_SHOWN} more: keep typing.</Text>
+        <T variant="sub" tone="muted">
+          {matches.length - MAX_SHOWN} more: keep typing.
+        </T>
       ) : null}
       {props.onAddAsset ? (
         <Button label="Add asset" kind="plain" onPress={props.onAddAsset} />
@@ -109,16 +124,15 @@ export function AssetPicker(props: {
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
     block: { marginBottom: space.md },
-    label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
+    label: { marginBottom: space.xs },
     selected: { flexDirection: 'row', alignItems: 'center', gap: space.md },
     flex: { flex: 1 },
-    ticker: { fontSize: 15, fontWeight: '600', color: colors.text },
-    muted: { fontSize: 12, color: colors.muted },
-    link: { color: colors.accent, fontWeight: '600' },
-    error: { fontSize: 13, color: colors.loss, marginTop: 4 },
+    error: { marginTop: space.xs },
     option: {
+      minHeight: 48,
+      justifyContent: 'center',
       paddingVertical: space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
+      borderBottomColor: colors.divider,
     },
   });

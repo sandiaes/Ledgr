@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, type ComponentRef } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { formatDate, formatTime } from '../format';
 import { usePortfolioSummary } from '../header/PortfolioSummary';
@@ -22,6 +23,8 @@ import {
 
 export function DashboardScreen() {
   const colors = useColors();
+  const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
+  useScrollToTop(scroll);
   const state = usePortfolioSummary();
   const assets: AssetNames = useMemo(
     () => new Map(state.status === 'ready' ? state.ledger.assets.map((a) => [a.id, a]) : []),
@@ -86,7 +89,7 @@ export function DashboardScreen() {
     );
   }
   return (
-    <ScrollView refreshControl={refresh} contentContainerStyle={styles.content}>
+    <ScrollView ref={scroll} refreshControl={refresh} contentContainerStyle={styles.content}>
       <IncludeCertificadosSwitch />
       <View>{body}</View>
     </ScrollView>

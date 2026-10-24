@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AppState, StyleSheet, Text, View } from 'react-native';
+import { AppState, StyleSheet, View } from 'react-native';
 import { useGate } from '../auth/AuthGate';
 import { useServices } from '../services';
 import { useSettings } from '../settings/SettingsProvider';
 import { Button } from '../ui/parts';
+import { T } from '../ui/T';
 import { space, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 
@@ -84,8 +85,17 @@ function LockScreen({ onUnlock }: { onUnlock(): Promise<void> }) {
 
   return (
     <View style={styles.screen}>
-      <Text style={styles.title}>Ledgr is locked</Text>
-      {failed ? <Text style={styles.text}>Unlock with your fingerprint, face or PIN.</Text> : null}
+      <T variant="title2" tone="accent" style={styles.brand}>
+        Ledgr
+      </T>
+      <T variant="title1" accessibilityRole="header" style={styles.title}>
+        Ledgr is locked
+      </T>
+      {failed ? (
+        <T variant="body" tone="muted" style={styles.text}>
+          Unlock with your fingerprint, face or PIN.
+        </T>
+      ) : null}
       <Button label="Unlock" onPress={unlock} />
       <Button label="Sign out" kind="plain" onPress={signOut} />
     </View>
@@ -100,6 +110,7 @@ const makeStyles = (colors: Colors) =>
       padding: space.xl,
       backgroundColor: colors.background,
     },
-    title: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: space.md },
-    text: { fontSize: 15, color: colors.muted },
+    brand: { marginBottom: space.sm },
+    title: { marginBottom: space.md },
+    text: { marginBottom: space.sm },
   });

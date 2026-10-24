@@ -4,7 +4,7 @@ import {
   type CertificadoSubscriptionView,
 } from '@ledgr/core';
 import { useMemo } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { errorCode } from '../auth/errors';
 import { useLedger, useToday } from '../data/usePortfolio';
 import { formatPeriod } from '../format';
@@ -13,9 +13,10 @@ import { Badge } from '../positions/PositionRowView';
 import type { Ledger } from '../services';
 import { brokerLabel, useNames } from '../ui/labels';
 import { Amount } from '../ui/Amount';
-import { Money, Units } from '../ui/Money';
-import { Banner, Button, Card, Line } from '../ui/parts';
-import { space, type Colors } from '../ui/theme';
+import { Banner, Button, Line } from '../ui/parts';
+import { Section } from '../ui/Section';
+import { T } from '../ui/T';
+import { space } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 
 /** "Série E" for a subscription's series (its code when the name is not known). */
@@ -56,7 +57,11 @@ export function CertificadosScreen() {
       <Banner tone="error">Could not load the certificados ({errorCode(ledger.error)}).</Banner>
     );
   } else if (!ledger.data || !subs) {
-    body = <Text style={styles.status}>Loading…</Text>;
+    body = (
+      <T variant="sub" tone="muted" style={styles.status}>
+        Loading…
+      </T>
+    );
   } else if ('error' in subs) {
     body = <Banner tone="error">The certificados could not be valued ({subs.error}).</Banner>;
   } else {
@@ -71,9 +76,11 @@ export function CertificadosScreen() {
           </Banner>
         ) : null}
         {subs.length === 0 ? (
-          <Card>
-            <Text style={styles.muted}>No certificados held.</Text>
-          </Card>
+          <Section>
+            <T variant="sub" tone="muted">
+              No certificados held.
+            </T>
+          </Section>
         ) : (
           subs.map((s) => (
             <Subscription
@@ -110,46 +117,46 @@ function Subscription(props: { s: CertificadoSubscriptionView; series: string; b
   const styles = useStyles(makeStyles);
   const { s } = props;
   return (
-    <Card testID="ca-row">
+    <Section testID="ca-row">
       <Line
         label={`${props.series} · subscribed ${formatPeriod(s.subscribedOn.slice(0, 7))}`}
         strong
       >
-        <Money value={s.valueEur} style={styles.strong} />
+        <Amount value={s.valueEur} variant="headline" />
       </Line>
-      <Text style={styles.muted}>{props.broker} · value from factor</Text>
+      <T variant="sub" tone="muted" style={styles.sub}>
+        {props.broker} · value from factor
+      </T>
       <Line label="Units held">
-        <Units value={s.units} style={styles.value} />
+        <Amount kind="units" value={s.units} variant="body" />
       </Line>
       <Line
         label={
           s.factorMonth ? `Factor of ${formatPeriod(s.factorMonth.slice(0, 7))}` : 'No factor yet'
         }
       >
-        <Amount value={s.unitValueEur} currency="EUR" dp={5} style={styles.value} />
+        <Amount value={s.unitValueEur} currency="EUR" dp={5} variant="body" />
       </Line>
       <Line label="Gain">
-        <Money value={s.gainEur} sign colored style={styles.value} />
+        <Amount value={s.gainEur} sign tone variant="body" />
       </Line>
       <View style={styles.age}>
-        <Text style={styles.muted}>
+        <T variant="sub" tone="muted">
           {s.factorMonth
             ? `Factor ${s.ageDays} days old`
             : `Subscription price, ${s.ageDays} days old`}
-        </Text>
+        </T>
         {s.stale ? <Badge text="over 35 days" tone="danger" /> : null}
       </View>
-    </Card>
+    </Section>
   );
 }
 
-const makeStyles = (colors: Colors) =>
+const makeStyles = () =>
   StyleSheet.create({
     content: { paddingTop: space.md, paddingBottom: space.xl },
-    status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
-    muted: { fontSize: 12, color: colors.muted, marginBottom: space.xs },
-    value: { fontSize: 14, color: colors.text },
-    strong: { fontSize: 15, fontWeight: '700', color: colors.text },
+    status: { textAlign: 'center', marginTop: space.xl },
+    sub: { marginBottom: space.xs },
     age: { flexDirection: 'row', gap: space.sm, alignItems: 'center', marginTop: space.xs },
     buttons: { marginHorizontal: space.lg },
   });

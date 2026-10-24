@@ -1,5 +1,6 @@
 import type { IsoDate, PortfolioUnvalued, ScopedView } from '@ledgr/core';
-import type { ReactElement, ReactNode } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
+import { useRef, type ReactElement, type ReactNode, type ComponentRef } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import type { PortfolioResult, PortfolioState } from '../data/usePortfolio';
 import { formatDate, formatTime } from '../format';
@@ -47,6 +48,9 @@ export function PortfolioScreen<V extends { status: string; today: IsoDate }>(pr
   children: (view: Valued<V>, ready: Ready<V>, frame: ListFrame) => ReactNode;
 }) {
   const colors = useColors();
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  // Pressing the current tab again scrolls to the top (only on a tab screen).
+  useScrollToTop(scrollRef);
   const { state } = props;
   const refresh = (
     <RefreshControl
@@ -58,6 +62,7 @@ export function PortfolioScreen<V extends { status: string; today: IsoDate }>(pr
   );
   const scroll = (content: ReactNode) => (
     <ScrollView
+      ref={scrollRef}
       refreshControl={refresh}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"

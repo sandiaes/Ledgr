@@ -8,12 +8,15 @@ import {
 } from '@ledgr/core';
 import { useMutation } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { errorCode } from '../auth/errors';
 import { useLedger, useRefreshAfterWrite } from '../data/usePortfolio';
 import { useServices } from '../services';
-import { Banner, Button, Card, Chip, Field, Segmented } from '../ui/parts';
-import { space, type Colors } from '../ui/theme';
+import { Banner, Button, Chip, Field } from '../ui/parts';
+import { Section } from '../ui/Section';
+import { SegmentedControl } from '../ui/SegmentedControl';
+import { T } from '../ui/T';
+import { space } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 import { assetIssueText } from './messages';
 
@@ -85,15 +88,17 @@ export function AddAssetForm(props: { onDone(assetId: string): void; onCancel():
   };
 
   return (
-    <Card title="Add asset">
+    <Section title="Add asset">
       <Field
         label="Name"
         value={form.name}
         onChangeText={(name) => set('name', { name })}
         error={errorOf('name')}
       />
-      <Text style={styles.label}>Type</Text>
-      <Segmented
+      <T variant="overline" tone="muted" style={styles.label}>
+        Type
+      </T>
+      <SegmentedControl
         options={TYPES}
         value={form.assetType}
         onChange={(assetType) =>
@@ -117,7 +122,9 @@ export function AddAssetForm(props: { onDone(assetId: string): void; onCancel():
       />
       {form.assetType === 'crypto' ? null : (
         <>
-          <Text style={styles.label}>Exchange</Text>
+          <T variant="overline" tone="muted" style={styles.label}>
+            Exchange
+          </T>
           <View style={styles.chips}>
             {ASSET_EXCHANGES.map((mic) => (
               <Chip
@@ -128,7 +135,11 @@ export function AddAssetForm(props: { onDone(assetId: string): void; onCancel():
               />
             ))}
           </View>
-          {errorOf('exchange') ? <Text style={styles.error}>{errorOf('exchange')}</Text> : null}
+          {errorOf('exchange') ? (
+            <T variant="sub" tone="loss" style={styles.error}>
+              {errorOf('exchange')}
+            </T>
+          ) : null}
         </>
       )}
       <Field
@@ -142,10 +153,10 @@ export function AddAssetForm(props: { onDone(assetId: string): void; onCancel():
         hint="The currency the exchange quotes it in (not what you paid in)."
         error={touched.has('currency') || effective.currency ? errorOf('currency') : undefined}
       />
-      <Text style={styles.note}>
+      <T variant="caption" tone="muted" style={styles.note}>
         Saved as “price pending”: it is valued at your trade price until the next daily price run
         finds its symbol and fetches its closes.
-      </Text>
+      </T>
       {mutation.error ? (
         <Banner tone="error">
           Not saved ({errorCode(mutation.error)}). Tap Save to try again: it will not add the asset
@@ -162,14 +173,14 @@ export function AddAssetForm(props: { onDone(assetId: string): void; onCancel():
         busy={mutation.isPending}
       />
       <Button label="Cancel" kind="plain" onPress={props.onCancel} />
-    </Card>
+    </Section>
   );
 }
 
-const makeStyles = (colors: Colors) =>
+const makeStyles = () =>
   StyleSheet.create({
-    label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
+    label: { marginBottom: space.xs },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.md },
-    error: { fontSize: 13, color: colors.loss, marginTop: -space.sm, marginBottom: space.md },
-    note: { fontSize: 12, color: colors.muted, marginBottom: space.sm },
+    error: { marginTop: -space.sm, marginBottom: space.md },
+    note: { marginBottom: space.sm },
   });

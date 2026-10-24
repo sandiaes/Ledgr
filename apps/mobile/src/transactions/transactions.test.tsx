@@ -7,6 +7,7 @@ import { fakeAuth, fakeData, fakeServices, portfolioLedger } from '../test/fakes
 import { AMOUNT_TEXT } from '../test/leaks';
 import { goToNew } from '../test/nav';
 import { MASK } from '../ui/Amount';
+import type { Settings } from '../settings/settings';
 
 jest.mock('react-native-gifted-charts', () => ({
   LineChart: () => null,
@@ -20,17 +21,25 @@ const today = localDate(new Date(), TIME_ZONE);
 //   Degiro  VWCE 10 @ 100 (2025-01-02), BTC 0.1, dividend 12 on VWCE
 //   IBKR    VWCE 5 @ 120, AAPL 4 (USD), MSFT 2 bought and sold (closed), fee 5
 //   AforroNet  certificado subscription
-async function openApp(settings: { hideValues?: boolean } = {}) {
+// The drawer's three options on, so the form offers everything these tests exercise; the
+// 'New transaction options' tests below start from the defaults instead.
+const ALL_OPTIONS = { dividend: true, interest: true, fee: true };
+
+async function openApp(settings: Partial<Settings> = {}) {
   const fixture = portfolioLedger(today);
   const data = fakeData(fixture);
   const { auth, state } = fakeAuth({ level: 'aal2' });
-  const services = fakeServices({ auth, data, settings });
+  const services = fakeServices({
+    auth,
+    data,
+    settings: { newTxOptions: ALL_OPTIONS, ...settings },
+  });
   await render(<AppRoot services={services} />);
   await screen.findByText('Total gain');
   return { data, state, services };
 }
 
-async function openNew(settings: { hideValues?: boolean } = {}) {
+async function openNew(settings: Partial<Settings> = {}) {
   const app = await openApp(settings);
   await goToNew();
   await screen.findByLabelText('Type Buy');
@@ -175,7 +184,6 @@ describe('New transaction: validation', () => {
     expect(screen.queryByLabelText('Fee (€, optional)')).toBeNull();
     expect(screen.getByLabelText('Amount received (€)')).toBeOnTheScreen();
 
-    await fireEvent.press(screen.getByLabelText('More types'));
     await fireEvent.press(screen.getByLabelText('Type Interest'));
     expect(screen.queryByLabelText('Asset')).toBeNull(); // cash interest has no asset
   });

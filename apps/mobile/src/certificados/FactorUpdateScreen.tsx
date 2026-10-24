@@ -9,15 +9,24 @@ import {
 } from '@ledgr/core';
 import { useMutation } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
+import { Icon } from '../ui/Icon';
 import { errorCode } from '../auth/errors';
 import { useLedger, useRefreshAfterWrite, useToday } from '../data/usePortfolio';
 import { formatPeriod } from '../format';
 import { useServices, type Ledger } from '../services';
 import { Amount } from '../ui/Amount';
-import { Money, Pct } from '../ui/Money';
-import { Banner, Button, Card, Field } from '../ui/parts';
-import { space, type Colors } from '../ui/theme';
+import { Banner, Button, Field } from '../ui/parts';
+import { Section } from '../ui/Section';
+import { T } from '../ui/T';
+import { space, TOUCH_TARGET, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 import { seriesLabel } from './CertificadosScreen';
 
@@ -48,7 +57,13 @@ export function FactorUpdateScreen() {
       </ScrollView>
     );
   }
-  if (!ledger.data) return <Text style={styles.status}>Loading…</Text>;
+  if (!ledger.data) {
+    return (
+      <T variant="sub" tone="muted" style={styles.status}>
+        Loading…
+      </T>
+    );
+  }
   return <FactorUpdate ledger={ledger.data} today={today} />;
 }
 
@@ -107,67 +122,76 @@ function FactorUpdate({ ledger, today }: { ledger: Ledger; today: IsoDate }) {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Card>
-        <View style={styles.month}>
-          <Pressable
-            onPress={() => step(-1)}
-            accessibilityRole="button"
-            accessibilityLabel="Previous month"
-            hitSlop={12}
-          >
-            <Text style={styles.arrow}>‹</Text>
-          </Pressable>
-          <Text style={styles.monthText}>{formatPeriod(month.slice(0, 7))}</Text>
-          <Pressable
-            onPress={() => step(1)}
-            disabled={month >= thisMonth}
-            accessibilityRole="button"
-            accessibilityLabel="Next month"
-            accessibilityState={{ disabled: month >= thisMonth }}
-            hitSlop={12}
-          >
-            <Text style={[styles.arrow, month >= thisMonth && styles.off]}>›</Text>
-          </Pressable>
-        </View>
-        <Text style={styles.muted}>
-          The value of one unit as AforroNet shows it, in force from the 1st of the month.
-        </Text>
-      </Card>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'android' ? 'padding' : 'height'}
+    >
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Section>
+          <View style={styles.month}>
+            <Pressable
+              onPress={() => step(-1)}
+              accessibilityRole="button"
+              accessibilityLabel="Previous month"
+              style={styles.arrow}
+            >
+              <Icon name="back" tone="accent" />
+            </Pressable>
+            <T variant="headline">{formatPeriod(month.slice(0, 7))}</T>
+            <Pressable
+              onPress={() => step(1)}
+              disabled={month >= thisMonth}
+              accessibilityRole="button"
+              accessibilityLabel="Next month"
+              accessibilityState={{ disabled: month >= thisMonth }}
+              style={styles.arrow}
+            >
+              <Icon name="forward" tone={month >= thisMonth ? 'faint' : 'accent'} />
+            </Pressable>
+          </View>
+          <T variant="sub" tone="muted">
+            The value of one unit as AforroNet shows it, in force from the 1st of the month.
+          </T>
+        </Section>
 
-      {savedMonth === month ? <Banner tone="warning">Factors saved.</Banner> : null}
-      {lines.length === 0 ? (
-        <Card>
-          <Text style={styles.muted}>No certificados held.</Text>
-        </Card>
-      ) : null}
-      {lines.map((l) => (
-        <FactorInput
-          key={l.subscriptionId}
-          line={l}
-          series={seriesLabel(ledger, l.seriesId)}
-          text={inputs[l.subscriptionId] ?? ''}
-          onChange={(t) => setInputs((i) => ({ ...i, [l.subscriptionId]: t }))}
-        />
-      ))}
-
-      {mutation.error ? (
-        <Banner tone="error">
-          Not saved ({errorCode(mutation.error)}). Tap Save to try again.
-        </Banner>
-      ) : null}
-      {open.length > 0 ? (
-        <View style={styles.buttons}>
-          <Button
-            label={toSave.length > 1 ? `Save ${toSave.length} factors` : 'Save factor'}
-            onPress={() => void save()}
-            disabled={toSave.length === 0 || invalid}
-            busy={mutation.isPending}
+        {savedMonth === month ? <Banner tone="warning">Factors saved.</Banner> : null}
+        {lines.length === 0 ? (
+          <Section>
+            <T variant="sub" tone="muted">
+              No certificados held.
+            </T>
+          </Section>
+        ) : null}
+        {lines.map((l) => (
+          <FactorInput
+            key={l.subscriptionId}
+            line={l}
+            series={seriesLabel(ledger, l.seriesId)}
+            text={inputs[l.subscriptionId] ?? ''}
+            onChange={(t) => setInputs((i) => ({ ...i, [l.subscriptionId]: t }))}
           />
-          <Text style={styles.note}>Snapshots pick this up in tomorrow’s daily run.</Text>
-        </View>
-      ) : null}
-    </ScrollView>
+        ))}
+
+        {mutation.error ? (
+          <Banner tone="error">
+            Not saved ({errorCode(mutation.error)}). Tap Save to try again.
+          </Banner>
+        ) : null}
+        {open.length > 0 ? (
+          <View style={styles.buttons}>
+            <Button
+              label={toSave.length > 1 ? `Save ${toSave.length} factors` : 'Save factor'}
+              onPress={() => void save()}
+              disabled={toSave.length === 0 || invalid}
+              busy={mutation.isPending}
+            />
+            <T variant="caption" tone="muted" style={styles.note}>
+              Snapshots pick this up in tomorrow’s daily run.
+            </T>
+          </View>
+        ) : null}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -187,21 +211,31 @@ function FactorInput(props: {
     ? factorChange({ previous: previous?.factor ?? null, next, units: line.units })
     : null;
   return (
-    <Card testID="factor-line">
-      <Text style={styles.title}>{label}</Text>
+    <Section testID="factor-line">
+      <T variant="headline" style={styles.title}>
+        {label}
+      </T>
       <View style={styles.inline}>
-        <Text style={styles.muted}>
+        <T variant="sub" tone="muted">
           {previous ? `Last: ${formatPeriod(previous.month.slice(0, 7))}` : 'No earlier factor'}
-        </Text>
+        </T>
         {previous ? (
-          <Amount value={previous.factor} currency="EUR" dp={5} style={styles.muted} />
+          <Amount
+            value={previous.factor}
+            currency="EUR"
+            dp={5}
+            variant="sub"
+            style={styles.muted}
+          />
         ) : null}
       </View>
       {line.recorded ? (
         <View style={styles.inline}>
-          <Text style={styles.value}>Recorded:</Text>
-          <Amount value={line.recorded.factor} currency="EUR" dp={5} style={styles.value} />
-          <Text style={styles.muted}>(read-only)</Text>
+          <T variant="body">Recorded:</T>
+          <Amount value={line.recorded.factor} currency="EUR" dp={5} variant="body" />
+          <T variant="sub" tone="muted">
+            (read-only)
+          </T>
         </View>
       ) : (
         <Field
@@ -215,32 +249,40 @@ function FactorInput(props: {
       )}
       {change?.valueEur ? (
         <View style={styles.inline} testID="factor-change">
-          <Text style={styles.muted}>Change vs last month, from factor:</Text>
-          <Money value={change.valueEur} sign colored style={styles.value} />
-          <Pct value={change.pct} sign style={styles.value} />
+          <T variant="sub" tone="muted">
+            Change vs last month, from factor:
+          </T>
+          <Amount value={change.valueEur} sign tone variant="body" />
+          <Amount kind="pct" value={change.pct} sign variant="body" />
         </View>
       ) : null}
       {change?.decreased ? (
-        <Text style={styles.warning}>Lower than last month: check it (it can still be saved).</Text>
+        <T variant="sub" tone="warning">
+          Lower than last month: check it (it can still be saved).
+        </T>
       ) : null}
-    </Card>
+    </Section>
   );
 }
 
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
+    flex: { flex: 1 },
     content: { paddingTop: space.md, paddingBottom: space.xl },
-    status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
+    status: { textAlign: 'center', marginTop: space.xl },
     month: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
       marginBottom: space.xs,
     },
-    monthText: { fontSize: 17, fontWeight: '700', color: colors.text },
-    arrow: { fontSize: 28, color: colors.accent, paddingHorizontal: space.md },
-    off: { color: colors.border },
-    title: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: space.xs },
+    arrow: {
+      minWidth: TOUCH_TARGET,
+      minHeight: TOUCH_TARGET,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    title: { marginBottom: space.xs },
     inline: {
       flexDirection: 'row',
       gap: 4,
@@ -248,9 +290,7 @@ const makeStyles = (colors: Colors) =>
       flexWrap: 'wrap',
       marginBottom: space.xs,
     },
-    muted: { fontSize: 12, color: colors.muted },
-    value: { fontSize: 14, color: colors.text },
-    warning: { fontSize: 13, color: colors.warningText },
-    note: { fontSize: 12, color: colors.muted, marginTop: space.sm, textAlign: 'center' },
+    muted: { color: colors.muted },
+    note: { marginTop: space.sm, textAlign: 'center' },
     buttons: { marginHorizontal: space.lg },
   });

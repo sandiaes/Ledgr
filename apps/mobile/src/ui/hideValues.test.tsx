@@ -7,7 +7,6 @@ import { SettingsProvider } from '../settings/SettingsProvider';
 import { fakeAuth, fakeData, fakeServices, sampleLedger } from '../test/fakes';
 import { AMOUNT_TEXT } from '../test/leaks';
 import { Amount, MASK } from './Amount';
-import { Money } from './Money';
 
 jest.mock('../dashboard/ValueChart', () => ({ ValueChart: () => null }));
 jest.mock('../dashboard/AllocationDonut', () => ({ AllocationDonut: () => null }));
@@ -54,8 +53,8 @@ describe('Amount with privacy on', () => {
       withSettings(
         true,
         <>
-          <Money value={dec('-1234.5')} sign colored />
-          <Money value={null} />
+          <Amount value={dec('-1234.5')} sign tone />
+          <Amount value={null} />
           <Amount kind="units" value={dec('3.5')} />
           <Amount kind="pct" value={dec('0.0345')} sign tone />
           <Amount value={dec('412.37')} currency="USD" />
@@ -78,7 +77,7 @@ describe('Amount with privacy on', () => {
       withSettings(
         false,
         <>
-          <Money value={dec('-1234.5')} sign />
+          <Amount value={dec('-1234.5')} sign />
           <Amount kind="pct" value={dec('0.0345')} sign tone />
           <Amount kind="units" value={dec('1000.5')} />
         </>,

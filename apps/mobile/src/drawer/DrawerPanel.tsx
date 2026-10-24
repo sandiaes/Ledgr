@@ -23,6 +23,7 @@ import {
   LOCK_TIMEOUTS,
   type AppearancePreference,
   type LockTimeout,
+  type NewTxOptions,
 } from '../settings/settings';
 import { useSettings } from '../settings/SettingsProvider';
 
@@ -84,9 +85,9 @@ function RunLine(props: {
 }
 
 /**
- * What the menu button opens (docs/design.md §6.2). U1 ships the shell: the sections are
- * there, holding today's Settings controls as they were; U3 restyles them and adds the New
- * transaction options. The privacy switch is the one the eye in the header toggles.
+ * What the menu button opens (docs/design.md §6.2): appearance, privacy, the New transaction
+ * options, security, data, the Certificados link, sign out and the version. The privacy
+ * switch is the one the eye in the header toggles.
  */
 export function DrawerPanel({ closeDrawer }: { closeDrawer(): void }) {
   // Nothing is built (or fetched, like the job runs) until the drawer is first opened.
@@ -118,6 +119,8 @@ function DrawerSections({ open, closeDrawer }: { open: boolean; closeDrawer(): v
       .then(setLevel);
   }, [device]);
   const noDeviceLock = level === 'none';
+  const setOption = (change: Partial<NewTxOptions>) =>
+    update({ newTxOptions: { ...settings.newTxOptions, ...change } });
 
   return (
     <ScrollView
@@ -155,9 +158,27 @@ function DrawerSections({ open, closeDrawer }: { open: boolean; closeDrawer(): v
         </Row>
       </Section>
       <Section title="New transaction options">
-        <T variant="caption" tone="faint">
-          Dividend and Interest switches arrive with the New transaction update.
-        </T>
+        <Row label="Dividend" hint="Adds the Dividend type to New transaction.">
+          <Switch
+            value={settings.newTxOptions.dividend}
+            onValueChange={(on) => setOption({ dividend: on })}
+            accessibilityLabel="Dividend"
+          />
+        </Row>
+        <Row label="Interest" hint="Adds the Interest type to New transaction.">
+          <Switch
+            value={settings.newTxOptions.interest}
+            onValueChange={(on) => setOption({ interest: on })}
+            accessibilityLabel="Interest"
+          />
+        </Row>
+        <Row label="Fee" hint="Adds the Fee field to a buy or a sell.">
+          <Switch
+            value={settings.newTxOptions.fee}
+            onValueChange={(on) => setOption({ fee: on })}
+            accessibilityLabel="Fee"
+          />
+        </Row>
       </Section>
       <Section title="Security">
         <Row

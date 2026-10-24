@@ -6,7 +6,7 @@ import { TIME_ZONE } from '../data/usePortfolio';
 import { DEFAULT_SETTINGS, parseSettings, type Settings } from '../settings/settings';
 import { fakeAuth, fakeData, fakeServices, portfolioLedger } from '../test/fakes';
 import { openDrawer } from '../test/nav';
-import { Money } from './Money';
+import { Amount } from './Amount';
 import { resolveScheme } from './ThemeProvider';
 import { themes } from './theme';
 
@@ -73,20 +73,17 @@ describe('Appearance setting', () => {
   });
 
   it('keeps the New transaction options off unless saved, and reads them defensively', () => {
-    expect(DEFAULT_SETTINGS.newTxTypes).toEqual({ dividend: false, interest: false });
-    expect(parseSettings(null).newTxTypes).toEqual({ dividend: false, interest: false });
-    expect(parseSettings({ newTxTypes: { dividend: true } }).newTxTypes).toEqual({
+    const off = { dividend: false, interest: false, fee: false };
+    expect(DEFAULT_SETTINGS.newTxOptions).toEqual(off);
+    expect(parseSettings(null).newTxOptions).toEqual(off);
+    expect(parseSettings({ newTxOptions: { dividend: true } }).newTxOptions).toEqual({
+      ...off,
       dividend: true,
-      interest: false,
     });
-    expect(parseSettings({ newTxTypes: 'yes' }).newTxTypes).toEqual({
-      dividend: false,
-      interest: false,
-    });
-    expect(parseSettings({ newTxTypes: { dividend: 1, interest: true } }).newTxTypes).toEqual({
-      dividend: false,
-      interest: true,
-    });
+    expect(parseSettings({ newTxOptions: 'yes' }).newTxOptions).toEqual(off);
+    expect(
+      parseSettings({ newTxOptions: { dividend: 1, interest: true, fee: true } }).newTxOptions,
+    ).toEqual({ dividend: false, interest: true, fee: true });
   });
 
   it('resolves a fixed choice, or the phone for System', () => {
@@ -233,8 +230,8 @@ describe('theme tokens', () => {
   it('keeps the +/- sign on coloured gains and losses, so colour is never the only cue', async () => {
     await render(
       <>
-        <Money value={dec('12.5')} sign colored />
-        <Money value={dec('-12.5')} sign colored />
+        <Amount value={dec('12.5')} sign tone />
+        <Amount value={dec('-12.5')} sign tone />
       </>,
     );
     const [gain, loss] = screen.getAllByTestId('money');
