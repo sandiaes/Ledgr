@@ -1,79 +1,88 @@
 import { buildPositions } from '@ledgr/core';
-import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { useMemo, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { usePortfolio } from '../data/usePortfolio';
-import { useRootNavigation, useRootRoute } from '../navigation';
+import { useRootRoute } from '../navigation';
+import { Amount } from '../ui/Amount';
+import { EmptyState } from '../ui/EmptyState';
+import { FigureLine } from '../ui/FigureLine';
 import { brokerLabel, useNames } from '../ui/labels';
-import { Money, Pct } from '../ui/Money';
-import { Card, Line } from '../ui/parts';
 import { PortfolioScreen } from '../ui/PortfolioScreen';
 import { excludesCertificados } from '../ui/Scope';
-import { type Colors } from '../ui/theme';
-import { useStyles } from '../ui/ThemeProvider';
+import { Section } from '../ui/Section';
+import { SkeletonRows } from '../ui/Skeleton';
+import { T } from '../ui/T';
+import { space } from '../ui/theme';
 import { DEFAULT_SORT, sortPositions, type Sort } from './listing';
 import { PositionRowView } from './PositionRowView';
 import { SortPanel } from './PositionsScreen';
 
 /** One broker: its figures and its own units of each position (FIFO per account). */
 export function BrokerDetailScreen() {
-  const styles = useStyles(makeStyles);
   const { accountId } = useRootRoute<'BrokerDetail'>().params;
   const state = usePortfolio(buildPositions);
   const names = useNames(state.status === 'ready' ? state.ledger : null);
-  const navigation = useRootNavigation();
   const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
-  useEffect(() => {
-    navigation.setOptions({ title: brokerLabel(names, accountId) });
-  }, [navigation, names, accountId]);
   const view = state.status === 'ready' && state.view.status === 'ok' ? state.view : null;
   const broker = view?.brokers.find((b) => b.accountId === accountId);
   const rows = useMemo(() => (broker ? sortPositions(broker.positions, sort) : []), [broker, sort]);
   return (
-    <PortfolioScreen state={state} what="broker">
+    <PortfolioScreen state={state} what="broker" skeleton={<SkeletonRows n={8} />}>
       {() =>
         !broker ? (
-          <Card>
-            <Text style={styles.muted}>
-              {excludesCertificados(view?.excludeTypes)
-                ? 'Nothing at this broker without certificados.'
-                : 'Nothing held or realized at this broker.'}
-            </Text>
-          </Card>
+          <EmptyState
+            title={
+              excludesCertificados(view?.excludeTypes)
+                ? 'Nothing at this broker without certificados'
+                : 'Nothing held or realized at this broker'
+            }
+          />
         ) : (
           <>
-            <Card>
-              <Line label="Value" strong>
-                <Money value={broker.valueEur} style={styles.strong} />
-              </Line>
-              <Line label="Weight">
-                <Pct value={broker.weight} />
-              </Line>
-              <Line label="Cost basis">
-                <Money value={broker.costBasisEur} />
-              </Line>
-              <Line label="Unrealized">
-                <Money value={broker.unrealizedEur} sign />
-              </Line>
-              <Line label="Realized">
-                <Money value={broker.realizedEur} sign />
-              </Line>
-              <Line label="Income">
-                <Money value={broker.incomeNetEur} sign />
-              </Line>
-              <Line label="Other costs">
-                <Money value={broker.otherCostsEur.neg()} sign />
-              </Line>
-              <Line label="Gain" strong>
-                <Money value={broker.totalGainEur} sign colored style={styles.strong} />
-              </Line>
-            </Card>
+            <View style={styles.hero}>
+              <T variant="headline">{brokerLabel(names, accountId)}</T>
+              <Amount value={broker.valueEur} variant="title1" />
+            </View>
+            <Section title="Figures">
+              <FigureLine label="Weight">
+                <Amount kind="pct" value={broker.weight} />
+              </FigureLine>
+              <FigureLine label="Cost basis">
+                <Amount value={broker.costBasisEur} />
+              </FigureLine>
+              <FigureLine label="Unrealized">
+                <Amount value={broker.unrealizedEur} sign />
+              </FigureLine>
+              <FigureLine label="Realized">
+                <Amount value={broker.realizedEur} sign />
+              </FigureLine>
+              <FigureLine label="Income">
+                <Amount value={broker.incomeNetEur} sign />
+              </FigureLine>
+              <FigureLine label="Other costs">
+                <Amount value={broker.otherCostsEur.neg()} sign />
+              </FigureLine>
+              <FigureLine label="Gain" strong>
+                <Amount value={broker.totalGainEur} sign tone variant="headline" />
+              </FigureLine>
+            </Section>
             <SortPanel sort={sort} onChange={setSort} keys={['value', 'weight', 'gain']} />
-            <Card title="Holdings at this broker">
-              {rows.length === 0 ? <Text style={styles.muted}>No units held here.</Text> : null}
-              {rows.map((r) => (
-                <PositionRowView key={r.assetId} row={r} names={names} showDay={false} />
+            <Section title="Holdings at this broker">
+              {rows.length === 0 ? (
+                <T variant="sub" tone="muted">
+                  No units held here.
+                </T>
+              ) : null}
+              {rows.map((r, i) => (
+                <PositionRowView
+                  key={r.assetId}
+                  row={r}
+                  names={names}
+                  showDay={false}
+                  last={i === rows.length - 1}
+                />
               ))}
-            </Card>
+            </Section>
           </>
         )
       }
@@ -81,8 +90,6 @@ export function BrokerDetailScreen() {
   );
 }
 
-const makeStyles = (colors: Colors) =>
-  StyleSheet.create({
-    strong: { fontWeight: '700', color: colors.text },
-    muted: { color: colors.muted, fontSize: 13 },
-  });
+const styles = StyleSheet.create({
+  hero: { paddingHorizontal: space.lg, marginBottom: space.xl, gap: 2 },
+});

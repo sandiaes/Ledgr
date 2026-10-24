@@ -7,34 +7,36 @@ import {
   type PositionsView,
   type SeriesRange,
 } from '@ledgr/core';
-import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState, type ReactNode } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { errorCode } from '../auth/errors';
 import { usePortfolio, usePriceHistory } from '../data/usePortfolio';
 import { formatDate, formatPeriod } from '../format';
 import { useRootNavigation, useRootRoute } from '../navigation';
 import type { Market } from '../services';
-import { assetLabel, assetName, brokerLabel, typeLabel, useNames, type Names } from '../ui/labels';
 import { Amount } from '../ui/Amount';
-import { Money, Pct, Units } from '../ui/Money';
-import { Banner, Button, Card, Line, Segmented } from '../ui/parts';
+import { ChartFrame } from '../ui/ChartFrame';
+import { EmptyState, ErrorState } from '../ui/EmptyState';
+import { FigureLine } from '../ui/FigureLine';
+import { assetLabel, assetName, brokerLabel, typeLabel, useNames, type Names } from '../ui/labels';
+import { Banner, Button } from '../ui/parts';
 import { PortfolioScreen } from '../ui/PortfolioScreen';
 import { excludesCertificados } from '../ui/Scope';
+import { Section } from '../ui/Section';
+import { SegmentedControl } from '../ui/SegmentedControl';
+import { Skeleton, SkeletonChart } from '../ui/Skeleton';
+import { T } from '../ui/T';
 import { space, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 import { Badge, ValuationBadge } from './PositionRowView';
-import { PriceChart } from './PriceChart';
+import { PriceChart, PRICE_CHART_HEIGHT } from './PriceChart';
 
 export function PositionDetailScreen() {
   const { assetId } = useRootRoute<'PositionDetail'>().params;
   const state = usePortfolio(buildPositions);
   const names = useNames(state.status === 'ready' ? state.ledger : null);
-  const navigation = useRootNavigation();
-  useEffect(() => {
-    navigation.setOptions({ title: assetLabel(names, assetId) });
-  }, [navigation, names, assetId]);
   return (
-    <PortfolioScreen state={state} what="position">
+    <PortfolioScreen state={state} what="position" skeleton={<DetailSkeleton />}>
       {(view, ready) => (
         <Detail view={view} market={ready.market} assetId={assetId} names={names} />
       )}
@@ -42,8 +44,20 @@ export function PositionDetailScreen() {
   );
 }
 
+/** The hero figure, a few figure rows and the chart: the shape of the loaded screen. */
+function DetailSkeleton() {
+  return (
+    <View style={styles.skeleton}>
+      <Skeleton width="50%" height={16} />
+      <Skeleton width="60%" height={34} />
+      <Skeleton width="40%" height={14} />
+      <View style={styles.gap} />
+      <SkeletonChart />
+    </View>
+  );
+}
+
 function Detail(props: { view: PositionsView; market: Market; assetId: string; names: Names }) {
-  const styles = useStyles(makeStyles);
   const { view, assetId, names } = props;
   const navigation = useRootNavigation();
   const p = view.details[assetId];
@@ -51,92 +65,100 @@ function Detail(props: { view: PositionsView; market: Market; assetId: string; n
   const type = names.assets.get(assetId)?.assetType;
   if (type && excludesCertificados(view.excludeTypes) && type === 'certificado_aforro') {
     return (
-      <Card>
-        <Text style={styles.muted}>
-          Not included: certificados are excluded (Dashboard, “Include certificados de aforro”).
-          They stay under More › Certificados.
-        </Text>
-      </Card>
+      <EmptyState
+        icon="noMatch"
+        title="Not included"
+        line="Certificados are excluded (Dashboard, “Include certificados de aforro”). They stay under the drawer’s Certificados."
+      />
     );
   }
   if (!p || !row) {
     return (
-      <Card>
-        <Text style={styles.muted}>
-          {assetLabel(names, assetId)} is not held today. Its realized result is under Closed
-          positions.
-        </Text>
-        <Button
-          label="Transactions"
-          onPress={() => navigation.navigate('AssetTransactions', { assetId })}
-        />
-      </Card>
+      <EmptyState
+        title={`${assetLabel(names, assetId)} is not held today`}
+        line="Its realized result is under Closed positions."
+        action={{
+          label: 'Transactions',
+          onPress: () => navigation.navigate('AssetTransactions', { assetId }),
+        }}
+      />
     );
   }
   const asset = names.assets.get(assetId);
   const year = view.today.slice(0, 4);
   return (
     <>
-      <Card>
-        <Text style={styles.caption}>
+      <View style={styles.hero}>
+        <T variant="headline" numberOfLines={1}>
+          {assetLabel(names, assetId)}
+        </T>
+        <T variant="sub" tone="muted">
           {assetName(names, assetId)} · {typeLabel(row.assetType)}
           {asset?.isin ? ` · ${asset.isin}` : ''}
-        </Text>
-        <Money value={p.valueEur} style={styles.total} />
-        <View style={styles.figures}>
+        </T>
+        <Amount value={p.valueEur} variant="title1" style={styles.total} />
+        <View style={styles.inline}>
           {p.dayChange?.openedToday ? (
-            <Text style={styles.muted}>new today</Text>
+            <T variant="sub" tone="muted">
+              new today
+            </T>
           ) : (
             <>
-              <Money value={p.dayChange?.changeEur ?? null} sign colored style={styles.day} />
-              <Pct value={p.dayChange?.changePct ?? null} sign colored style={styles.day} />
-              <Text style={styles.muted}> today</Text>
+              <Amount value={p.dayChange?.changeEur ?? null} sign tone variant="body" />
+              <Amount kind="pct" value={p.dayChange?.changePct ?? null} sign tone variant="body" />
+              <T variant="sub" tone="muted">
+                today
+              </T>
             </>
           )}
         </View>
-        <View style={[styles.figures, styles.priceLine]}>
+        <View style={[styles.inline, styles.priceLine]}>
           <ValuationBadge row={row} />
           {p.price ? (
             <>
-              <Text style={styles.muted}>
+              <T variant="caption" tone="muted">
                 {row.valuation.source === 'trade' ? 'last trade price' : 'price'}
-              </Text>
-              <Amount value={p.price.close} currency={p.price.currency} style={styles.muted} />
-              <Text style={styles.muted}>{formatDate(p.price.date, year)}</Text>
+              </T>
+              <Amount value={p.price.close} currency={p.price.currency} variant="caption" />
+              <T variant="caption" tone="muted">
+                {formatDate(p.price.date, year)}
+              </T>
             </>
           ) : null}
         </View>
-      </Card>
+      </View>
 
-      <Card title="Position">
-        <Line label="Units">
-          <Units value={p.units} />
-        </Line>
-        <Line label="Average cost">
+      <Section title="Position">
+        <FigureLine label="Units">
+          <Amount kind="units" value={p.units} />
+        </FigureLine>
+        <FigureLine label="Average cost">
           <Amount value={p.averageCostEur} currency="EUR" />
-        </Line>
-        <Line label="Cost basis">
-          <Money value={p.costBasisEur} />
-        </Line>
-        <Line label="Weight">
-          <Pct value={p.weight} />
-        </Line>
-        <Line label="Unrealized gain">
-          <Money value={p.unrealizedEur} sign colored />
-          <Pct value={p.unrealizedPct} sign style={styles.muted} />
-        </Line>
-        <Line label="Realized gain">
-          <Money value={p.realizedEur} sign />
-        </Line>
-        <Line label="Income">
-          <Money value={p.incomeEur} sign />
-        </Line>
-      </Card>
+        </FigureLine>
+        <FigureLine label="Cost basis">
+          <Amount value={p.costBasisEur} />
+        </FigureLine>
+        <FigureLine label="Weight">
+          <Amount kind="pct" value={p.weight} />
+        </FigureLine>
+        <FigureLine label="Unrealized gain">
+          <Amount value={p.unrealizedEur} sign tone />
+          <T variant="sub" tone="muted">
+            <Amount kind="pct" value={p.unrealizedPct} sign />
+          </T>
+        </FigureLine>
+        <FigureLine label="Realized gain">
+          <Amount value={p.realizedEur} sign />
+        </FigureLine>
+        <FigureLine label="Income">
+          <Amount value={p.incomeEur} sign />
+        </FigureLine>
+      </Section>
 
       {row.assetType === 'certificado_aforro' ? (
         <Subscriptions detail={p} today={view.today} />
       ) : (
-        <PriceCard
+        <PriceSection
           assetId={assetId}
           currency={asset?.tradingCurrency ?? p.price?.currency ?? 'EUR'}
           market={props.market}
@@ -144,40 +166,48 @@ function Detail(props: { view: PositionsView; market: Market; assetId: string; n
         />
       )}
 
-      <Card title="Split by broker">
+      <Section title="Split by broker">
         {p.accounts.map((a) => (
-          <View key={a.accountId} style={styles.block} testID="broker-split">
-            <Line label={brokerLabel(names, a.accountId)} strong>
-              <Money value={a.valueEur} style={styles.strong} />
-            </Line>
-            <Line label="Units · cost">
-              <Units value={a.units} style={styles.small} />
-              <Text style={styles.muted}>·</Text>
-              <Money value={a.costBasisEur} style={styles.small} />
-            </Line>
-            <Line label="Unrealized · realized">
-              <Money value={a.unrealizedEur} sign colored style={styles.small} />
-              <Text style={styles.muted}>·</Text>
-              <Money value={a.realizedEur} sign colored style={styles.small} />
-            </Line>
-          </View>
+          <Block key={a.accountId} testID="broker-split">
+            <FigureLine label={brokerLabel(names, a.accountId)} strong>
+              <Amount value={a.valueEur} variant="headline" />
+            </FigureLine>
+            <FigureLine label="Units · cost" sub>
+              <Amount kind="units" value={a.units} />
+              <T variant="sub" tone="faint">
+                ·
+              </T>
+              <Amount value={a.costBasisEur} />
+            </FigureLine>
+            <FigureLine label="Unrealized · realized" sub>
+              <Amount value={a.unrealizedEur} sign tone />
+              <T variant="sub" tone="faint">
+                ·
+              </T>
+              <Amount value={a.realizedEur} sign tone />
+            </FigureLine>
+          </Block>
         ))}
-      </Card>
+      </Section>
 
-      <Card title="Open lots (FIFO per broker)">
+      <Section title="Open lots (FIFO per broker)">
         {p.lots.map((l) => (
-          <View key={l.lotId} style={styles.block} testID="open-lot">
-            <Line label={`${formatDate(l.acquiredOn, year)} · ${brokerLabel(names, l.accountId)}`}>
-              <Money value={l.costEur} style={styles.small} />
-            </Line>
-            <Line label="Units · unit cost">
-              <Units value={l.units} style={styles.small} />
-              <Text style={styles.muted}>@</Text>
-              <Amount value={l.unitCostEur} currency="EUR" style={styles.small} />
-            </Line>
-          </View>
+          <Block key={l.lotId} testID="open-lot">
+            <FigureLine
+              label={`${formatDate(l.acquiredOn, year)} · ${brokerLabel(names, l.accountId)}`}
+            >
+              <Amount value={l.costEur} />
+            </FigureLine>
+            <FigureLine label="Units · unit cost" sub>
+              <Amount kind="units" value={l.units} />
+              <T variant="sub" tone="faint">
+                @
+              </T>
+              <Amount value={l.unitCostEur} currency="EUR" />
+            </FigureLine>
+          </Block>
         ))}
-      </Card>
+      </Section>
 
       <View style={styles.buttons}>
         <Button
@@ -189,9 +219,23 @@ function Detail(props: { view: PositionsView; market: Market; assetId: string; n
   );
 }
 
-/** Split-adjusted closes from the asset's whole (paginated) price history. */
-function PriceCard(props: { assetId: string; currency: string; market: Market; today: IsoDate }) {
+/** A group of figure lines with a hairline under it, in a compact table. */
+function Block(props: { children: ReactNode; testID: string }) {
   const styles = useStyles(makeStyles);
+  return (
+    <View style={styles.block} testID={props.testID}>
+      {props.children}
+    </View>
+  );
+}
+
+/** Split-adjusted closes from the asset's whole (paginated) price history. */
+function PriceSection(props: {
+  assetId: string;
+  currency: string;
+  market: Market;
+  today: IsoDate;
+}) {
   const [range, setRange] = useState<SeriesRange>('1Y');
   const history = usePriceHistory(props.assetId, true);
   const series = useMemo(
@@ -208,86 +252,118 @@ function PriceCard(props: { assetId: string; currency: string; market: Market; t
         : null,
     [history.data, props.assetId, props.currency, props.market, props.today, range],
   );
-  return (
-    <Card title="Price">
-      <Segmented
-        options={SERIES_RANGES.map((r) => ({ value: r, label: r }))}
-        value={range}
-        onChange={setRange}
-      />
-      {history.isError ? (
-        <Text style={styles.muted}>Could not load the prices ({errorCode(history.error)}).</Text>
-      ) : !series ? (
-        <Text style={styles.muted}>Loading prices…</Text>
-      ) : (
-        <>
-          <PriceChart points={series.chart} currency={series.currency} />
-          <Line label="Change in range">
-            {series.change ? (
-              <Amount value={series.change} currency={series.currency} sign style={styles.small} />
-            ) : (
-              <Text style={styles.small}>—</Text>
-            )}
-            <Pct value={series.changePct} sign colored style={styles.small} />
-          </Line>
-          <Text style={styles.note}>Split-adjusted closes in {series.currency}.</Text>
-        </>
-      )}
-    </Card>
+  const controls = (
+    <SegmentedControl
+      options={SERIES_RANGES.map((r) => ({ value: r, label: r }))}
+      value={range}
+      onChange={setRange}
+    />
   );
+  let body;
+  if (history.isError) {
+    body = (
+      <ErrorState
+        title="Could not load the prices"
+        code={errorCode(history.error)}
+        hint="Open the screen again to retry"
+      />
+    );
+  } else if (!series) {
+    body = <SkeletonChart height={PRICE_CHART_HEIGHT} />;
+  } else {
+    const first = series.chart[0];
+    const last = series.chart[series.chart.length - 1];
+    body = (
+      <ChartFrame
+        height={PRICE_CHART_HEIGHT}
+        empty={series.chart.length < 2}
+        emptyText="Not enough prices for a chart in this range"
+        xLabels={first && last ? [formatDate(first.date), formatDate(last.date)] : undefined}
+        controls={controls}
+        summary={
+          <View style={styles.change}>
+            <T variant="body">Change in range</T>
+            <View style={styles.inline}>
+              {series.change ? (
+                <Amount value={series.change} currency={series.currency} sign tone variant="body" />
+              ) : (
+                <T variant="body">—</T>
+              )}
+              <Amount kind="pct" value={series.changePct} sign tone variant="body" />
+            </View>
+          </View>
+        }
+        legend={
+          <T variant="caption" tone="faint">
+            Split-adjusted closes in {series.currency}.
+          </T>
+        }
+      >
+        <PriceChart points={series.chart} currency={series.currency} />
+      </ChartFrame>
+    );
+  }
+  return <Section title="Price">{body}</Section>;
 }
 
 /** Certificados: each held subscription with its units, latest factor and value. */
 function Subscriptions({ detail, today }: { detail: PositionDetail; today: IsoDate }) {
-  const styles = useStyles(makeStyles);
   const year = today.slice(0, 4);
   return (
-    <Card title="Subscriptions (value from factor)">
+    <Section title="Subscriptions (value from factor)">
       {detail.certificados.length === 0 ? (
         <Banner tone="warning">These units are not linked to a subscription.</Banner>
       ) : null}
       {detail.certificados.map((s) => (
-        <View key={s.subscriptionId} style={styles.block} testID="ca-subscription">
-          <Line label={`Subscribed ${formatDate(s.subscribedOn, year)}`} strong>
-            <Money value={s.valueEur} style={styles.strong} />
-          </Line>
-          <Line label="Units · factor">
-            <Units value={s.units} style={styles.small} />
-            <Text style={styles.muted}>×</Text>
-            <Amount value={s.unitValueEur} currency="EUR" dp={5} style={styles.small} />
-          </Line>
-          <View style={styles.figures}>
-            <Text style={styles.muted}>
+        <Block key={s.subscriptionId} testID="ca-subscription">
+          <FigureLine label={`Subscribed ${formatDate(s.subscribedOn, year)}`} strong>
+            <Amount value={s.valueEur} variant="headline" />
+          </FigureLine>
+          <FigureLine label="Units · factor" sub>
+            <Amount kind="units" value={s.units} />
+            <T variant="sub" tone="faint">
+              ×
+            </T>
+            <Amount value={s.unitValueEur} currency="EUR" dp={5} />
+          </FigureLine>
+          <View style={styles.inline}>
+            <T variant="caption" tone="muted">
               {s.factorMonth
                 ? `factor of ${formatPeriod(s.factorMonth.slice(0, 7))}, ${s.ageDays} days old`
                 : 'no factor yet: subscription price'}
-            </Text>
+            </T>
             {s.stale ? <Badge text="factor old" /> : null}
           </View>
-          <Line label="Gain">
-            <Money value={s.gainEur} sign colored style={styles.small} />
-          </Line>
-        </View>
+          <FigureLine label="Gain" sub>
+            <Amount value={s.gainEur} sign tone />
+          </FigureLine>
+        </Block>
       ))}
-    </Card>
+    </Section>
   );
 }
 
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
-    caption: { fontSize: 13, color: colors.muted },
-    total: { fontSize: 28, fontWeight: '700', color: colors.text, marginVertical: space.xs },
-    day: { fontSize: 15, fontWeight: '600' },
-    priceLine: { marginTop: space.xs },
-    figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline', flexWrap: 'wrap' },
-    strong: { fontWeight: '700', color: colors.text },
-    small: { fontSize: 13, color: colors.text },
-    muted: { color: colors.muted, fontSize: 12 },
-    note: { color: colors.muted, fontSize: 11, marginTop: space.xs },
     block: {
-      paddingVertical: space.xs,
+      paddingVertical: space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
+      borderBottomColor: colors.divider,
     },
-    buttons: { marginHorizontal: space.lg },
   });
+
+const styles = StyleSheet.create({
+  hero: { paddingHorizontal: space.lg, marginBottom: space.xl, gap: 2 },
+  total: { marginVertical: space.xs },
+  inline: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.sm },
+  priceLine: { marginTop: space.xs },
+  change: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginTop: space.md,
+  },
+  buttons: { marginHorizontal: space.lg },
+  skeleton: { gap: space.sm },
+  gap: { height: space.md },
+});

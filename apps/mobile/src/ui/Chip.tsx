@@ -35,12 +35,25 @@ export function Chip(props: {
   );
 }
 
-/** A small non-interactive tag ("stale", "price pending", "approx.", "month only"). */
-export function Badge(props: { label: string }) {
+/**
+ * A small non-interactive tag ("stale", "price pending", "approx.", "month only"): quiet by
+ * default; `danger` (a certificado factor over 35 days old) and `warning` tint it.
+ */
+export function Badge(props: { label: string; tone?: 'muted' | 'warning' | 'danger' }) {
   const styles = useStyles(makeStyles);
+  const tone = props.tone ?? 'muted';
   return (
-    <View style={styles.badge}>
-      <T variant="caption" tone="muted">
+    <View
+      style={[
+        styles.badge,
+        tone === 'warning' && styles.warning,
+        tone === 'danger' && styles.danger,
+      ]}
+    >
+      <T
+        variant="caption"
+        tone={tone === 'muted' ? 'muted' : tone === 'danger' ? 'loss' : 'warning'}
+      >
         {props.label}
       </T>
     </View>
@@ -66,4 +79,6 @@ const makeStyles = (colors: Colors) =>
       borderRadius: radius.pill,
       backgroundColor: colors.pressed,
     },
+    warning: { backgroundColor: colors.warningBg },
+    danger: { backgroundColor: colors.lossSoft },
   });

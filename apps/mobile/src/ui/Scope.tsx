@@ -4,7 +4,8 @@
 import type { AssetType } from '@ledgr/core';
 import { StyleSheet, Text, View } from 'react-native';
 import { useIncludeCertificados } from '../settings/SettingsProvider';
-import { Card, Switch } from './parts';
+import { EmptyState } from './EmptyState';
+import { Switch } from './parts';
 import { T } from './T';
 import { space, type Colors } from './theme';
 import { useStyles } from './ThemeProvider';
@@ -37,14 +38,13 @@ export function ScopeNote({ excludeTypes }: { excludeTypes: readonly AssetType[]
 
 /** The ledger has rows, but none outside the certificados. */
 export function NothingInScope({ what = 'holdings' }: { what?: string }) {
-  const styles = useStyles(makeStyles);
   return (
-    <Card>
-      <Text style={styles.muted}>
-        No {what} without certificados. Turn on “Include certificados de aforro” on the Dashboard to
-        see them.
-      </Text>
-    </Card>
+    <EmptyState
+      icon="noMatch"
+      title={`No ${what} without certificados`}
+      line="Turn on “Include certificados de aforro” on the Dashboard to see them."
+      testID="nothing-in-scope"
+    />
   );
 }
 
@@ -71,5 +71,4 @@ const makeStyles = (colors: Colors) =>
       marginHorizontal: space.lg,
       marginBottom: space.sm,
     },
-    muted: { color: colors.muted, fontSize: 13 },
   });

@@ -59,14 +59,15 @@ export function Button(props: {
   label: string;
   onPress(): void;
   disabled?: boolean;
-  kind?: 'primary' | 'plain' | 'danger';
+  /** `dangerText`: a text button in the loss colour (Delete on a detail screen). */
+  kind?: 'primary' | 'plain' | 'danger' | 'dangerText';
   /** Shows a spinner (and is disabled). */
   busy?: boolean;
   accessibilityLabel?: string;
 }) {
   const styles = useStyles(makeStyles);
   const colors = useColors();
-  const plain = props.kind === 'plain';
+  const plain = props.kind === 'plain' || props.kind === 'dangerText';
   const disabled = props.disabled || props.busy;
   return (
     <Pressable
@@ -93,6 +94,7 @@ export function Button(props: {
             styles.buttonText,
             plain && styles.buttonTextPlain,
             props.kind === 'danger' && styles.buttonTextDanger,
+            props.kind === 'dangerText' && styles.buttonTextLoss,
           ]}
         >
           {props.label}
@@ -192,6 +194,7 @@ const makeStyles = (colors: Colors) =>
     buttonText: { color: colors.onAccent, fontWeight: '600', fontSize: 15 },
     buttonTextPlain: { color: colors.accent },
     buttonTextDanger: { color: colors.onLoss },
+    buttonTextLoss: { color: colors.loss },
     buttonDanger: { backgroundColor: colors.loss },
     disabled: { opacity: 0.5 },
     field: { marginBottom: space.md },

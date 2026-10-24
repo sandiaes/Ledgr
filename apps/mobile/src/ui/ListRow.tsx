@@ -27,6 +27,8 @@ export function ListRow(props: {
   right?: ReactNode;
   rightSub?: ReactNode;
   leading?: ReactNode;
+  /** A full-width line under the row (a breakdown, the details of an expanded row). */
+  footer?: ReactNode;
   onPress?: () => void;
   /** A forward chevron after the figures (implied by `onPress`). */
   chevron?: boolean;
@@ -39,18 +41,21 @@ export function ListRow(props: {
   const styles = useStyles(makeStyles);
   const body = (
     <>
-      {props.leading ? <View style={styles.leading}>{props.leading}</View> : null}
-      <View style={styles.left}>
-        {part(props.title, 'headline', 'text')}
-        {props.subtitle ? part(props.subtitle, 'sub', 'muted') : null}
-      </View>
-      {props.right || props.rightSub ? (
-        <View style={styles.right}>
-          {props.right ? part(props.right, 'headline', 'text') : null}
-          {props.rightSub ? part(props.rightSub, 'sub', 'muted') : null}
+      <View style={styles.main}>
+        {props.leading ? <View style={styles.leading}>{props.leading}</View> : null}
+        <View style={styles.left}>
+          {part(props.title, 'headline', 'text')}
+          {props.subtitle ? part(props.subtitle, 'sub', 'muted') : null}
         </View>
-      ) : null}
-      {props.chevron || props.onPress ? <Icon name="forward" size={18} tone="faint" /> : null}
+        {props.right || props.rightSub ? (
+          <View style={styles.right}>
+            {props.right ? part(props.right, 'headline', 'text') : null}
+            {props.rightSub ? part(props.rightSub, 'sub', 'muted') : null}
+          </View>
+        ) : null}
+        {props.chevron || props.onPress ? <Icon name="forward" size={18} tone="faint" /> : null}
+      </View>
+      {props.footer ? <View style={styles.footer}>{props.footer}</View> : null}
     </>
   );
   const rowStyle = [styles.row, props.last ? null : styles.divider, props.style];
@@ -76,13 +81,9 @@ export function ListRow(props: {
 
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
-    row: {
-      minHeight: 56,
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: space.md,
-      gap: space.md,
-    },
+    row: { minHeight: 56, justifyContent: 'center', paddingVertical: space.md },
+    main: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+    footer: { marginTop: space.sm },
     divider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
     pressed: { backgroundColor: colors.pressed },
     leading: { alignItems: 'center', justifyContent: 'center' },
