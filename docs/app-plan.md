@@ -7,7 +7,8 @@ Status: **plan approved with decisions D1–D7 on 2026-10-23** (§9). **Slice 5a
 positions; §8). **Slice 5c built 2026-10-24** (New transaction, Activity, Certificados,
 Settings, symbol resolution in `prices-daily`; §8). **Slice 5d built 2026-10-24**
 (the app-wide "Include certificados de aforro" toggle, §10; plan approved the same day with
-the recommendations of §10.5). KPI
+the recommendations of §10.5). **Slice 5e built 2026-10-24** (the Return calculator under
+More, "Return calculator" below and `docs/kpis.md` §11). KPI
 definitions are in `docs/kpis.md`; calculation assumptions in `docs/assumptions.md`.
 
 `apps/mobile`: Expo + React Native + TypeScript, Android only, run with Expo Go during
@@ -32,6 +33,7 @@ Root (auth gate, §6)
    ├─ Activity    ─── Transaction detail ── Edit (form ── confirm) / Delete (dialog)
    └─ More        ─┬─ Certificados ── Factor update
                    ├─ Allocation, Performance, Closed positions (same screens)
+                   ├─ Return calculator
                    └─ Settings
 ```
 
@@ -148,6 +150,24 @@ deleted, but not edited in the app.
   block) if a factor decreases. Save inserts one `ca_factors` row per subscription
   (insert only: rows are immutable, a month already recorded is shown read-only). Note
   under the button: "snapshots pick this up in tomorrow's daily run".
+
+### Return calculator (slice 5e)
+
+A projection screen under More (`docs/kpis.md` §11): starting value, years and extra months,
+expected annual return (effective annual rate), monthly contribution, contribution timing (end
+or start of month) and optional inflation. Outputs: ending value, total contributed, total
+growth, growth as a share of the ending value, the ending value in today's money (inflation
+above 0), a stacked chart of contributed vs growth and a year-by-year table.
+
+- **Defaults from the app's data**, in the current asset scope: starting value = the portfolio
+  value now; return = XIRR Since start, else the annualized TWR, else empty (the screen asks),
+  with the source and its period shown, a warning outside −20% to +30%, and chips to pick XIRR,
+  TWR (annualized) or Custom; contribution = average net purchases of the last 12 months.
+- The screen carries its own copy of the "Include certificados" switch so the scope can change
+  while it is open. A field the owner has not edited follows the scope, an edited one keeps its
+  text, "Reset to my values" clears every edit. Inputs are never persisted.
+- Validation per field with limits; hide values masks the results and the two amount fields.
+  One line says it is a projection, not a forecast.
 
 ### More / Settings
 
@@ -532,6 +552,13 @@ screen, and component tests. No schema change, no function to redeploy.
 - **D6 Dividends and interest**: the net amount received, labeled "Amount received", no
   withholding field (so `withholding_tax` stays empty on app-entered rows) and no fee.
   **All app rows are EUR at fx 1.**
+  **5e — Return calculator** (built 2026-10-24). Formulas in `docs/kpis.md` §11 first, then core:
+  `projectGrowth` / `projectMonthByMonth` (closed form and month-by-month series),
+  `averageMonthlyNetPurchases`, `projectionDefaults`, `parseProjectionForm`, `buildProjection`
+  (assumption #41), with hand-checkable tests and a property test that the final month-by-month
+  balance equals the closed form; then the screen under More with component tests (defaults follow
+  the toggle, edited fields are kept, hide values masks). No schema change, nothing to redeploy.
+
 - **D7 Not in the form**: transfers, certificado subscriptions and redemptions, and
   foreign-currency rows. Totals are entered in EUR (fx 1), as in the import.
 

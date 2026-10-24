@@ -332,3 +332,102 @@ result.
 | Certificado subscription, factor age (§8)   | `certificadoSubscriptions` (`certificados.ts`)                |
 | Factor update: change vs last month (§8)    | `factorChange`, `factorUpdateLines` (`certificados.ts`)       |
 | Asset scope (§0.2)                          | `scope.ts`; a `scope` option (`docs/app-plan.md` §10.3)       |
+| Return calculator: projection (§11)         | `projectGrowth`, `projectMonthByMonth` (`projection.ts`)      |
+| Calculator defaults (§11.4)                 | `projectionDefaults` (`projection.ts`), `buildProjection`     |
+| Average net monthly purchases (§11.4)       | `averageMonthlyNetPurchases` (`projection.ts`)                |
+| Calculator form and limits (§11.1)          | `parseProjectionForm` (`projection.ts`)                       |
+
+## 11. Return calculator (projection, slice 5e)
+
+A **projection**, not a forecast: it compounds the numbers the owner chooses and says nothing
+about what markets will do. Nothing here comes from or goes back to the ledger; the inputs are
+not stored. All maths is `Decimal` (`packages/core/src/projection.ts`).
+
+### 11.1 Inputs
+
+| Input                | Symbol | Rule                                                             |
+| -------------------- | ------ | ---------------------------------------------------------------- |
+| Starting value       | _P_    | EUR, ≥ 0                                                         |
+| Timeline             | _n_    | whole years _Y_ plus extra months _m_ (0–11): _n_ = 12 _Y_ + _m_ |
+| Expected annual rate | _a_    | the **effective** annual rate, > −100%                           |
+| Monthly contribution | _C_    | EUR, ≥ 0, the same nominal amount every month                    |
+| Annual inflation     | _f_    | ≥ 0, default 0                                                   |
+| Contribution timing  |        | end of month (default) or start of month                         |
+
+The form limits are: starting value ≤ 1,000,000,000; contribution ≤ 10,000,000 a month; _Y_ ≤ 60;
+_a_ from −50% to +100%; _f_ from 0% to 50%. Core itself accepts any _a_ > −100% and up to 100
+years.
+
+### 11.2 Formulas
+
+Monthly rate, so that twelve months compound to exactly the annual rate:
+
+> _i_ = (1 + _a_)^(1/12) − 1
+
+(_a_ = 7% gives _i_ = 0.5654%, not 7% ÷ 12.) A negative _a_ gives a negative _i_.
+
+**Month by month** (balance _B_k_ after month _k_, _B_0_ = _P_):
+
+- end of month: _B_k_ = _B\_{k−1}_ (1 + _i_) + _C_ (the month's growth first, then the deposit)
+- start of month: _B_k_ = (_B\_{k−1}_ + _C_) (1 + _i_) (the deposit earns that month)
+
+**Closed form** (the same numbers, with _g_ = (1 + _i_)^_k_ = (1 + _a_)^(_k_/12)):
+
+- _i_ ≠ 0, end of month: _B_k_ = _P_ g + _C_ (g − 1) ÷ _i_
+- _i_ ≠ 0, start of month: _B_k_ = _P_ g + _C_ (g − 1) ÷ _i_ × (1 + _i_)
+- _i_ = 0 (_a_ = 0, the division above is 0 ÷ 0): _B_k_ = _P_ + _C_ _k_ for both timings
+
+The closed form is what the screen uses; the month-by-month series is the reference the tests
+compare it with (`projectMonthByMonth`). Both handle _i_ = 0, negative rates, _n_ = 0 (the
+balance stays _P_) and _C_ = 0 (the contribution term is 0).
+
+### 11.3 Outputs
+
+| Output                          | Definition                                                       |
+| ------------------------------- | ---------------------------------------------------------------- |
+| **Ending value**                | _B_n_                                                            |
+| **Total contributed**           | _P_ + _C_ _n_ (starting value plus every contribution)           |
+| **Total growth**                | ending value − total contributed (negative with a negative rate) |
+| **Growth share**                | total growth ÷ ending value; "—" when the ending value is 0      |
+| **Ending value, today's money** | only when _f_ > 0: ending value ÷ (1 + _f_)^(_n_/12)             |
+
+Inflation only deflates the result: the contribution stays the same nominal amount every
+month (it is not indexed), and the rate _a_ is nominal.
+
+**Year-by-year table**: one row at the end of month 12, 24, … and, when _m_ > 0, a last row at
+month _n_ (a part year, labeled so). Each row: the balance _B_k_, contributed to that point
+(_P_ + _C_ _k_) and growth to that point (balance − contributed). The **stacked chart** draws,
+per row, contributed and growth; when growth is negative the bar is as tall as the amount
+contributed, with the balance in the contributions colour and the loss on top in the loss colour.
+No axis amounts are drawn, so hiding values needs no extra masking. Zero years and zero
+months: no rows, ending value = _P_.
+
+Hand-checkable: _P_ = 10,000, _a_ = 7%, _Y_ = 10, _C_ = 0 → 10,000 × 1.07^10 = **19,671.51**
+(19,671.5135…), growth 9,671.51 = **49.17%** of the ending value. _P_ = 0, _C_ = 100, _a_ = 0,
+12 months → 1,200. _P_ = 0, _C_ = 100, _a_ = 12%, 12 months: end of month 1,264.65, start of
+month 1,276.65 (the difference is exactly _C_ × _a_ = 12).
+
+### 11.4 Defaults (from the app's data, in the current asset scope, §0.2)
+
+| Field                       | Default                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------ |
+| Starting value              | _V(T)_ (§1).                                                                               |
+| Annual return               | XIRR Since start (§3), else annualized TWR Since start, else empty and the owner is asked. |
+| Monthly contribution        | **average net monthly purchases**, below.                                                  |
+| Timeline, inflation, timing | 10 years 0 months, 0%, end of month.                                                       |
+
+- **XIRR** is the solved annual rate (`annualRate`), also for a history shorter than a year (the
+  screen then says how many days it rests on). **TWR** is the annualized figure of §3, which
+  exists only from 365 days of history. The screen shows which one is used and the period
+  (first flow → _T_, in days), warns when it is outside **−20% to +30%**, and lets the owner pick
+  XIRR, TWR (annualized) or a custom rate. Both are recomputed for the scope, not derived.
+- **Average net monthly purchases** = (Σ buy and subscription costs − Σ sell and redemption
+  proceeds, fees as in net invested §0, of the rows in scope dated in (`addMonths(T, −12)`, _T_])
+  ÷ _M_, where _M_ = 12, or for a history shorter than 12 months the whole months since the first
+  row in scope (at least 1). Income, fee rows, deposits and withdrawals are not purchases.
+  When the average is negative (net seller), the default contribution is 0 and the screen says
+  so. No rows in scope: 0.
+- The fields hold the displayed text (value and contribution to cents, return to 2 decimals of a
+  percent) and the projection runs on that text, so what is on screen reproduces by hand.
+- When the scope changes, a field the owner has not edited takes the new default; an edited
+  field keeps what was typed. "Reset to my values" clears every edit. Nothing is persisted.
