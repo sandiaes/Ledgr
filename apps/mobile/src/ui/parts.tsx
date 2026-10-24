@@ -3,14 +3,17 @@ import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
+  Switch as RNSwitch,
   Text,
   TextInput,
   View,
   type StyleProp,
+  type SwitchProps,
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
-import { colors, space } from './theme';
+import { space, type Colors } from './theme';
+import { useColors, useKeyboardAppearance, useStyles } from './ThemeProvider';
 
 export function Card(props: {
   title?: string;
@@ -18,6 +21,7 @@ export function Card(props: {
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={[styles.card, props.style]} testID={props.testID}>
       {props.title ? <Text style={styles.title}>{props.title}</Text> : null}
@@ -32,6 +36,7 @@ export function Segmented<T extends string>(props: {
   value: T;
   onChange(value: NoInfer<T>): void;
 }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.segmented} accessibilityRole="tablist">
       {props.options.map((o) => {
@@ -54,6 +59,7 @@ export function Segmented<T extends string>(props: {
 
 /** A label on the left, figures on the right. */
 export function Line(props: { label: string; children: ReactNode; strong?: boolean }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.line}>
       <Text style={[styles.lineLabel, props.strong && styles.lineStrong]}>{props.label}</Text>
@@ -63,6 +69,7 @@ export function Line(props: { label: string; children: ReactNode; strong?: boole
 }
 
 export function Banner(props: { tone: 'warning' | 'error'; children: ReactNode }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={[styles.banner, props.tone === 'error' ? styles.bannerError : null]}>
       <Text style={styles.bannerText}>{props.children}</Text>
@@ -79,6 +86,8 @@ export function Button(props: {
   busy?: boolean;
   accessibilityLabel?: string;
 }) {
+  const styles = useStyles(makeStyles);
+  const colors = useColors();
   const plain = props.kind === 'plain';
   const disabled = props.disabled || props.busy;
   return (
@@ -96,9 +105,20 @@ export function Button(props: {
       ]}
     >
       {props.busy ? (
-        <ActivityIndicator color="#fff" accessibilityLabel="Saving" />
+        <ActivityIndicator
+          color={plain ? colors.accent : props.kind === 'danger' ? colors.onLoss : colors.onAccent}
+          accessibilityLabel="Saving"
+        />
       ) : (
-        <Text style={[styles.buttonText, plain && styles.buttonTextPlain]}>{props.label}</Text>
+        <Text
+          style={[
+            styles.buttonText,
+            plain && styles.buttonTextPlain,
+            props.kind === 'danger' && styles.buttonTextDanger,
+          ]}
+        >
+          {props.label}
+        </Text>
       )}
     </Pressable>
   );
@@ -108,15 +128,15 @@ export function Button(props: {
 export function Field(
   props: TextInputProps & { label: string; hint?: string; error?: ReactNode; testID?: string },
 ) {
+  const styles = useStyles(makeStyles);
   const { label, hint, error, style, ...input } = props;
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
+      <Input
         accessibilityLabel={label}
-        placeholderTextColor={colors.muted}
         autoCorrect={false}
-        style={[styles.input, error ? styles.inputError : null, style]}
+        style={[error ? styles.inputError : null, style]}
         {...input}
       />
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
@@ -125,7 +145,36 @@ export function Field(
   );
 }
 
+/** A text input in the theme's input colours, with the matching keyboard. */
+export function Input(props: TextInputProps) {
+  const styles = useStyles(makeStyles);
+  const colors = useColors();
+  const keyboard = useKeyboardAppearance();
+  return (
+    <TextInput
+      placeholderTextColor={colors.input.placeholder}
+      keyboardAppearance={keyboard}
+      selectionColor={colors.accent}
+      {...props}
+      style={[styles.input, props.style]}
+    />
+  );
+}
+
+/** A Switch in the theme's track and thumb colours. */
+export function Switch(props: SwitchProps) {
+  const { switch: sw } = useColors();
+  return (
+    <RNSwitch
+      trackColor={{ false: sw.trackOff, true: sw.trackOn }}
+      thumbColor={props.value ? sw.thumbOn : sw.thumbOff}
+      {...props}
+    />
+  );
+}
+
 export function FieldError(props: { children: ReactNode }) {
+  const styles = useStyles(makeStyles);
   return (
     <Text style={styles.error} accessibilityRole="alert">
       {props.children}
@@ -140,6 +189,7 @@ export function Chip(props: {
   onPress(): void;
   accessibilityLabel?: string;
 }) {
+  const styles = useStyles(makeStyles);
   return (
     <Pressable
       onPress={props.onPress}
@@ -157,71 +207,73 @@ export function Chip(props: {
   );
 }
 
-export const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: space.lg,
-    marginHorizontal: space.lg,
-    marginBottom: space.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  title: { fontSize: 13, fontWeight: '600', color: colors.muted, marginBottom: space.sm },
-  segmented: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.sm },
-  chip: {
-    paddingHorizontal: space.md,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: colors.background,
-  },
-  chipOn: { backgroundColor: colors.accent },
-  chipText: { fontSize: 13, color: colors.text },
-  chipTextOn: { color: '#fff', fontWeight: '600' },
-  banner: {
-    backgroundColor: colors.warningBg,
-    padding: space.md,
-    borderRadius: 8,
-    marginHorizontal: space.lg,
-    marginBottom: space.md,
-  },
-  bannerError: { backgroundColor: colors.errorBg },
-  bannerText: { color: colors.warningText, fontSize: 13 },
-  button: {
-    backgroundColor: colors.accent,
-    borderRadius: 8,
-    paddingVertical: space.md,
-    alignItems: 'center',
-    marginTop: space.md,
-  },
-  buttonPlain: { backgroundColor: 'transparent' },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  buttonTextPlain: { color: colors.accent },
-  buttonDanger: { backgroundColor: colors.loss },
-  disabled: { opacity: 0.5 },
-  chipBordered: { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  field: { marginBottom: space.md },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    fontSize: 16,
-    color: colors.text,
-    backgroundColor: colors.card,
-  },
-  inputError: { borderColor: colors.loss },
-  hint: { fontSize: 12, color: colors.muted, marginTop: 4 },
-  error: { fontSize: 13, color: colors.loss, marginTop: 4 },
-  line: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    paddingVertical: 3,
-  },
-  lineLabel: { color: colors.text, fontSize: 14, flexShrink: 1, marginRight: space.sm },
-  lineStrong: { fontWeight: '700' },
-  lineFigures: { flexDirection: 'row', gap: 4, alignItems: 'baseline', flexWrap: 'wrap' },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: space.lg,
+      marginHorizontal: space.lg,
+      marginBottom: space.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    title: { fontSize: 13, fontWeight: '600', color: colors.muted, marginBottom: space.sm },
+    segmented: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.sm },
+    chip: {
+      paddingHorizontal: space.md,
+      paddingVertical: 6,
+      borderRadius: 16,
+      backgroundColor: colors.background,
+    },
+    chipOn: { backgroundColor: colors.accent },
+    chipText: { fontSize: 13, color: colors.text },
+    chipTextOn: { color: colors.onAccent, fontWeight: '600' },
+    banner: {
+      backgroundColor: colors.warningBg,
+      padding: space.md,
+      borderRadius: 8,
+      marginHorizontal: space.lg,
+      marginBottom: space.md,
+    },
+    bannerError: { backgroundColor: colors.errorBg },
+    bannerText: { color: colors.warningText, fontSize: 13 },
+    button: {
+      backgroundColor: colors.accent,
+      borderRadius: 8,
+      paddingVertical: space.md,
+      alignItems: 'center',
+      marginTop: space.md,
+    },
+    buttonPlain: { backgroundColor: 'transparent' },
+    buttonText: { color: colors.onAccent, fontWeight: '600', fontSize: 15 },
+    buttonTextPlain: { color: colors.accent },
+    buttonTextDanger: { color: colors.onLoss },
+    buttonDanger: { backgroundColor: colors.loss },
+    disabled: { opacity: 0.5 },
+    chipBordered: { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+    field: { marginBottom: space.md },
+    fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.input.border,
+      borderRadius: 8,
+      paddingHorizontal: space.md,
+      paddingVertical: space.sm,
+      fontSize: 16,
+      color: colors.input.text,
+      backgroundColor: colors.input.background,
+    },
+    inputError: { borderColor: colors.loss },
+    hint: { fontSize: 12, color: colors.muted, marginTop: 4 },
+    error: { fontSize: 13, color: colors.loss, marginTop: 4 },
+    line: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      paddingVertical: 3,
+    },
+    lineLabel: { color: colors.text, fontSize: 14, flexShrink: 1, marginRight: space.sm },
+    lineStrong: { fontWeight: '700' },
+    lineFigures: { flexDirection: 'row', gap: 4, alignItems: 'baseline', flexWrap: 'wrap' },
+  });

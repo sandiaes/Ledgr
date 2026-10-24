@@ -8,13 +8,15 @@ import { Money, Pct } from '../ui/Money';
 import { Card, Line } from '../ui/parts';
 import { PortfolioScreen } from '../ui/PortfolioScreen';
 import { excludesCertificados } from '../ui/Scope';
-import { colors } from '../ui/theme';
+import { type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 import { DEFAULT_SORT, sortPositions, type Sort } from './listing';
 import { PositionRowView } from './PositionRowView';
 import { SortPanel } from './PositionsScreen';
 
 /** One broker: its figures and its own units of each position (FIFO per account). */
 export function BrokerDetailScreen() {
+  const styles = useStyles(makeStyles);
   const { accountId } = useRootRoute<'BrokerDetail'>().params;
   const state = usePortfolio(buildPositions);
   const names = useNames(state.status === 'ready' ? state.ledger : null);
@@ -79,7 +81,8 @@ export function BrokerDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  strong: { fontWeight: '700', color: colors.text },
-  muted: { color: colors.muted, fontSize: 13 },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    strong: { fontWeight: '700', color: colors.text },
+    muted: { color: colors.muted, fontSize: 13 },
+  });

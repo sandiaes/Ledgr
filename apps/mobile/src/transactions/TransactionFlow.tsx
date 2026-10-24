@@ -29,7 +29,8 @@ import { useServices, type Ledger } from '../services';
 import { assetLabel, assetName, brokerLabel, useNames, type Names } from '../ui/labels';
 import { Amount, Money, Units } from '../ui/Money';
 import { Banner, Button, Card, Chip, Field, FieldError, Line } from '../ui/parts';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 import { AddAssetForm } from './AddAssetForm';
 import { AssetPicker, pricePending } from './AssetPicker';
 import { FORM_TYPE_LABELS, issueText } from './messages';
@@ -57,6 +58,7 @@ export function TransactionFlow(props: {
   /** Above the form (e.g. "Saved."). */
   notice?: ReactNode;
 }) {
+  const styles = useStyles(makeStyles);
   const ledger = useLedger();
   if (ledger.isError) {
     return (
@@ -77,6 +79,7 @@ function Flow(props: {
   onSaved(row: Transaction): void;
   notice?: ReactNode;
 }) {
+  const styles = useStyles(makeStyles);
   const { ledger, original } = props;
   const { newId } = useServices();
   const today = useToday();
@@ -442,6 +445,7 @@ function DateField(props: {
   onChange(date: string): void;
   error?: ReactNode;
 }) {
+  const styles = useStyles(makeStyles);
   const valid = isDate(props.value);
   return (
     <View>
@@ -474,6 +478,7 @@ function DateField(props: {
 
 /** An issue's text; the units in it go through <Units>, so hiding values masks them. */
 function IssueText(props: { issue: TransactionIssue; names: Names; date: IsoDate }) {
+  const styles = useStyles(makeStyles);
   const { issue, names } = props;
   if (issue.code === 'exceeds_holdings') {
     return (
@@ -507,6 +512,7 @@ function Confirm(props: {
   onBack(): void;
   onSaved(row: Transaction): void;
 }) {
+  const styles = useStyles(makeStyles);
   const { row, names, original } = props;
   const { data: api } = useServices();
   const refresh = useRefreshAfterWrite();
@@ -633,6 +639,7 @@ function Figures(props: {
   title: string;
   figures: { before: PositionFigures; after: PositionFigures };
 }) {
+  const styles = useStyles(makeStyles);
   const { before, after } = props.figures;
   const pair = (render: (f: PositionFigures) => ReactNode) => (
     <>
@@ -660,28 +667,29 @@ function Figures(props: {
   );
 }
 
-const styles = StyleSheet.create({
-  content: { paddingTop: space.md, paddingBottom: space.xl },
-  status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
-  heading: { fontSize: 17, fontWeight: '700', color: colors.text },
-  subheading: { fontSize: 13, fontWeight: '600', color: colors.muted, marginBottom: 2 },
-  types: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap', marginBottom: space.xs },
-  label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.md },
-  dateChips: { marginTop: -space.sm },
-  chipText: { fontSize: 13, color: colors.text },
-  inline: {
-    flexDirection: 'row',
-    gap: 4,
-    alignItems: 'baseline',
-    flexWrap: 'wrap',
-    marginBottom: space.md,
-  },
-  muted: { fontSize: 13, color: colors.muted },
-  value: { fontSize: 14, color: colors.text },
-  strong: { fontSize: 15, fontWeight: '700', color: colors.text },
-  error: { fontSize: 13, color: colors.loss },
-  note: { fontSize: 12, color: colors.muted, marginTop: space.sm },
-  block: { marginBottom: space.sm },
-  buttons: { marginHorizontal: space.lg },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    content: { paddingTop: space.md, paddingBottom: space.xl },
+    status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
+    heading: { fontSize: 17, fontWeight: '700', color: colors.text },
+    subheading: { fontSize: 13, fontWeight: '600', color: colors.muted, marginBottom: 2 },
+    types: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap', marginBottom: space.xs },
+    label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.md },
+    dateChips: { marginTop: -space.sm },
+    chipText: { fontSize: 13, color: colors.text },
+    inline: {
+      flexDirection: 'row',
+      gap: 4,
+      alignItems: 'baseline',
+      flexWrap: 'wrap',
+      marginBottom: space.md,
+    },
+    muted: { fontSize: 13, color: colors.muted },
+    value: { fontSize: 14, color: colors.text },
+    strong: { fontSize: 15, fontWeight: '700', color: colors.text },
+    error: { fontSize: 13, color: colors.loss },
+    note: { fontSize: 12, color: colors.muted, marginTop: space.sm },
+    block: { marginBottom: space.sm },
+    buttons: { marginHorizontal: space.lg },
+  });

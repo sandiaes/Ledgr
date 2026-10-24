@@ -4,13 +4,16 @@ import { LineChart } from 'react-native-gifted-charts';
 import { formatAmount, formatDate } from '../format';
 import { useHideValues } from '../settings/SettingsProvider';
 import { MASK } from '../ui/Money';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useColors, useStyles } from '../ui/ThemeProvider';
 
 /** Decimal -> number for pixel positions only; every label is formatted from the Decimal. */
 const pixels = (d: Decimal) => Number(d.toPrecision(12));
 
 /** One asset's closes for the selected range; touch to scrub (the price is masked when hidden). */
 export function PriceChart(props: { points: readonly PricePoint[]; currency: string }) {
+  const styles = useStyles(makeStyles);
+  const colors = useColors();
   const { points, currency } = props;
   const [hidden] = useHideValues();
   const { width } = useWindowDimensions();
@@ -32,10 +35,10 @@ export function PriceChart(props: { points: readonly PricePoint[]; currency: str
       adjustToWidth
       width={chartWidth}
       height={180}
-      xAxisColor={colors.border}
+      xAxisColor={colors.chart.axis}
       yAxisColor="transparent"
       pointerConfig={{
-        pointerStripColor: colors.muted,
+        pointerStripColor: colors.chart.pointer,
         pointerColor: colors.value,
         pointerLabelWidth: 120,
         pointerLabelHeight: 44,
@@ -57,15 +60,16 @@ export function PriceChart(props: { points: readonly PricePoint[]; currency: str
   );
 }
 
-const styles = StyleSheet.create({
-  empty: { color: colors.muted, paddingVertical: space.lg },
-  label: {
-    backgroundColor: colors.card,
-    borderRadius: 6,
-    padding: space.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  labelDate: { fontSize: 11, color: colors.muted },
-  labelValue: { fontSize: 13, fontWeight: '600', color: colors.value },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    empty: { color: colors.muted, paddingVertical: space.lg },
+    label: {
+      backgroundColor: colors.chart.tooltipBg,
+      borderRadius: 6,
+      padding: space.xs,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.chart.tooltipBorder,
+    },
+    labelDate: { fontSize: 11, color: colors.muted },
+    labelValue: { fontSize: 13, fontWeight: '600', color: colors.value },
+  });

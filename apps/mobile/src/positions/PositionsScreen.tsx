@@ -5,14 +5,15 @@ import {
   type PortfolioTotals,
 } from '@ledgr/core';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { usePortfolio } from '../data/usePortfolio';
 import { useRootNavigation } from '../navigation';
 import { brokerLabel, typeLabel, useNames, type Names } from '../ui/labels';
 import { Money, Pct } from '../ui/Money';
-import { Banner, Card, Segmented } from '../ui/parts';
+import { Banner, Card, Input, Segmented, Switch } from '../ui/parts';
 import { PortfolioScreen } from '../ui/PortfolioScreen';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 import { ClosedList } from './ClosedList';
 import {
   activeFilterCount,
@@ -49,6 +50,7 @@ export function PositionsScreen() {
 }
 
 function Positions({ view, names }: { view: PositionsView; names: Names }) {
+  const styles = useStyles(makeStyles);
   const [segment, setSegment] = useState<Segment>('all');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
@@ -77,7 +79,7 @@ function Positions({ view, names }: { view: PositionsView; names: Names }) {
       </View>
       {listed ? (
         <View style={styles.controls}>
-          <TextInput
+          <Input
             value={query}
             onChangeText={setQuery}
             placeholder="Search ticker, name or ISIN"
@@ -150,6 +152,7 @@ function Positions({ view, names }: { view: PositionsView; names: Names }) {
 }
 
 function ControlButton(props: { label: string; on: boolean; onPress(): void }) {
+  const styles = useStyles(makeStyles);
   return (
     <Pressable
       onPress={props.onPress}
@@ -193,6 +196,7 @@ function Chips<T extends string>(props: {
   chosen: readonly T[];
   onChange(chosen: T[]): void;
 }) {
+  const styles = useStyles(makeStyles);
   if (props.options.length === 0) return null;
   return (
     <View>
@@ -229,6 +233,7 @@ function FilterPanel(props: {
   onChange(f: Filters): void;
   closed: boolean;
 }) {
+  const styles = useStyles(makeStyles);
   const { names, filters: f, onChange } = props;
   const { types, brokers, currencies } = props.options;
   return (
@@ -271,6 +276,7 @@ function FilterPanel(props: {
 }
 
 function GainLine({ t }: { t: Pick<PortfolioTotals, 'valueEur' | 'totalGainEur'> }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.figures}>
       <Text style={styles.muted}>gain</Text>
@@ -281,6 +287,7 @@ function GainLine({ t }: { t: Pick<PortfolioTotals, 'valueEur' | 'totalGainEur'>
 
 /** One card per broker (value, weight, gain), then the brokers' total. */
 function Brokers({ view, names }: { view: PositionsView; names: Names }) {
+  const styles = useStyles(makeStyles);
   const navigation = useRootNavigation();
   return (
     <>
@@ -323,61 +330,59 @@ function Brokers({ view, names }: { view: PositionsView; names: Names }) {
   );
 }
 
-const styles = StyleSheet.create({
-  segments: { marginHorizontal: space.lg },
-  controls: {
-    flexDirection: 'row',
-    gap: space.xs,
-    marginHorizontal: space.lg,
-    marginBottom: space.sm,
-    alignItems: 'center',
-  },
-  search: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    paddingHorizontal: space.md,
-    paddingVertical: 6,
-    fontSize: 14,
-    color: colors.text,
-  },
-  control: {
-    paddingHorizontal: space.sm,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  controlOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-  controlText: { fontSize: 12, color: colors.text },
-  controlTextOn: { color: '#fff', fontWeight: '600' },
-  filterTitle: { fontSize: 12, fontWeight: '600', color: colors.muted, marginBottom: space.xs },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.sm },
-  chip: {
-    paddingHorizontal: space.md,
-    paddingVertical: 5,
-    borderRadius: 14,
-    backgroundColor: colors.background,
-  },
-  chipOn: { backgroundColor: colors.accent },
-  chipText: { fontSize: 13, color: colors.text },
-  chipTextOn: { color: '#fff', fontWeight: '600' },
-  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  clear: { color: colors.accent, fontSize: 13, marginTop: space.sm },
-  sectionHead: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 2,
-  },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
-  figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline' },
-  strong: { fontSize: 15, fontWeight: '600', color: colors.text },
-  small: { fontSize: 13 },
-  muted: { color: colors.muted, fontSize: 12 },
-  label: { color: colors.text, fontSize: 14 },
-  total: { borderColor: colors.accent },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    segments: { marginHorizontal: space.lg },
+    controls: {
+      flexDirection: 'row',
+      gap: space.xs,
+      marginHorizontal: space.lg,
+      marginBottom: space.sm,
+      alignItems: 'center',
+    },
+    search: {
+      flex: 1,
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      paddingHorizontal: space.md,
+      paddingVertical: 6,
+      fontSize: 14,
+    },
+    control: {
+      paddingHorizontal: space.sm,
+      paddingVertical: 6,
+      borderRadius: 8,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    controlOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+    controlText: { fontSize: 12, color: colors.text },
+    controlTextOn: { color: colors.onAccent, fontWeight: '600' },
+    filterTitle: { fontSize: 12, fontWeight: '600', color: colors.muted, marginBottom: space.xs },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.sm },
+    chip: {
+      paddingHorizontal: space.md,
+      paddingVertical: 5,
+      borderRadius: 14,
+      backgroundColor: colors.background,
+    },
+    chipOn: { backgroundColor: colors.accent },
+    chipText: { fontSize: 13, color: colors.text },
+    chipTextOn: { color: colors.onAccent, fontWeight: '600' },
+    switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    clear: { color: colors.accent, fontSize: 13, marginTop: space.sm },
+    sectionHead: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      marginBottom: 2,
+    },
+    sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+    figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline' },
+    strong: { fontSize: 15, fontWeight: '600', color: colors.text },
+    small: { fontSize: 13 },
+    muted: { color: colors.muted, fontSize: 12 },
+    label: { color: colors.text, fontSize: 14 },
+    total: { borderColor: colors.accent },
+  });

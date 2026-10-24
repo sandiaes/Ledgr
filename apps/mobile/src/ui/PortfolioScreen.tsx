@@ -5,7 +5,8 @@ import type { PortfolioResult, PortfolioState } from '../data/usePortfolio';
 import { formatDate, formatTime } from '../format';
 import { Banner } from './parts';
 import { NothingInScope, ScopeNote } from './Scope';
-import { colors, space } from './theme';
+import { space, type Colors } from './theme';
+import { useStyles } from './ThemeProvider';
 
 type Ready<V> = Extract<PortfolioState<V>, { status: 'ready' }>;
 type Valued<V> = Exclude<V, PortfolioUnvalued>;
@@ -22,6 +23,7 @@ export function PortfolioScreen<V extends { status: string; today: IsoDate }>(pr
   what: string;
   children: (view: Valued<V>, ready: Ready<V>) => ReactNode;
 }) {
+  const styles = useStyles(makeStyles);
   const { state } = props;
   const refresh = (
     <RefreshControl refreshing={state.refreshing} onRefresh={() => void state.refresh()} />
@@ -77,8 +79,9 @@ export function PortfolioScreen<V extends { status: string; today: IsoDate }>(pr
   );
 }
 
-const styles = StyleSheet.create({
-  content: { paddingTop: space.md, paddingBottom: space.xl },
-  status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
-  asOf: { color: colors.muted, fontSize: 12, marginHorizontal: space.lg, marginBottom: space.sm },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    content: { paddingTop: space.md, paddingBottom: space.xl },
+    status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
+    asOf: { color: colors.muted, fontSize: 12, marginHorizontal: space.lg, marginBottom: space.sm },
+  });

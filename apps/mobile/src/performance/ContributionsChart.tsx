@@ -2,7 +2,8 @@ import type { CalendarReturn, Decimal } from '@ledgr/core';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { BarChart } from 'react-native-gifted-charts';
 import { formatPeriod } from '../format';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useColors, useStyles } from '../ui/ThemeProvider';
 
 /** Decimal -> number for bar heights only; no amount is drawn (axes hidden). */
 const pixels = (d: Decimal | null) => (d ? Number(d.toFixed(2)) : 0);
@@ -12,6 +13,8 @@ const pixels = (d: Decimal | null) => (d ? Number(d.toFixed(2)) : 0);
  * axis labels, so nothing needs masking when values are hidden.
  */
 export function ContributionsChart({ periods }: { periods: readonly CalendarReturn[] }) {
+  const styles = useStyles(makeStyles);
+  const colors = useColors();
   const { width } = useWindowDimensions();
   const rows = [...periods].reverse();
   if (rows.length === 0) return <Text style={styles.empty}>No history yet.</Text>;
@@ -41,7 +44,7 @@ export function ContributionsChart({ periods }: { periods: readonly CalendarRetu
         hideYAxisText
         yAxisLabelWidth={0}
         hideRules
-        xAxisColor={colors.border}
+        xAxisColor={colors.chart.axis}
         yAxisColor="transparent"
         noOfSectionsBelowXAxis={negative ? 2 : 0}
         scrollToEnd
@@ -56,9 +59,10 @@ export function ContributionsChart({ periods }: { periods: readonly CalendarRetu
   );
 }
 
-const styles = StyleSheet.create({
-  empty: { color: colors.muted, paddingVertical: space.lg },
-  axis: { fontSize: 9, color: colors.muted },
-  legend: { flexDirection: 'row', gap: space.md, marginTop: space.sm },
-  small: { fontSize: 12 },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    empty: { color: colors.muted, paddingVertical: space.lg },
+    axis: { fontSize: 9, color: colors.muted },
+    legend: { flexDirection: 'row', gap: space.md, marginTop: space.sm },
+    small: { fontSize: 12 },
+  });

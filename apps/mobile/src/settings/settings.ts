@@ -1,3 +1,6 @@
+export const APPEARANCES = ['system', 'light', 'dark'] as const;
+export type AppearancePreference = (typeof APPEARANCES)[number];
+
 export const LOCK_TIMEOUTS = [0, 1, 5, 15] as const;
 export type LockTimeout = (typeof LOCK_TIMEOUTS)[number];
 
@@ -14,6 +17,8 @@ export interface Settings {
    * certificados out (docs/app-plan.md §10). A preference, not financial data.
    */
   includeCertificados: boolean;
+  /** Theme: follow the phone (default), or always light / dark. */
+  appearance: AppearancePreference;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -22,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hideValues: false,
   blockScreenshots: true,
   includeCertificados: true,
+  appearance: 'system',
 };
 
 export const SETTINGS_KEY = 'ledgr.settings.v1';
@@ -38,5 +44,8 @@ export function parseSettings(raw: unknown): Settings {
     hideValues: bool(r.hideValues, DEFAULT_SETTINGS.hideValues),
     blockScreenshots: bool(r.blockScreenshots, DEFAULT_SETTINGS.blockScreenshots),
     includeCertificados: bool(r.includeCertificados, DEFAULT_SETTINGS.includeCertificados),
+    appearance: APPEARANCES.includes(r.appearance as AppearancePreference)
+      ? (r.appearance as AppearancePreference)
+      : DEFAULT_SETTINGS.appearance,
   };
 }

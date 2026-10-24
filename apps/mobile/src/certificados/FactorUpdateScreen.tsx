@@ -16,7 +16,8 @@ import { formatPeriod } from '../format';
 import { useServices, type Ledger } from '../services';
 import { Amount, Money, Pct } from '../ui/Money';
 import { Banner, Button, Card, Field } from '../ui/parts';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 import { seriesLabel } from './CertificadosScreen';
 
 type Parsed = { ok: true; value: Decimal } | { ok: false; message: string } | null;
@@ -36,6 +37,7 @@ function parseFactor(text: string): Parsed {
  * rows are never changed.
  */
 export function FactorUpdateScreen() {
+  const styles = useStyles(makeStyles);
   const ledger = useLedger();
   const today = useToday();
   if (ledger.isError) {
@@ -50,6 +52,7 @@ export function FactorUpdateScreen() {
 }
 
 function FactorUpdate({ ledger, today }: { ledger: Ledger; today: IsoDate }) {
+  const styles = useStyles(makeStyles);
   const { data: api } = useServices();
   const refresh = useRefreshAfterWrite();
   const thisMonth = `${today.slice(0, 7)}-01`;
@@ -173,6 +176,7 @@ function FactorInput(props: {
   text: string;
   onChange(text: string): void;
 }) {
+  const styles = useStyles(makeStyles);
   const { line } = props;
   const label = `${props.series} · subscribed ${formatPeriod(line.subscribedOn.slice(0, 7))}`;
   const previous = line.previous;
@@ -222,29 +226,30 @@ function FactorInput(props: {
   );
 }
 
-const styles = StyleSheet.create({
-  content: { paddingTop: space.md, paddingBottom: space.xl },
-  status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
-  month: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: space.xs,
-  },
-  monthText: { fontSize: 17, fontWeight: '700', color: colors.text },
-  arrow: { fontSize: 28, color: colors.accent, paddingHorizontal: space.md },
-  off: { color: colors.border },
-  title: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: space.xs },
-  inline: {
-    flexDirection: 'row',
-    gap: 4,
-    alignItems: 'baseline',
-    flexWrap: 'wrap',
-    marginBottom: space.xs,
-  },
-  muted: { fontSize: 12, color: colors.muted },
-  value: { fontSize: 14, color: colors.text },
-  warning: { fontSize: 13, color: colors.warningText },
-  note: { fontSize: 12, color: colors.muted, marginTop: space.sm, textAlign: 'center' },
-  buttons: { marginHorizontal: space.lg },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    content: { paddingTop: space.md, paddingBottom: space.xl },
+    status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
+    month: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: space.xs,
+    },
+    monthText: { fontSize: 17, fontWeight: '700', color: colors.text },
+    arrow: { fontSize: 28, color: colors.accent, paddingHorizontal: space.md },
+    off: { color: colors.border },
+    title: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: space.xs },
+    inline: {
+      flexDirection: 'row',
+      gap: 4,
+      alignItems: 'baseline',
+      flexWrap: 'wrap',
+      marginBottom: space.xs,
+    },
+    muted: { fontSize: 12, color: colors.muted },
+    value: { fontSize: 14, color: colors.text },
+    warning: { fontSize: 13, color: colors.warningText },
+    note: { fontSize: 12, color: colors.muted, marginTop: space.sm, textAlign: 'center' },
+    buttons: { marginHorizontal: space.lg },
+  });

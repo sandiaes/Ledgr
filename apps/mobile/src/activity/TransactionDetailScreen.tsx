@@ -22,10 +22,12 @@ import {
 } from '../ui/labels';
 import { Amount, Money, Units } from '../ui/Money';
 import { Banner, Button, Card, Line } from '../ui/parts';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 
 /** One ledger row: its fields, Edit (form rows only) and Delete (soft, with confirmation). */
 export function TransactionDetailScreen() {
+  const styles = useStyles(makeStyles);
   const { id } = useRootRoute<'TransactionDetail'>().params;
   const navigation = useRootNavigation();
   const ledger = useLedger();
@@ -178,6 +180,7 @@ function DeleteDialog(props: {
   onClose(): void;
   onDeleted(): void;
 }) {
+  const styles = useStyles(makeStyles);
   const { data: api } = useServices();
   const refresh = useRefreshAfterWrite();
   const mutation = useMutation({ mutationFn: (id: string) => api.deleteTransaction(id) });
@@ -232,20 +235,21 @@ function DeleteDialog(props: {
   );
 }
 
-const styles = StyleSheet.create({
-  content: { paddingTop: space.md, paddingBottom: space.xl },
-  status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
-  value: { fontSize: 14, color: colors.text },
-  strong: { fontSize: 15, fontWeight: '700', color: colors.text },
-  note: { fontSize: 12, color: colors.muted, marginTop: space.sm },
-  error: { fontSize: 13, color: colors.loss, marginTop: space.sm },
-  buttons: { marginHorizontal: space.lg },
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    padding: space.xl,
-  },
-  dialog: { backgroundColor: colors.card, borderRadius: 12, padding: space.lg },
-  dialogTitle: { fontSize: 17, fontWeight: '700', color: colors.text, marginBottom: space.sm },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    content: { paddingTop: space.md, paddingBottom: space.xl },
+    status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
+    value: { fontSize: 14, color: colors.text },
+    strong: { fontSize: 15, fontWeight: '700', color: colors.text },
+    note: { fontSize: 12, color: colors.muted, marginTop: space.sm },
+    error: { fontSize: 13, color: colors.loss, marginTop: space.sm },
+    buttons: { marginHorizontal: space.lg },
+    backdrop: {
+      flex: 1,
+      backgroundColor: colors.modal.backdrop,
+      justifyContent: 'center',
+      padding: space.xl,
+    },
+    dialog: { backgroundColor: colors.modal.surface, borderRadius: 12, padding: space.lg },
+    dialogTitle: { fontSize: 17, fontWeight: '700', color: colors.text, marginBottom: space.sm },
+  });

@@ -2,12 +2,13 @@ import type { Decimal } from '@ledgr/core';
 import { Text, type StyleProp, type TextStyle } from 'react-native';
 import { formatAmount, formatEur, formatPct, formatUnits } from '../format';
 import { useHideValues } from '../settings/SettingsProvider';
-import { colors } from './theme';
+import type { Colors } from './theme';
+import { useColors } from './ThemeProvider';
 
 /** What every amount shows while values are hidden. */
 export const MASK = '••••';
 
-const tone = (value: Decimal | null) =>
+const tone = (colors: Colors, value: Decimal | null) =>
   !value || value.isZero() ? undefined : value.isNegative() ? colors.loss : colors.gain;
 
 /**
@@ -23,12 +24,13 @@ export function Money(props: {
   style?: StyleProp<TextStyle>;
 }) {
   const [hidden] = useHideValues();
+  const colors = useColors();
   const text = hidden
     ? MASK
     : props.value === null
       ? '—'
       : formatEur(props.value, { sign: props.sign });
-  const color = props.colored && !hidden ? tone(props.value) : undefined;
+  const color = props.colored && !hidden ? tone(colors, props.value) : undefined;
   return (
     <Text style={[props.style, color ? { color } : null]} testID="money">
       {text}
@@ -76,7 +78,8 @@ export function Pct(props: {
   colored?: boolean;
   style?: StyleProp<TextStyle>;
 }) {
-  const color = props.colored ? tone(props.value) : undefined;
+  const colors = useColors();
+  const color = props.colored ? tone(colors, props.value) : undefined;
   return (
     <Text style={[props.style, color ? { color } : null]}>
       {formatPct(props.value, { sign: props.sign })}

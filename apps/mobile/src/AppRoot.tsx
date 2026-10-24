@@ -1,5 +1,4 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthGateProvider, useGate } from './auth/AuthGate';
@@ -15,15 +14,17 @@ import { LockGate } from './lock/LockGate';
 import { MainTabs } from './MainTabs';
 import { ServicesProvider, type Services } from './services';
 import { SettingsProvider } from './settings/SettingsProvider';
+import { ThemeProvider } from './ui/ThemeProvider';
 
 /** The whole app below the configuration check; `services` are faked in tests. */
 export function AppRoot({ services }: { services: Services }) {
   return (
     <ServicesProvider services={services}>
       <SafeAreaProvider>
-        <StatusBar style="dark" />
         <SettingsProvider>
-          <Session />
+          <ThemeProvider>
+            <Session />
+          </ThemeProvider>
         </SettingsProvider>
       </SafeAreaProvider>
     </ServicesProvider>

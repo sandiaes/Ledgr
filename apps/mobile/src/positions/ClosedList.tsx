@@ -5,9 +5,11 @@ import { formatDate } from '../format';
 import { assetLabel, assetName, brokerLabel, type Names } from '../ui/labels';
 import { Money, Pct, Units } from '../ui/Money';
 import { Banner } from '../ui/parts';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 
 function Line(props: { label: string; children: React.ReactNode }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.line}>
       <Text style={styles.label}>{props.label}</Text>
@@ -18,6 +20,7 @@ function Line(props: { label: string; children: React.ReactNode }) {
 
 /** One closed position: realized € and %; tap for its figures and broker split. */
 function ClosedItem({ c, names }: { c: ClosedPosition; names: Names }) {
+  const styles = useStyles(makeStyles);
   const [open, setOpen] = useState(false);
   return (
     <Pressable
@@ -75,6 +78,7 @@ function ClosedItem({ c, names }: { c: ClosedPosition; names: Names }) {
 
 /** Realized results per fully closed asset (docs/kpis.md §8). */
 export function ClosedList(props: { closed: readonly ClosedPosition[]; names: Names }) {
+  const styles = useStyles(makeStyles);
   return (
     <>
       <Banner tone="warning">
@@ -92,34 +96,35 @@ export function ClosedList(props: { closed: readonly ClosedPosition[]; names: Na
   );
 }
 
-const styles = StyleSheet.create({
-  list: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.xs,
-    marginHorizontal: space.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  item: {
-    paddingVertical: space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  line: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    paddingVertical: 1,
-  },
-  figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline' },
-  ticker: { fontSize: 15, fontWeight: '600', color: colors.text },
-  name: { flex: 1, color: colors.muted, fontSize: 12, marginRight: space.sm },
-  strong: { fontSize: 15, fontWeight: '600', color: colors.text },
-  small: { fontSize: 13, color: colors.text },
-  muted: { color: colors.muted, fontSize: 12 },
-  label: { color: colors.text, fontSize: 13 },
-  details: { marginTop: space.sm, gap: 2 },
-  subtitle: { fontSize: 12, fontWeight: '600', color: colors.muted, marginTop: space.xs },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    list: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      paddingHorizontal: space.lg,
+      paddingVertical: space.xs,
+      marginHorizontal: space.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    item: {
+      paddingVertical: space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    line: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      paddingVertical: 1,
+    },
+    figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline' },
+    ticker: { fontSize: 15, fontWeight: '600', color: colors.text },
+    name: { flex: 1, color: colors.muted, fontSize: 12, marginRight: space.sm },
+    strong: { fontSize: 15, fontWeight: '600', color: colors.text },
+    small: { fontSize: 13, color: colors.text },
+    muted: { color: colors.muted, fontSize: 12 },
+    label: { color: colors.text, fontSize: 13 },
+    details: { marginTop: space.sm, gap: 2 },
+    subtitle: { fontSize: 12, fontWeight: '600', color: colors.muted, marginTop: space.xs },
+  });

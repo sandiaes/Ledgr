@@ -17,7 +17,8 @@ import {
 import { Money, Units } from '../ui/Money';
 import { Banner, Button, Card, Chip, Field, Segmented } from '../ui/parts';
 import { NothingInScope, ScopeNote } from '../ui/Scope';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 import {
   activeActivityFilters,
   activityOptions,
@@ -36,6 +37,7 @@ import {
  * "Include certificados" is off.
  */
 export function ActivityScreen() {
+  const styles = useStyles(makeStyles);
   const ledger = useLedger();
   const today = useToday();
   const names = useNames(ledger.data ?? null);
@@ -123,6 +125,7 @@ function FilterPanel(props: {
   options: ReturnType<typeof activityOptions>;
   names: Names;
 }) {
+  const styles = useStyles(makeStyles);
   const { filters, set, names, options: used } = props;
   const assets = [...names.assets.values()].filter((a) => used.assets.has(a.id));
   return (
@@ -196,6 +199,7 @@ function FilterPanel(props: {
 }
 
 function ActivityRow(props: { row: AssetTransactionRow; names: Names; year: string }) {
+  const styles = useStyles(makeStyles);
   const { row: r, names } = props;
   const navigation = useRootNavigation();
   const what = r.assetId ? assetLabel(names, r.assetId) : 'Cash';
@@ -225,27 +229,28 @@ function ActivityRow(props: { row: AssetTransactionRow; names: Names; year: stri
   );
 }
 
-const styles = StyleSheet.create({
-  content: { paddingTop: space.md, paddingBottom: space.xl },
-  status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
-  bar: { flexDirection: 'row', gap: space.md, marginHorizontal: space.lg, marginTop: -space.md },
-  label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.xs,
-    marginBottom: space.md,
-    alignItems: 'center',
-  },
-  dates: { flexDirection: 'row', gap: space.md },
-  date: { minWidth: 130 },
-  row: {
-    paddingVertical: space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  type: { fontSize: 14, fontWeight: '600', color: colors.text, flexShrink: 1 },
-  total: { fontSize: 14, color: colors.text },
-  muted: { color: colors.muted, fontSize: 12 },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    content: { paddingTop: space.md, paddingBottom: space.xl },
+    status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
+    bar: { flexDirection: 'row', gap: space.md, marginHorizontal: space.lg, marginTop: -space.md },
+    label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
+    chips: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: space.xs,
+      marginBottom: space.md,
+      alignItems: 'center',
+    },
+    dates: { flexDirection: 'row', gap: space.md },
+    date: { minWidth: 130 },
+    row: {
+      paddingVertical: space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+    type: { fontSize: 14, fontWeight: '600', color: colors.text, flexShrink: 1 },
+    total: { fontSize: 14, color: colors.text },
+    muted: { color: colors.muted, fontSize: 12 },
+  });

@@ -14,7 +14,8 @@ import type { Ledger } from '../services';
 import { brokerLabel, useNames } from '../ui/labels';
 import { Amount, Money, Units } from '../ui/Money';
 import { Banner, Button, Card, Line } from '../ui/parts';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 
 /** "Série E" for a subscription's series (its code when the name is not known). */
 export const seriesLabel = (ledger: Ledger, seriesId: string) => {
@@ -27,6 +28,7 @@ export const seriesLabel = (ledger: Ledger, seriesId: string) => {
  * month, value from factor, gain and the factor's age, red when over 35 days.
  */
 export function CertificadosScreen() {
+  const styles = useStyles(makeStyles);
   const ledger = useLedger();
   const today = useToday();
   const navigation = useRootNavigation();
@@ -104,6 +106,7 @@ export function CertificadosScreen() {
 }
 
 function Subscription(props: { s: CertificadoSubscriptionView; series: string; broker: string }) {
+  const styles = useStyles(makeStyles);
   const { s } = props;
   return (
     <Card testID="ca-row">
@@ -139,12 +142,13 @@ function Subscription(props: { s: CertificadoSubscriptionView; series: string; b
   );
 }
 
-const styles = StyleSheet.create({
-  content: { paddingTop: space.md, paddingBottom: space.xl },
-  status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
-  muted: { fontSize: 12, color: colors.muted, marginBottom: space.xs },
-  value: { fontSize: 14, color: colors.text },
-  strong: { fontSize: 15, fontWeight: '700', color: colors.text },
-  age: { flexDirection: 'row', gap: space.sm, alignItems: 'center', marginTop: space.xs },
-  buttons: { marginHorizontal: space.lg },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    content: { paddingTop: space.md, paddingBottom: space.xl },
+    status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
+    muted: { fontSize: 12, color: colors.muted, marginBottom: space.xs },
+    value: { fontSize: 14, color: colors.text },
+    strong: { fontSize: 15, fontWeight: '700', color: colors.text },
+    age: { flexDirection: 'row', gap: space.sm, alignItems: 'center', marginTop: space.xs },
+    buttons: { marginHorizontal: space.lg },
+  });

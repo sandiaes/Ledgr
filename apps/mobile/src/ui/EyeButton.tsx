@@ -1,11 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable } from 'react-native';
 import { useHideValues } from '../settings/SettingsProvider';
-import { colors, space } from './theme';
+import { space } from './theme';
+import { useColors } from './ThemeProvider';
 
 /** Hide / show every amount (the same toggle as in More). */
 export function EyeButton() {
   const [hidden, toggle] = useHideValues();
+  const colors = useColors();
   return (
     <Pressable
       onPress={toggle}
