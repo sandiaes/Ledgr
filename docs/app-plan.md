@@ -5,8 +5,9 @@ Status: **plan approved with decisions D1–D7 on 2026-10-23** (§9). **Slice 5a
 (`apps/mobile` foundation, sign-in with MFA, lock, Dashboard; §8). **Slice 5b built
 2026-10-23** (Positions, Position and Broker detail, Allocation, Performance, Closed
 positions; §8). **Slice 5c built 2026-10-24** (New transaction, Activity, Certificados,
-Settings, symbol resolution in `prices-daily`; §8). KPI definitions are in `docs/kpis.md`;
-calculation assumptions in `docs/assumptions.md`.
+Settings, symbol resolution in `prices-daily`; §8). **Slice 5d planned 2026-10-24**
+(the app-wide "Include certificados de aforro" toggle, §10; awaiting approval). KPI
+definitions are in `docs/kpis.md`; calculation assumptions in `docs/assumptions.md`.
 
 `apps/mobile`: Expo + React Native + TypeScript, Android only, run with Expo Go during
 development and installable as an APK built with EAS. All numbers come from
@@ -39,6 +40,8 @@ empty list); amounts never appear in error text.
 
 ### Dashboard
 
+- **Scope toggle** (slice 5d, §10): a switch "Include certificados de aforro" at the very
+  top, above the header card. It is one app-wide setting, not a Dashboard filter.
 - **Header card**: total value (large), day change € and % (green/red), "as of" time.
   Indicators under it when they apply: "2 prices stale", "1 price pending", "CA factor
   41 days old" (tap → list of the assets concerned with their price dates).
@@ -271,7 +274,7 @@ the jobs. Writes send strings.
 | `['ledger']`          | `transactions` (not deleted, order `trade_date, created_at, id` — the order FIFO relies on), `assets`, `accounts`, `ca_subscriptions`, `ca_series`, `ca_factors` | ~150 + ~25 + 4 + 3 + ~30 |
 | `['market', T]`       | `prices` of held assets dated ≥ _T_ − 14 days, plus the latest older close for an asset with none in that window; `fx_rates` ≥ _T_ − 14 days; `live_quotes`      | ~200                     |
 | `['valueNow']`        | `supabase.functions.invoke('value-now')`: refreshes due quotes server-side (provider keys never reach the app), returns totals                                   | 1 call                   |
-| `['snapshots']`       | `portfolio_snapshots`: `snapshot_date, total_value_eur::text, net_contributions_eur::text`, order by date                                                        | ~2,150 → 3 pages         |
+| `['snapshots']`       | `portfolio_snapshots`: `snapshot_date, total_value_eur::text, net_contributions_eur::text` and (slice 5d) the four per-type value columns, order by date         | ~2,150 → 3 pages         |
 | `['prices', assetId]` | one asset's full price history (`price_date, close::text, currency, split_factor::text`), only when its detail chart opens                                       | up to ~2,200 → 3 pages   |
 | `['jobRuns']`         | `job_runs` newest `prices` and `snapshots` rows (`limit 1` each)                                                                                                 | 2                        |
 
@@ -500,6 +503,12 @@ negative values are blocked; Save is disabled while saving and a double tap inse
 row; a retried insert with the same id does not duplicate. Plus symbol resolution in
 `prices-daily` (§5, D3) with its tests and the `docs/prices.md` redeploy steps.
 
+**5d — "Include certificados de aforro" toggle** (planned 2026-10-24, awaiting approval;
+the full plan is §10). Core first: `AssetScope` and a `scope` option on every KPI, series
+and aggregation function, with the tests listed in §10.6; then the app: the setting, the
+switch on the Dashboard, the "Excluding certificados" note on every affected screen, and
+component tests. No schema change.
+
 ## 9. Decisions (approved 2026-10-23)
 
 - **D1 Total gain** = realized + unrealized + net income − other costs
@@ -521,3 +530,161 @@ row; a retried insert with the same id does not duplicate. Plus symbol resolutio
   **All app rows are EUR at fx 1.**
 - **D7 Not in the form**: transfers, certificado subscriptions and redemptions, and
   foreign-currency rows. Totals are entered in EUR (fx 1), as in the import.
+
+## 10. Asset scope: the certificados toggle (slice 5d)
+
+Status: **plan, 2026-10-24, awaiting approval** (Phase A). Nothing below is built yet.
+
+### 10.1 What the snapshots store, and whether it is enough
+
+`portfolio_snapshots` stores, per day, `total_value_eur` and the value of each asset type
+as its own numeric column: `stock_value_eur`, `etf_value_eur`, `crypto_value_eur`,
+`certificado_aforro_value_eur` (`20261019000004_caches_and_snapshots.sql`).
+`buildSnapshot` (`snapshot.ts`) fills each column with Σ of that type's holdings, and the
+total is Σ of the four (cash is not tracked, `trackCash: false`, #27). Each column is
+written rounded half-even to 18 decimals (`market/src/db.ts`, `snapshotRow`).
+
+Valuation is per asset: a holding's value depends only on its own lots, prices, FX and
+(for certificados) factors, never on other assets. So the value of "the portfolio without
+certificados" on day _d_ is **exactly** `stock + etf + crypto` of that day's snapshot: it is
+the sum of the holdings in scope, the same number `buildSnapshot` would compute from a
+ledger with the certificado rows removed (a test proves it, §10.6). It is a **sum of the
+in-scope columns, not total − certificados**: nothing is subtracted.
+
+What the snapshots do **not** give per type is net invested (`net_contributions_eur` is
+one total). Without certificados, _NI(d)_ comes from the ledger: `netInvestedEur` over the
+in-scope rows, as of _d_ (one cumulative pass over the rows and the snapshot days, not one
+pass per day). Flows _F(d)_, XIRR, TWR, income and costs already come from the ledger.
+
+**Conclusion: no schema change.** The app only selects four more columns it already has
+the right to read (RLS and aal2 unchanged).
+
+Rounding: each stored column is rounded to 18 decimals separately, so `stock + etf +
+crypto` can differ from a freshly computed total in the 18th decimal. That is far below a
+cent and never visible.
+
+### 10.2 The rule (core)
+
+- `AssetScope` (new `scope.ts`): built once by `assetScope({ assets, excludeTypes })`; it
+  answers "is this asset id in scope". The default is every type (`FULL_SCOPE`), and every
+  function given no scope behaves exactly as today. The app uses one value:
+  `excludeTypes: ['certificado_aforro']` when the toggle is off.
+- A ledger row is in scope when its asset's type is not excluded. Rows **without an
+  asset** (cash interest, fee rows without an asset, deposits and withdrawals) are not
+  certificados and stay in scope. A row whose asset id is unknown (not in `assets`) stays
+  in scope, as today.
+- Excluded figures are always **recomputed from the in-scope ledger, prices and
+  snapshot columns**, never by subtracting certificados from a total: FIFO, holdings,
+  _V(T)_, _V(Y)_, _F(d)_, _NI(d)_, _R_, _U_, _I_, _C_, _G_, XIRR, TWR, monthly and yearly
+  returns, allocation weights and top movers all run on the scoped inputs.
+- Shared helpers apply the rule once, so all functions agree: `scopeTransactions`,
+  `scopeHoldings`, `scopeSnapshots` (value = Σ in-scope type columns; NI from the scoped
+  ledger; with the full scope the stored `total_value_eur` and `net_contributions_eur` are
+  used unchanged, so "toggle on" reproduces today's numbers bit for bit).
+
+### 10.3 Functions touched
+
+`packages/core` (each gets an optional `scope`, default full; the scoping happens at the
+start, before any arithmetic):
+
+| File             | Function(s)                                                                                       | Change                                                                                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `scope.ts` (new) | `assetScope`, `FULL_SCOPE`, `isFullScope`, `scopeTransactions`, `scopeHoldings`, `scopeSnapshots` | the rule of §10.2                                                                                                                                                                                                  |
+| `returns.ts`     | `ValueSnapshot`                                                                                   | optional `valueByTypeEur` (the four stored columns)                                                                                                                                                                |
+| `returns.ts`     | `periodReturns`, `twrSteps`, `monthlyReturns`, `yearlyReturns`, `valueSeries`                     | `scope` in `ReturnsInput` / as an argument: flows and NI from the scoped ledger, V(d) from the scoped snapshots; "Since start" begins the day before the first in-scope row                                        |
+| `holdings.ts`    | `computeHoldings`                                                                                 | `scope` in `HoldingsInput`                                                                                                                                                                                         |
+| `snapshot.ts`    | `buildSnapshot`                                                                                   | `scope`: totals, cost, NI and valuation flags of the in-scope holdings only (so no CA factor flag when certificados are out)                                                                                       |
+| `gains.ts`       | `gainsSummary`, `netInvestedEur`                                                                  | `scope`                                                                                                                                                                                                            |
+| `cashflows.ts`   | `dailyFlows`, `investmentCashFlows`                                                               | `scope`                                                                                                                                                                                                            |
+| `daychange.ts`   | `dayChange`                                                                                       | `scope` (V(T), V(Y), F(T) all scoped)                                                                                                                                                                              |
+| `accounts.ts`    | `accountSummaries`                                                                                | `scope`; a broker is listed under today's rule applied to the in-scope rows (open lots, or any realized gain, income or cost), so a broker with only certificados (Aforro) disappears and the brokers still add up |
+| `allocation.ts`  | `allocation`, `concentration`                                                                     | `scope`; weights are of the in-scope total                                                                                                                                                                         |
+| `movers.ts`      | `topPositions`, `topMovers`                                                                       | `scope`                                                                                                                                                                                                            |
+| `closed.ts`      | `closedPositions`                                                                                 | `scope`                                                                                                                                                                                                            |
+| `positions.ts`   | `transactionRows` (Activity), `assetTransactions`                                                 | `scope`                                                                                                                                                                                                            |
+| `sanity.ts`      | `reconcile`                                                                                       | `scope`: the identities on the scoped figures; the comparison with value-now's totals only with the full scope (value-now returns whole-portfolio totals)                                                          |
+| `views.ts`       | `buildDashboard`, `buildPositions`, `buildAllocation`, `buildPerformance`                         | `PortfolioInput.excludeTypes`; each view also returns `scope` (`excludeTypes`) and `emptyInScope` (rows exist, none in scope)                                                                                      |
+
+Not touched, on purpose: `validation.ts`, `input.ts`, `assetInput.ts` (New transaction and
+its checks always use the whole ledger), `certificados.ts` (the Certificados screen and the
+factor update), `priceSeries`, `positionDetail` (one asset; an out-of-scope asset simply
+has no detail in a scoped view).
+
+`packages/client`: `SNAPSHOT_COLUMNS` and `snapshotFromRow` add the four per-type columns
+(`::text`, parsed with `dec()`). `packages/market` (jobs, value-now) is unchanged, and no
+Edge Function needs redeploying.
+
+`apps/mobile` (no arithmetic; formatting and wiring only):
+
+| Screen / module                                    | Change                                                                                                                                      |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `settings/settings.ts`, `SettingsProvider.tsx`     | `includeCertificados: boolean` (default `true`, a missing or unreadable value reads as `true`); `useAssetScope()` → `excludeTypes`          |
+| `data/usePortfolio.ts`                             | passes `excludeTypes` into `PortfolioInput`; it is in the `useMemo` dependencies but **not** in any query key, so switching never refetches |
+| `dashboard/DashboardScreen.tsx`                    | the switch at the top (shown in every state: loading, error, empty); the CA factor indicator is gone because `freshness.caFactor` is null   |
+| `ui/PortfolioScreen.tsx`                           | the "Excluding certificados" note under the "as of" line, so every portfolio screen shows it                                                |
+| Positions (all segments), Broker / Position detail | scoped views; the type filter offers only in-scope types; a detail opened for something no longer in scope says so instead of crashing      |
+| Allocation, Performance, Closed positions          | scoped views (through `PortfolioScreen`)                                                                                                    |
+| `activity/ActivityScreen.tsx`, `listing.ts`        | `transactionRows(…, scope)`; the asset, broker and type chips offer only what the scoped rows contain; the note at the top                  |
+| Certificados, Factor update, New transaction, Edit | unchanged (whole ledger), reachable from More as today                                                                                      |
+
+### 10.4 App-wide state
+
+- One boolean in the existing settings object (`ledgr.settings.v1` in AsyncStorage, next to
+  hide values). It is not financial data. The settings provider already loads before the
+  first render, so a screen never flashes the wrong scope.
+- `useAssetScope()` returns a stable `excludeTypes` array (`[]` or
+  `['certificado_aforro']`). `usePortfolio` hands it to the core builder; every screen
+  already goes through `usePortfolio` (or `useLedger` for Activity), so the switch reaches
+  all of them through context, with no per-screen state.
+- Switching re-runs the core builder on the rows already in the TanStack cache. No query
+  key contains the scope, so nothing is fetched again. Switching back computes the same
+  numbers from the same rows (core is deterministic; a test checks it).
+
+### 10.5 Edge cases
+
+| Case                                                                 | Handling                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Only certificados held (or the ledger has only CA rows)              | `emptyInScope`: "No holdings without certificados" on Dashboard, Positions, Allocation, Performance; charts show their empty state; returns "—" with "no rows in scope"; Activity says "No transactions without certificados" |
+| In-scope value 0 at a period start, certificados held then           | V(S) = 0 for the scoped portfolio; "Since start" starts the day before the first in-scope row; the TWR from-zero rule (#17) handles a later first buy                                                                         |
+| All in-scope positions sold, later re-entered                        | as today: TWR skips zero→zero steps and uses the from-zero rule on re-entry                                                                                                                                                   |
+| A snapshot missing for a day                                         | missing in both modes alike: "snapshot missing" as today                                                                                                                                                                      |
+| A non-CA asset without an FX rate                                    | "unvalued" in both modes (certificados are EUR, so they never cause it)                                                                                                                                                       |
+| Brokers                                                              | listed when they have in-scope open lots or any in-scope realized gain, income or cost (today's rule on the scoped rows): the Aforro broker disappears, a broker with only closed in-scope positions stays, totals add up     |
+| Assetless rows (cash interest, fee rows) booked at the Aforro broker | they are not certificados, so they stay in scope, and that broker then stays listed with value 0                                                                                                                              |
+| CA stale-factor indicator                                            | not shown when excluded (no CA holding in scope, `caFactor` null); the stale-price count never included certificados                                                                                                          |
+| value-now comparison (yellow banner)                                 | only with the full scope; the scoped identities (V − NI = R + U, Σ brokers = totals) are still checked                                                                                                                        |
+| A Position or Broker detail open on a now out-of-scope item          | the toggle is on the Dashboard tab and details are pushed above the tabs, so this needs going back first; if it happens anyway, the screen says "Not included: certificados are excluded" instead of failing                  |
+| Activity filter set to a certificado asset or the Aforro broker      | the filter resets to "All" when its value is no longer offered                                                                                                                                                                |
+| "approx." badges in Performance                                      | from the in-scope rows only: a month whose only month-level rows were certificados loses the badge when excluded                                                                                                              |
+| Allocation percentages                                               | weights divide by the in-scope total, so they sum to 1 (to Decimal precision); labels rounded to 2 decimals may add up to 99.99 or 100.01, as they can today                                                                  |
+| Hide values                                                          | unchanged: amounts masked in both modes                                                                                                                                                                                       |
+| Old app installs                                                     | no stored value → included (today's behavior)                                                                                                                                                                                 |
+
+### 10.6 Tests (Phase B)
+
+Core (Vitest):
+
+- **Equivalence (property-style)**: for random ledgers (fast-check: 2 accounts, stocks,
+  ETFs, crypto and certificado subscriptions/redemptions with factors) and for the
+  fixture ledger (`fixtures/sample_transactions.csv` + `sample_ca.csv` through the
+  importer's plan, in `scripts/import`, with generated prices), every figure of every view
+  with certificados excluded equals the same figure computed with the full scope from the
+  ledger with the certificado rows removed, and snapshots rebuilt with `buildSnapshot`
+  from that ledger: value, cost, NI, _R_, _U_, _I_, _C_, _G_, day change, XIRR and TWR for
+  the three periods, the five series, monthly and yearly rows, allocation in all four
+  dimensions, top 5 / 10, movers, brokers, closed positions and Activity rows.
+- **Round trip**: full → excluded → full gives figures equal (`Decimal.eq`, field by field)
+  to the first full run.
+- **Allocation** sums to 1 in every dimension in both modes; **by-broker totals** equal the
+  portfolio totals in both modes.
+- **XIRR and TWR are recomputed**: on a hand example the excluded rates differ from the
+  full ones and equal those of the CA-free ledger; neither equals anything derived from the
+  full figures.
+- `scopeSnapshots`: value = Σ in-scope columns (no subtraction), NI from the ledger; full
+  scope returns the stored values unchanged.
+
+App (jest-expo): the switch changes the figures on Dashboard, Positions (each segment),
+By broker (Aforro gone), Allocation, Performance, Closed positions and Activity, each
+showing "Excluding certificados"; no query runs again on switching; the preference
+survives a remount (stored and read back); Certificados and Factor update still work with
+certificados excluded; hide values still masks every amount in both modes.
