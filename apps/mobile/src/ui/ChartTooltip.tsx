@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { T, type Tone } from './T';
-import { radius, space, type Colors } from './theme';
+import { radius, space, weight, type Colors } from './theme';
 import { useStyles } from './ThemeProvider';
 
 /**
@@ -41,5 +41,5 @@ const makeStyles = (colors: Colors) =>
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.chart.tooltipBorder,
     },
-    strong: { fontWeight: '600' },
+    strong: { fontWeight: weight.semibold },
   });

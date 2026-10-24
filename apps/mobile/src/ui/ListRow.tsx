@@ -87,6 +87,6 @@ const makeStyles = (colors: Colors) =>
     divider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
     pressed: { backgroundColor: colors.pressed },
     leading: { alignItems: 'center', justifyContent: 'center' },
-    left: { flex: 1, gap: 2 },
-    right: { alignItems: 'flex-end', gap: 2 },
+    left: { flex: 1, gap: space.hairline },
+    right: { alignItems: 'flex-end', gap: space.hairline },
   });

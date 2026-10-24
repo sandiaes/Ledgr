@@ -13,6 +13,7 @@ jest.mock('react-native-gifted-charts', () => ({
   BarChart: () => null,
 }));
 
+import { formatDate } from '../format';
 const today = localDate(new Date(), TIME_ZONE);
 const drawer = () => screen.getByTestId('drawer-panel');
 const flip = (label: string, on: boolean) =>
@@ -239,7 +240,9 @@ describe('A small dummy buy, with the default options', () => {
     expect(row.fees.toString()).toBe('0'); // the hidden Fee field is saved as 0
 
     await fireEvent.press(screen.getByLabelText('Activity'));
-    await fireEvent.press(await screen.findByLabelText(`Buy VWCE ${today}`));
+    await fireEvent.press(
+      await screen.findByLabelText(`Buy VWCE ${formatDate(today, today.slice(0, 4))}`),
+    );
     await fireEvent.press(await screen.findByText('Delete'));
     await fireEvent.press(screen.getAllByText('Delete').at(-1)!);
     await waitFor(() => expect(data.deleteTransaction).toHaveBeenCalledWith(row.id));

@@ -4,7 +4,7 @@ import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconRole } from '../ui/Icon';
 import { T } from '../ui/T';
-import { radius, TOUCH_TARGET, type Colors } from '../ui/theme';
+import { radius, space, TOUCH_TARGET, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 
 /** The slot of the New transaction tab. */
@@ -121,7 +121,7 @@ const makeStyles = (colors: Colors) =>
       minHeight: TOUCH_TARGET,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 2,
+      gap: space.hairline,
     },
     // A ring in the screen colour separates the circle from the bar; the circle stands
     // `RAISED` dp above the bar's top edge (a translation, no shadow).

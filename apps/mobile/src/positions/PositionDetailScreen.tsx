@@ -353,7 +353,7 @@ const makeStyles = (colors: Colors) =>
   });
 
 const styles = StyleSheet.create({
-  hero: { paddingHorizontal: space.lg, marginBottom: space.xl, gap: 2 },
+  hero: { paddingHorizontal: space.lg, marginBottom: space.xl, gap: space.hairline },
   total: { marginVertical: space.xs },
   inline: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.sm },
   priceLine: { marginTop: space.xs },

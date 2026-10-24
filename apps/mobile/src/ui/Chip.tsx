@@ -75,7 +75,7 @@ const makeStyles = (colors: Colors) =>
     badge: {
       alignSelf: 'flex-start',
       paddingHorizontal: space.sm,
-      paddingVertical: 1,
+      paddingVertical: space.hairline,
       borderRadius: radius.pill,
       backgroundColor: colors.pressed,
     },

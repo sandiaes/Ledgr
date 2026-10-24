@@ -163,8 +163,8 @@ describe('Activity amounts', () => {
     await openApp();
     await fireEvent.press(screen.getByText('Activity'));
     const rows = await screen.findAllByTestId('activity-row');
-    const buy = rows.find((r) => r.props.accessibilityLabel === 'Buy BTC 2025-05-02')!;
-    const sell = rows.find((r) => r.props.accessibilityLabel === 'Sell MSFT 2025-06-02')!;
+    const buy = rows.find((r) => r.props.accessibilityLabel === 'Buy BTC 02/05/2025')!;
+    const sell = rows.find((r) => r.props.accessibilityLabel === 'Sell MSFT 02/06/2025')!;
     expect(within(buy).getByText('−3.000,00\u00A0€')).toBeOnTheScreen();
     expect(within(sell).getByTestId('money')).toHaveTextContent(/^\+\d/);
 
@@ -180,7 +180,7 @@ describe('Transaction detail', () => {
   it('shows the row’s figures and masks them with the eye', async () => {
     await openApp();
     await fireEvent.press(screen.getByText('Activity'));
-    await fireEvent.press(await screen.findByLabelText('Buy BTC 2025-05-02'));
+    await fireEvent.press(await screen.findByLabelText('Buy BTC 02/05/2025'));
     expect(await screen.findByText('Total (EUR)')).toBeOnTheScreen();
     expect(screen.getByText('Delete')).toBeOnTheScreen();
     expect(screen.getAllByText('3.000,00\u00A0€').length).toBeGreaterThan(0);

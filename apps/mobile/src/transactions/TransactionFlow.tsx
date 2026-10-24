@@ -22,10 +22,10 @@ import {
 import { useScrollToTop } from '@react-navigation/native';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type ComponentRef } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { errorCode } from '../auth/errors';
 import { useLedger, useRefreshAfterWrite, useToday } from '../data/usePortfolio';
-import { formatDate } from '../format';
+import { formatDate, unitPriceDp } from '../format';
 import { useServices, type Ledger } from '../services';
 import { assetLabel, assetName, brokerLabel, useNames, type Names } from '../ui/labels';
 import { Amount } from '../ui/Amount';
@@ -34,7 +34,8 @@ import { Section } from '../ui/Section';
 import { SegmentedControl } from '../ui/SegmentedControl';
 import { T } from '../ui/T';
 import { useSettings } from '../settings/SettingsProvider';
-import { space, type Colors } from '../ui/theme';
+import { SkeletonRows } from '../ui/Skeleton';
+import { space, weight, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 import { AddAssetForm } from './AddAssetForm';
 import { AssetPicker, pricePending } from './AssetPicker';
@@ -74,12 +75,7 @@ export function TransactionFlow(props: {
       </ScrollView>
     );
   }
-  if (!ledger.data)
-    return (
-      <T variant="sub" tone="muted" style={styles.status}>
-        Loading…
-      </T>
-    );
+  if (!ledger.data) return <SkeletonRows n={6} />;
   return <Flow {...props} ledger={ledger.data} />;
 }
 
@@ -422,7 +418,7 @@ function Flow(props: {
               <Amount
                 value={unitPrice}
                 currency="EUR"
-                dp={unitPrice.lt(1) ? 6 : 2}
+                dp={unitPriceDp(unitPrice)}
                 variant="sub"
                 style={styles.mutedFigure}
               />
@@ -501,24 +497,24 @@ function IssueText(props: { issue: TransactionIssue; names: Names; date: IsoDate
   const { issue, names } = props;
   if (issue.code === 'exceeds_holdings') {
     return (
-      <Text>
+      <>
         More than {brokerLabel(names, issue.accountId)} can sell on {formatDate(props.date)}: holds{' '}
         <Amount kind="units" value={issue.held} /> · can sell{' '}
         <Amount kind="units" value={issue.available} />
         {issue.available.lt(issue.held) ? ' (a later sale needs the rest)' : ''}.
-      </Text>
+      </>
     );
   }
   if (issue.field === 'ledger') {
     return (
-      <Text>
+      <>
         This would leave the sale of <Amount kind="units" value={issue.requested} />{' '}
         {assetLabel(names, issue.assetId)} at {brokerLabel(names, issue.accountId)} on{' '}
         {formatDate(issue.date)} with only <Amount kind="units" value={issue.available} /> units.
-      </Text>
+      </>
     );
   }
-  return <Text>{issueText(issue)}</Text>;
+  return <>{issueText(issue)}</>;
 }
 
 function Confirm(props: {
@@ -599,7 +595,7 @@ function Confirm(props: {
               <Amount
                 value={row.unitPrice}
                 currency="EUR"
-                dp={row.unitPrice.lt(1) ? 6 : 2}
+                dp={unitPriceDp(row.unitPrice)}
                 variant="body"
               />
             </Line>
@@ -693,15 +689,14 @@ const makeStyles = (colors: Colors) =>
   StyleSheet.create({
     flex: { flex: 1 },
     content: { paddingTop: space.md, paddingBottom: space.xl },
-    status: { textAlign: 'center', marginTop: space.xl },
-    subheading: { fontWeight: '600', marginBottom: 2 },
+    subheading: { fontWeight: weight.semibold, marginBottom: space.hairline },
     label: { marginBottom: space.xs },
     gap: { marginBottom: space.md },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.md },
     dateChips: { marginTop: -space.sm },
     inline: {
       flexDirection: 'row',
-      gap: 4,
+      gap: space.xs,
       alignItems: 'baseline',
       flexWrap: 'wrap',
       marginBottom: space.md,

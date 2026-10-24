@@ -15,6 +15,7 @@ import { brokerLabel, useNames } from '../ui/labels';
 import { Amount } from '../ui/Amount';
 import { Banner, Button, Line } from '../ui/parts';
 import { Section } from '../ui/Section';
+import { SkeletonRows } from '../ui/Skeleton';
 import { T } from '../ui/T';
 import { space } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
@@ -57,11 +58,7 @@ export function CertificadosScreen() {
       <Banner tone="error">Could not load the certificados ({errorCode(ledger.error)}).</Banner>
     );
   } else if (!ledger.data || !subs) {
-    body = (
-      <T variant="sub" tone="muted" style={styles.status}>
-        Loading…
-      </T>
-    );
+    body = <SkeletonRows n={6} />;
   } else if ('error' in subs) {
     body = <Banner tone="error">The certificados could not be valued ({subs.error}).</Banner>;
   } else {
@@ -155,7 +152,6 @@ function Subscription(props: { s: CertificadoSubscriptionView; series: string; b
 const makeStyles = () =>
   StyleSheet.create({
     content: { paddingTop: space.md, paddingBottom: space.xl },
-    status: { textAlign: 'center', marginTop: space.xl },
     sub: { marginBottom: space.xs },
     age: { flexDirection: 'row', gap: space.sm, alignItems: 'center', marginTop: space.xs },
     buttons: { marginHorizontal: space.lg },

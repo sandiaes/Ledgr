@@ -2,12 +2,12 @@
 // on the Dashboard, the note every affected screen shows while certificados are left out,
 // and the empty state when nothing else is held.
 import type { AssetType } from '@ledgr/core';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useIncludeCertificados } from '../settings/SettingsProvider';
 import { EmptyState } from './EmptyState';
 import { Switch } from './parts';
 import { T } from './T';
-import { space, type Colors } from './theme';
+import { radius, space, TOUCH_TARGET, weight, type Colors } from './theme';
 import { useStyles } from './ThemeProvider';
 
 export const excludesCertificados = (excludeTypes: readonly AssetType[] | undefined) =>
@@ -30,9 +30,11 @@ export function ScopeNote({ excludeTypes }: { excludeTypes: readonly AssetType[]
   const styles = useStyles(makeStyles);
   if (!excludesCertificados(excludeTypes)) return null;
   return (
-    <Text style={styles.note} testID="scope-note">
-      Excluding certificados
-    </Text>
+    <View style={styles.note}>
+      <T variant="caption" tone="warning" style={styles.noteText} testID="scope-note">
+        Excluding certificados
+      </T>
+    </View>
   );
 }
 
@@ -56,19 +58,16 @@ const makeStyles = (colors: Colors) =>
       alignItems: 'center',
       marginHorizontal: space.lg,
       marginBottom: space.xs,
+      minHeight: TOUCH_TARGET,
     },
-    label: { color: colors.text, fontSize: 14 },
     note: {
       alignSelf: 'flex-start',
-      color: colors.warningText,
       backgroundColor: colors.warningBg,
-      fontSize: 12,
-      fontWeight: '600',
       paddingHorizontal: space.sm,
-      paddingVertical: 2,
-      borderRadius: 10,
-      overflow: 'hidden',
+      paddingVertical: space.hairline,
+      borderRadius: radius.pill,
       marginHorizontal: space.lg,
       marginBottom: space.sm,
     },
+    noteText: { fontWeight: weight.semibold },
   });

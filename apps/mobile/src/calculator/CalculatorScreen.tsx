@@ -357,5 +357,5 @@ const makeStyles = (colors: Colors) =>
       borderBottomColor: colors.divider,
     },
     rowHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-    figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline', flexWrap: 'wrap' },
+    figures: { flexDirection: 'row', gap: space.xs, alignItems: 'baseline', flexWrap: 'wrap' },
   });

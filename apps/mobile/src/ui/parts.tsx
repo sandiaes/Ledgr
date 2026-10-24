@@ -10,7 +10,7 @@ import {
   type TextInputProps,
 } from 'react-native';
 import { T } from './T';
-import { radius, space, TOUCH_TARGET, type Colors } from './theme';
+import { INPUT_FONT_SIZE, radius, space, TOUCH_TARGET, weight, type Colors } from './theme';
 import { useColors, useKeyboardAppearance, useStyles } from './ThemeProvider';
 
 // The restyled chip (docs/design.md §6.8) is exported from here too, next to the form parts.
@@ -174,7 +174,7 @@ const makeStyles = (colors: Colors) =>
     buttonDanger: { backgroundColor: colors.loss },
     disabled: { opacity: 0.5 },
     field: { marginBottom: space.md },
-    fieldLabel: { fontWeight: '600', marginBottom: space.xs },
+    fieldLabel: { fontWeight: weight.semibold, marginBottom: space.xs },
     input: {
       borderWidth: 1,
       borderColor: colors.input.border,
@@ -182,7 +182,7 @@ const makeStyles = (colors: Colors) =>
       minHeight: TOUCH_TARGET,
       paddingHorizontal: space.md,
       paddingVertical: space.sm,
-      fontSize: 16,
+      fontSize: INPUT_FONT_SIZE,
       color: colors.input.text,
       backgroundColor: colors.input.background,
     },
@@ -196,6 +196,6 @@ const makeStyles = (colors: Colors) =>
       paddingVertical: space.xs,
     },
     lineLabel: { flexShrink: 1, marginRight: space.sm },
-    lineStrong: { fontWeight: '700' },
-    lineFigures: { flexDirection: 'row', gap: 4, alignItems: 'baseline', flexWrap: 'wrap' },
+    lineStrong: { fontWeight: weight.bold },
+    lineFigures: { flexDirection: 'row', gap: space.xs, alignItems: 'baseline', flexWrap: 'wrap' },
   });

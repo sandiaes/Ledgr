@@ -123,6 +123,31 @@ build differs from the text below:
   The existing New transaction tests run with the three options on, because they exercise
   Dividend, Interest and Fee; one line in them (opening "More types") went with the button.
 
+## Consistency pass (2026-10-24)
+
+A UI audit of `apps/mobile` after U3; no figure, calculation or behaviour changed. Where the
+build now differs from the text of this document:
+
+- **Tokens.** `space.hairline` (2 dp, for the tight stack of a title over its subtitle),
+  `weight` (`regular`, `semibold`, `bold`), `INPUT_FONT_SIZE` (the 16 sp of §3's input
+  exception) and `CODE_LETTER_SPACING`. No screen holds a font size, weight, line height,
+  letter spacing, gap, margin or padding literal; `ui/noLooseStyles.test.ts` scans for them,
+  for a bare react-native `Text` outside `T` and `Amount`, and for a `minHeight` under 48 dp.
+- **Touch targets.** `SegmentedControl` segments are 32 dp (a 36 dp track) with an 8 dp hit
+  slop, so 48 dp; the "Clear filters", "More" and "Change asset" links are 48 dp tall; the
+  header icon buttons are 48 dp with no hit slop (it overlapped the centre button). Wrapped
+  rows of chips (32 dp, 8 dp slop, `sm` gap) still have touch areas that overlap by 8 dp: kept,
+  so filter panels do not grow.
+- **"Excluding certificados"** is a `warningBg` pill with `caption` text in the warning tone.
+- **Loading** on Edit, the New transaction form, Certificados and Factor update is the shared
+  `SkeletonRows`, not a "Loading…" line; Edit shows an error with the code when the ledger
+  fails (it used to stay on "Loading…").
+- **Dates (option 3).** Rows, captions and accessibility labels collapse the current year
+  (`24/10`); chart axes and tooltips, the oversell message and a closed position's date range
+  always show it (`24/10/2026`), because they can span years. An Activity row's accessibility
+  label uses the same date as the row, no longer an ISO date.
+- **Unit price decimals** (6 under 1 €, else 2) are `unitPriceDp` in `format.ts`.
+
 ## 1. Principles
 
 1. **Numbers first.** The figure is the hero: large, tabular numerals, and nothing competing

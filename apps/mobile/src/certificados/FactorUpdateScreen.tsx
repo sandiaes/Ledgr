@@ -25,6 +25,7 @@ import { useServices, type Ledger } from '../services';
 import { Amount } from '../ui/Amount';
 import { Banner, Button, Field } from '../ui/parts';
 import { Section } from '../ui/Section';
+import { SkeletonRows } from '../ui/Skeleton';
 import { T } from '../ui/T';
 import { space, TOUCH_TARGET, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
@@ -58,11 +59,7 @@ export function FactorUpdateScreen() {
     );
   }
   if (!ledger.data) {
-    return (
-      <T variant="sub" tone="muted" style={styles.status}>
-        Loading…
-      </T>
-    );
+    return <SkeletonRows n={6} />;
   }
   return <FactorUpdate ledger={ledger.data} today={today} />;
 }
@@ -269,7 +266,6 @@ const makeStyles = (colors: Colors) =>
   StyleSheet.create({
     flex: { flex: 1 },
     content: { paddingTop: space.md, paddingBottom: space.xl },
-    status: { textAlign: 'center', marginTop: space.xl },
     month: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -285,7 +281,7 @@ const makeStyles = (colors: Colors) =>
     title: { marginBottom: space.xs },
     inline: {
       flexDirection: 'row',
-      gap: 4,
+      gap: space.xs,
       alignItems: 'baseline',
       flexWrap: 'wrap',
       marginBottom: space.xs,

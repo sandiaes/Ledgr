@@ -173,7 +173,17 @@ export type Scheme = 'light' | 'dark';
 export const themes: Record<Scheme, Colors> = { light: lightColors, dark: darkColors };
 
 /** The 4 dp grid. Screen side gutter is `lg`, between sections `xl`. */
-export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 } as const;
+export const space = {
+  /** The 2 dp of a tight stack (a title over its subtitle); below the 4 dp grid. */
+  hairline: 2,
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  xxl: 32,
+  xxxl: 48,
+} as const;
 
 /** `pill` for chips, segments and the round "+" button. */
 export const radius = { sm: 8, md: 12, lg: 16, pill: 999 } as const;
@@ -184,13 +194,22 @@ export const TOUCH_TARGET = 48;
 /** Height of the collapsed header bar, below the status bar. */
 export const HEADER_HEIGHT = 56;
 
+/** Font weights (docs/design.md §3): 400 and 600, and 700 for the expanded total. */
+export const weight = { regular: '400', semibold: '600', bold: '700' } as const;
+
+/** Text inside an input is 16 sp, a step above `body`, so it never reads tiny (§3). */
+export const INPUT_FONT_SIZE = 16;
+
+/** The spacing of the 6-digit code field's digits. */
+export const CODE_LETTER_SPACING = 6;
+
 export type TextVariant =
   'display' | 'title1' | 'title2' | 'headline' | 'body' | 'sub' | 'caption' | 'overline';
 
 export interface TextStyleSpec {
   fontSize: number;
   lineHeight: number;
-  fontWeight: '400' | '600' | '700';
+  fontWeight: (typeof weight)[keyof typeof weight];
   letterSpacing?: number;
   textTransform?: 'uppercase';
 }
@@ -200,17 +219,17 @@ export interface TextStyleSpec {
  * load. Figures also get tabular digits in `T`, so columns line up and values do not jitter.
  */
 export const type: Record<TextVariant, TextStyleSpec> = {
-  display: { fontSize: 34, lineHeight: 40, fontWeight: '700' },
-  title1: { fontSize: 28, lineHeight: 34, fontWeight: '600' },
-  title2: { fontSize: 20, lineHeight: 26, fontWeight: '600' },
-  headline: { fontSize: 16, lineHeight: 22, fontWeight: '600' },
-  body: { fontSize: 15, lineHeight: 20, fontWeight: '400' },
-  sub: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: '400' },
+  display: { fontSize: 34, lineHeight: 40, fontWeight: weight.bold },
+  title1: { fontSize: 28, lineHeight: 34, fontWeight: weight.semibold },
+  title2: { fontSize: 20, lineHeight: 26, fontWeight: weight.semibold },
+  headline: { fontSize: 16, lineHeight: 22, fontWeight: weight.semibold },
+  body: { fontSize: 15, lineHeight: 20, fontWeight: weight.regular },
+  sub: { fontSize: 13, lineHeight: 18, fontWeight: weight.regular },
+  caption: { fontSize: 12, lineHeight: 16, fontWeight: weight.regular },
   overline: {
     fontSize: 11,
     lineHeight: 14,
-    fontWeight: '600',
+    fontWeight: weight.semibold,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },

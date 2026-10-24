@@ -100,6 +100,6 @@ export function PositionRowView(props: {
 const styles = StyleSheet.create({
   inline: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   ticker: { flexShrink: 1 },
-  stack: { gap: 2 },
-  figures: { alignItems: 'flex-end', gap: 2 },
+  stack: { gap: space.hairline },
+  figures: { alignItems: 'flex-end', gap: space.hairline },
 });

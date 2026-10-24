@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { T } from './T';
-import { radius, space, type Colors } from './theme';
+import { radius, space, weight, type Colors } from './theme';
 import { useStyles } from './ThemeProvider';
 import { useReduceMotion } from './useReduceMotion';
 
@@ -76,7 +76,7 @@ export function SegmentedControl<V extends string>(props: {
           <Pressable
             key={o.value}
             onPress={() => props.onChange(o.value)}
-            hitSlop={{ top: 6, bottom: 6 }}
+            hitSlop={{ top: 8, bottom: 8 }}
             style={[styles.segment, selected && !measured && styles.selected]}
             accessibilityRole="tab"
             accessibilityLabel={o.accessibilityLabel}
@@ -119,5 +119,5 @@ const makeStyles = (colors: Colors) =>
     },
     compact: { marginBottom: 0 },
     selected: { backgroundColor: colors.accentSoft },
-    bold: { fontWeight: '600' },
+    bold: { fontWeight: weight.semibold },
   });

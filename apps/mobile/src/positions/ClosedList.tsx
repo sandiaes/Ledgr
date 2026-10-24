@@ -65,6 +65,6 @@ export function ClosedItem(props: { c: ClosedPosition; names: Names; last?: bool
 }
 
 const styles = StyleSheet.create({
-  details: { gap: 2 },
+  details: { gap: space.hairline },
   subtitle: { marginTop: space.sm },
 });
