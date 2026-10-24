@@ -9,9 +9,12 @@ Settings, symbol resolution in `prices-daily`; §8). **Slice 5d built 2026-10-24
 (the app-wide "Include certificados de aforro" toggle, §10; plan approved the same day with
 the recommendations of §10.5). **Slice 5e built 2026-10-24** (the Return calculator under
 More, "Return calculator" below and `docs/kpis.md` §11). **UI overhaul (U1–U3) planned
-2026-10-24**: Phase A approved with decisions D1–D6 (§11, `docs/design.md`); no slice built
-yet, so §1 below still describes the app as it is. KPI
-definitions are in `docs/kpis.md`; calculation assumptions in `docs/assumptions.md`.
+2026-10-24**: Phase A approved with decisions D1–D6 (§11, `docs/design.md`). **Slice U1 built
+2026-10-24** (design system, shared header, drawer shell, tab bar, Dashboard): the navigation
+tree and the Dashboard text of §1 below are updated to it; Positions, Allocation, Performance,
+Activity, New transaction, the Calculator, Certificados and the sign-in screens still look as
+described until U2 and U3. KPI definitions are in `docs/kpis.md`; calculation assumptions in
+`docs/assumptions.md`.
 
 `apps/mobile`: Expo + React Native + TypeScript, Android only, run with Expo Go during
 development and installable as an APK built with EAS. All numbers come from
@@ -26,42 +29,49 @@ Root (auth gate, §6)
 ├─ MFA challenge      (6-digit TOTP)          ← every aal1 session lands here
 ├─ No authenticator   ("enroll in the desktop app", sign out)
 ├─ Lock screen        (biometric / device PIN) ← overlays everything below
-└─ Main: bottom tabs
-   ├─ Dashboard   ─┬─ Allocation
-   │               └─ Performance
-   ├─ Positions   ─┬─ Position detail ── Transactions for the asset
-   │               └─ Broker detail ──── Position detail
-   ├─ New (+)     ─── Form ── Add asset (modal) ── Confirm ── Saved
-   ├─ Activity    ─── Transaction detail ── Edit (form ── confirm) / Delete (dialog)
-   └─ More        ─┬─ Certificados ── Factor update
-                   ├─ Allocation, Performance, Closed positions (same screens)
-                   ├─ Return calculator
-                   └─ Settings
+└─ Main: stack
+   ├─ Drawer ("Ledgr": appearance, privacy, security, data, Certificados, sign out)
+   │   └─ Header (menu · total value ▾ · eye) over the bottom tabs:
+   │      ├─ Dashboard   ─┬─ Allocation
+   │      │               └─ Performance
+   │      ├─ Positions   ─┬─ Position detail ── Transactions for the asset
+   │      │               └─ Broker detail ──── Position detail
+   │      ├─ New (+)     ─── Form ── Add asset (modal) ── Confirm ── Saved
+   │      ├─ Activity    ─── Transaction detail ── Edit (form ── confirm) / Delete (dialog)
+   │      └─ Calculator  (the Return calculator)
+   └─ Certificados ── Factor update   (from the drawer)
 ```
 
-Every screen with figures has a header line "as of 14:05 · prices 22 Oct" and an eye
-button (hide values). Pull to refresh everywhere. Errors are shown in place (never as an
+The header is one component above the tabs (and, in back mode, above every pushed screen):
+tap the total to expand Portfolio value, Today's result and Total result; the eye is the
+privacy switch (`docs/design.md` §6.1). Android back closes the drawer, then collapses the
+header, then leaves the screen.
+
+Every screen with figures has a quiet line "as of 14:05 · prices 22/10"; the eye (hide
+values) is in the header. Pull to refresh everywhere. Errors are shown in place (never as an
 empty list); amounts never appear in error text.
 
 ### Dashboard
 
 - **Scope toggle** (slice 5d, §10): a switch "Include certificados de aforro" at the very
   top, above the header card. It is one app-wide setting, not a Dashboard filter.
-- **Header card**: total value (large), day change € and % (green/red), "as of" time.
-  Indicators under it when they apply: "2 prices stale", "1 price pending", "CA factor
-  41 days old" (tap → list of the assets concerned with their price dates).
+- **Header** (moved to the shared header above the tabs): the total value, and in the
+  expanded panel today's result and the total result. The Dashboard keeps the indicators,
+  when they apply: "2 prices stale", "1 price pending", "CA factor 41 days old" (tap → list
+  of the assets concerned with their price dates).
 - **Gain card**: total gain (€) on top, and its components as separate lines that add up
   to it (`docs/kpis.md` §1): realized, unrealized (€ and %), net income, other costs (shown
   as a negative). Below: net invested.
 - **Returns card**: XIRR and TWR side by side, segmented Since start / YTD / 1Y; "not
   annualized" note where it applies. Tap → Performance.
-- **Chart**: value line and net-invested line, range chips 1M / 3M / YTD / 1Y / All; touch
-  to scrub (date, value, net invested). Under it: value change and net-invested change for
-  the range.
+- **Chart**: value line (accent, over a faint area) and net-invested line (dashed), range
+  buttons 1M / 3M / YTD / 1Y / All; touch to scrub (date, value, net invested). Under it only
+  the range's return: market gain € and time-weighted % (`docs/kpis.md` §4.1), replacing the
+  value change and net-invested change.
 - **Allocation donut** by type with legend (type, %, €). Tap → Allocation.
 - **Top movers**: two tabs Day / Total, 3 up and 3 down, ranked by € impact with the %
-  beside it: ticker, name, €, %. A small €/% chip switches the ranking to % (the same core
-  function with another sort key, so it is cheap). Tap → Position detail.
+  beside it: ticker, name, €, %. A small €/% chip switches the ranking to %. The selected
+  unit is the main figure of a row and the other sits under it. Tap → Position detail.
 
 ### Positions
 
@@ -158,7 +168,7 @@ deleted, but not edited in the app.
 
 ### Return calculator (slice 5e)
 
-A projection screen under More (`docs/kpis.md` §11): starting value, years and extra months,
+A projection screen (the Calculator tab; it was under More before slice U1) (`docs/kpis.md` §11): starting value, years and extra months,
 expected annual return (effective annual rate), monthly contribution, contribution timing (end
 or start of month) and optional inflation. Outputs: ending value, total contributed, total
 growth, growth as a share of the ending value, the ending value in today's money (inflation
@@ -174,10 +184,10 @@ above 0), a stacked chart of contributed vs growth and a year-by-year table.
 - Validation per field with limits; hide values masks the results and the two amount fields.
   One line says it is a projection, not a forecast.
 
-### More / Settings
+### Drawer (was More / Settings)
 
-(After slice U1, §11: More is gone; these settings move into the side drawer, and the Return
-calculator becomes a tab.)
+(Slice U1, §11: More is gone; these settings are in the side drawer, which U3 restyles, and the
+Return calculator is a tab.)
 
 Appearance (System default, Light, Dark; saved in AsyncStorage with the other toggles, applied
 before the first screen renders; System follows the phone live; every colour comes from
@@ -382,7 +392,7 @@ factors: insert only. Add asset: insert `assets`.
   functions run an older core, e.g. before the FIFO change); when an asset has no price
   ("price pending") or no FX rate (the dashboard shows "—" for the totals and names the
   currency, rather than a wrong total).
-- In the jobs (as today): `sanity.csv` and `job_runs.issues`; More → Settings shows the
+- In the jobs (as today): `sanity.csv` and `job_runs.issues`; the drawer shows the
   last run's status.
 
 ## 6. Security

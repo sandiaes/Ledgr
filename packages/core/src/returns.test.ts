@@ -6,6 +6,7 @@ import {
   bestWorstMonth,
   monthlyReturns,
   periodReturns,
+  seriesReturn,
   valueSeries,
   yearlyReturns,
   type CalendarReturn,
@@ -151,6 +152,100 @@ describe('valueSeries', () => {
     expect(valueSeries(snapshots, today, 'YTD').from).toBe('2023-12-31');
     expect(valueSeries(snapshots, today, '1Y').from).toBe('2023-03-31');
     expect(valueSeries(snapshots, today, '3M').from).toBe('2023-12-31');
+  });
+});
+
+describe('seriesReturn (the return under the chart, docs/kpis.md §4.1)', () => {
+  // One asset A; price 100 on 1 Jan, 110 on 31 Jan, 120 on 15 Feb, 130 on 29 Feb, 120 on
+  // 31 Mar, 140 today (T = 10 Apr). By hand (EUR):
+  //   1 Jan   buy 10 @ 100 = 1,000                       NI 1,000
+  //   15 Feb  buy 5 @ 120 = 600     V 15 x 120 = 1,800   NI 1,600
+  //   10 Mar  dividend 30 (no snapshot that day)
+  //   T       V 15 x 140 = 2,100                         NI 1,600
+  const transactions = [
+    buy('2024-01-01', 'A', '10', '100'),
+    buy('2024-02-15', 'A', '5', '120'),
+    dividend('2024-03-10', '30', { asset: 'A' }),
+  ];
+  const snapshots = [
+    snap('2024-01-31', '1100', '1000'),
+    snap('2024-02-15', '1800', '1600'),
+    snap('2024-02-29', '1950', '1600'),
+    snap('2024-03-31', '1800', '1600'),
+  ];
+  const today = '2024-04-10';
+  const now = snap(today, '2100', '1600');
+  const input = { transactions, snapshots, today, valueTodayEur: d('2100') };
+  const of = (range: Parameters<typeof valueSeries>[2], over: Partial<typeof input> = {}) => {
+    const i = { ...input, ...over };
+    return seriesReturn(i, valueSeries(i.snapshots, now, range), range);
+  };
+
+  it('1M: the window starts at the first chart point of the range', () => {
+    // First point 31 Mar (1,800, NI 1,600). Gain (2,100 - 1,800) - (1,600 - 1,600) = 300;
+    // TWR: 2,100 / 1,800 - 1 = 1/6 (the 10 Mar dividend is before the window).
+    const r = of('1M');
+    expect([r.start, r.end]).toEqual(['2024-03-31', today]);
+    expectDec(r.marketGainEur, '300');
+    if (!r.twr.ok) throw new Error('expected a TWR');
+    expectClose(r.twr.cumulative, d('1').div(6), '1e-40');
+    expect(r.twr.annualized).toBeNull();
+  });
+
+  it('3M and YTD: market gain is the value change less the contributions of the window', () => {
+    // First point 31 Jan (1,100, NI 1,000): (2,100 - 1,100) - (1,600 - 1,000) = 400, which is
+    // 10 x (140 - 110) + 5 x (140 - 120). The dividend is income, not market gain.
+    // TWR steps: 15 Feb (1,800 - 600) / 1,100 = 12/11; 29 Feb 1,950 / 1,800 = 13/12;
+    // 31 Mar (1,800 + 30) / 1,950 = 61/65 (the dividend rides on the next point);
+    // T 2,100 / 1,800 = 7/6.  Product 427/330, so 97/330.
+    for (const range of ['3M', 'YTD'] as const) {
+      const r = of(range);
+      expect(r.start).toBe('2024-01-31');
+      expectDec(r.marketGainEur, '400');
+      if (!r.twr.ok) throw new Error('expected a TWR');
+      expectClose(r.twr.cumulative, d('97').div(330), '1e-40');
+    }
+  });
+
+  it('All: starts the day before the first row, so gain = V(T) - NI(T) and TWR = Since start', () => {
+    // 31 Jan: from zero, 1,100 / 1,000 - 1 = 10%; then the steps above: 1.1 x 427/330 = 427/300.
+    const r = of('All');
+    expect(r.start).toBe('2023-12-31');
+    expectDec(r.marketGainEur, '500');
+    if (!r.twr.ok) throw new Error('expected a TWR');
+    expectClose(r.twr.cumulative, d('127').div(300), '1e-40');
+    const sinceStart = periodReturns(input)[0]!.twr;
+    if (!sinceStart.ok) throw new Error('expected a TWR');
+    expectDec(r.twr.cumulative, sinceStart.cumulative);
+  });
+
+  it('the TWR counts income and the market gain does not, so they can differ in sign', () => {
+    // Bought 1,000, worth 990 later, 30 dividend: market gain -10, TWR (990 + 30) / 1,000 - 1.
+    const tx = [buy('2024-01-01', 'A', '10', '100'), dividend('2024-02-10', '30', { asset: 'A' })];
+    const i = {
+      transactions: tx,
+      snapshots: [snap('2024-01-31', '1000', '1000')],
+      today,
+      valueTodayEur: d('990'),
+    };
+    const r = seriesReturn(i, valueSeries(i.snapshots, snap(today, '990', '1000'), 'All'), 'All');
+    expectDec(r.marketGainEur, '-10');
+    if (!r.twr.ok) throw new Error('expected a TWR');
+    expectClose(r.twr.cumulative, '0.02', '1e-40');
+  });
+
+  it('an empty window or an empty ledger gives no figure instead of a zero', () => {
+    // No snapshot inside 1M: the range's only point is today's.
+    const none = of('1M', { snapshots: [snap('2024-01-31', '1100', '1000')] });
+    expect(none.marketGainEur).toBeNull();
+    expect(none.twr).toMatchObject({ ok: false, reason: 'twr-undefined' });
+    const noRows = seriesReturn(
+      { transactions: [], snapshots: [], today, valueTodayEur: d('0') },
+      valueSeries([], snap(today, '0', '0'), 'All'),
+      'All',
+    );
+    expect(noRows.marketGainEur).toBeNull();
+    expect(noRows.twr).toMatchObject({ ok: false, reason: 'no-flows' });
   });
 });
 

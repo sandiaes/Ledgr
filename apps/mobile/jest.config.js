@@ -1,6 +1,8 @@
 module.exports = {
   preset: 'jest-expo',
   setupFiles: ['<rootDir>/jest.setup.js'],
+  // Reanimated and worklets run their JS implementation under Jest.
+  resolver: 'react-native-reanimated/jest/resolver',
   testMatch: ['<rootDir>/src/**/*.test.{ts,tsx}'],
   // Workspace packages and ESM-only libraries are compiled like the app's own code.
   transformIgnorePatterns: [

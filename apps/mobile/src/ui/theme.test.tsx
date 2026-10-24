@@ -5,6 +5,7 @@ import { AppRoot } from '../AppRoot';
 import { TIME_ZONE } from '../data/usePortfolio';
 import { DEFAULT_SETTINGS, parseSettings, type Settings } from '../settings/settings';
 import { fakeAuth, fakeData, fakeServices, portfolioLedger } from '../test/fakes';
+import { openDrawer } from '../test/nav';
 import { Money } from './Money';
 import { resolveScheme } from './ThemeProvider';
 import { themes } from './theme';
@@ -45,9 +46,8 @@ const lastCall = (m: jest.Mock) => m.mock.calls[m.mock.calls.length - 1]?.[0];
 
 async function openSettings(s: ReturnType<typeof services>) {
   const view = await render(<AppRoot services={s} />);
-  await screen.findByText('Total value');
-  await fireEvent.press(screen.getByText('More'));
-  await fireEvent.press(await screen.findByText('Settings'));
+  await screen.findByText('Total gain');
+  await openDrawer();
   await screen.findByText('Appearance');
   return view;
 }
@@ -59,10 +59,34 @@ beforeEach(() => {
 });
 
 describe('Appearance setting', () => {
-  it('defaults to System and reads an unknown stored value as System', () => {
-    expect(DEFAULT_SETTINGS.appearance).toBe('system');
+  it('starts a new install in Dark but keeps what an existing phone saved', () => {
+    expect(DEFAULT_SETTINGS.appearance).toBe('dark');
+    // Nothing stored at all: a new install.
+    expect(parseSettings(null).appearance).toBe('dark');
+    expect(parseSettings(undefined).appearance).toBe('dark');
+    // Settings stored before Appearance existed meant the phone's theme: no migration.
+    expect(parseSettings({ hideValues: true }).appearance).toBe('system');
     expect(parseSettings({ appearance: 'sepia' }).appearance).toBe('system');
+    expect(parseSettings({ appearance: 'system' }).appearance).toBe('system');
+    expect(parseSettings({ appearance: 'light' }).appearance).toBe('light');
     expect(parseSettings({ appearance: 'dark' }).appearance).toBe('dark');
+  });
+
+  it('keeps the New transaction options off unless saved, and reads them defensively', () => {
+    expect(DEFAULT_SETTINGS.newTxTypes).toEqual({ dividend: false, interest: false });
+    expect(parseSettings(null).newTxTypes).toEqual({ dividend: false, interest: false });
+    expect(parseSettings({ newTxTypes: { dividend: true } }).newTxTypes).toEqual({
+      dividend: true,
+      interest: false,
+    });
+    expect(parseSettings({ newTxTypes: 'yes' }).newTxTypes).toEqual({
+      dividend: false,
+      interest: false,
+    });
+    expect(parseSettings({ newTxTypes: { dividend: 1, interest: true } }).newTxTypes).toEqual({
+      dividend: false,
+      interest: true,
+    });
   });
 
   it('resolves a fixed choice, or the phone for System', () => {
@@ -91,9 +115,9 @@ describe('Appearance setting', () => {
   it('is applied from the first render after a restart, without the other theme', async () => {
     systemScheme.mockReturnValue('light');
     await render(<AppRoot services={services({ appearance: 'dark' })} />);
-    await screen.findByText('Total value');
+    await screen.findByText('Total gain');
     expect(mockStatusBar.mock.calls.every(([style]) => style === 'light')).toBe(true);
-    expect(colorOf('Total value')).toBe(themes.dark.muted);
+    expect(colorOf('Total gain')).toBe(themes.dark.text);
   });
 
   it('System follows the phone, including a change while the app is open', async () => {
@@ -135,14 +159,16 @@ describe('theme tokens', () => {
     return (hi + 0.05) / (lo + 0.05);
   };
 
+  // docs/design.md §2.4: text pairs on the three grounds must read (AA, 4.5:1); the input
+  // border needs 3:1; the chart colours need 3:1 on every ground they are drawn on.
   describe.each(['light', 'dark'] as const)('%s', (name) => {
     const c = themes[name];
-    const grounds = { background: c.background, surface: c.surface };
+    const grounds = { background: c.background, surface: c.surface, raised: c.raised };
 
     it.each(Object.entries(grounds))(
-      'text, muted, gain, loss and accent read on %s (AA)',
+      'text, muted, faint, gain, loss and accent read on %s (AA)',
       (_n, bg) => {
-        for (const fg of [c.text, c.muted, c.gain, c.loss, c.accent]) {
+        for (const fg of [c.text, c.muted, c.faint, c.gain, c.loss, c.accent]) {
           expect(ratio(fg, bg)).toBeGreaterThanOrEqual(4.5);
         }
       },
@@ -153,13 +179,23 @@ describe('theme tokens', () => {
       expect(ratio(c.onLoss, c.loss)).toBeGreaterThanOrEqual(4.5);
       expect(ratio(c.warningText, c.warningBg)).toBeGreaterThanOrEqual(4.5);
       expect(ratio(c.loss, c.errorBg)).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(c.loss, c.lossSoft)).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(c.gain, c.gainSoft)).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(c.text, c.accentSoft)).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(c.accent, c.accentSoft)).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(c.muted, c.pressed)).toBeGreaterThanOrEqual(4.5); // segment track, badges
       expect(ratio(c.input.text, c.input.background)).toBeGreaterThanOrEqual(4.5);
       expect(ratio(c.input.placeholder, c.input.background)).toBeGreaterThanOrEqual(4.5);
       expect(ratio(c.tabBar.inactive, c.tabBar.background)).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(c.tabBar.active, c.tabBar.background)).toBeGreaterThanOrEqual(4.5);
       expect(ratio(c.muted, c.chart.tooltipBg)).toBeGreaterThanOrEqual(4.5);
     });
 
-    it('chart colours stand out from the surface (3:1)', () => {
+    it('the input border is visible against its field (3:1)', () => {
+      expect(ratio(c.input.border, c.input.background)).toBeGreaterThanOrEqual(3);
+    });
+
+    it.each(Object.entries(grounds))('chart colours stand out from %s (3:1)', (_n, bg) => {
       const chart = [
         c.value,
         c.invested,
@@ -169,8 +205,23 @@ describe('theme tokens', () => {
         ...Object.values(c.types),
         ...c.palette,
       ];
-      for (const fg of chart) expect(ratio(fg, c.surface)).toBeGreaterThanOrEqual(3);
+      for (const fg of chart) expect(ratio(fg, bg)).toBeGreaterThanOrEqual(3);
     });
+
+    it('gain and loss are told apart by their sign, since their luminance is close', () => {
+      // Principle 5 of the design: never colour alone. The tokens may be close in dark.
+      expect(c.gain).not.toBe(c.loss);
+    });
+  });
+
+  it('has the same token names in both themes, so a screen cannot read one only', () => {
+    const names = (o: object, prefix = ''): string[] =>
+      Object.entries(o).flatMap(([k, v]) =>
+        v && typeof v === 'object' && !Array.isArray(v)
+          ? names(v, `${prefix}${k}.`)
+          : [`${prefix}${k}`],
+      );
+    expect(names(themes.light)).toEqual(names(themes.dark));
   });
 
   it('keeps the +/- sign on coloured gains and losses, so colour is never the only cue', async () => {

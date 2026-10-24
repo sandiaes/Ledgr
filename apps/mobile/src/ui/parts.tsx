@@ -15,6 +15,11 @@ import {
 import { space, type Colors } from './theme';
 import { useColors, useKeyboardAppearance, useStyles } from './ThemeProvider';
 
+// The restyled controls (docs/design.md §6.7, §6.8) under their old names, so the screens
+// U2 and U3 have not touched yet get them too.
+export { Chip } from './Chip';
+export { SegmentedControl as Segmented } from './SegmentedControl';
+
 export function Card(props: {
   title?: string;
   children: ReactNode;
@@ -26,33 +31,6 @@ export function Card(props: {
     <View style={[styles.card, props.style]} testID={props.testID}>
       {props.title ? <Text style={styles.title}>{props.title}</Text> : null}
       {props.children}
-    </View>
-  );
-}
-
-/** A row of mutually exclusive chips (ranges, periods, tabs). */
-export function Segmented<T extends string>(props: {
-  options: readonly { value: NoInfer<T>; label: string }[];
-  value: T;
-  onChange(value: NoInfer<T>): void;
-}) {
-  const styles = useStyles(makeStyles);
-  return (
-    <View style={styles.segmented} accessibilityRole="tablist">
-      {props.options.map((o) => {
-        const selected = o.value === props.value;
-        return (
-          <Pressable
-            key={o.value}
-            onPress={() => props.onChange(o.value)}
-            style={[styles.chip, selected && styles.chipOn]}
-            accessibilityRole="tab"
-            accessibilityState={{ selected }}
-          >
-            <Text style={[styles.chipText, selected && styles.chipTextOn]}>{o.label}</Text>
-          </Pressable>
-        );
-      })}
     </View>
   );
 }
@@ -182,31 +160,6 @@ export function FieldError(props: { children: ReactNode }) {
   );
 }
 
-/** One selectable chip (a broker, an asset type, a filter value). */
-export function Chip(props: {
-  label: ReactNode;
-  selected: boolean;
-  onPress(): void;
-  accessibilityLabel?: string;
-}) {
-  const styles = useStyles(makeStyles);
-  return (
-    <Pressable
-      onPress={props.onPress}
-      accessibilityRole="button"
-      accessibilityLabel={props.accessibilityLabel}
-      accessibilityState={{ selected: props.selected }}
-      style={[styles.chip, styles.chipBordered, props.selected && styles.chipOn]}
-    >
-      {typeof props.label === 'string' ? (
-        <Text style={[styles.chipText, props.selected && styles.chipTextOn]}>{props.label}</Text>
-      ) : (
-        props.label
-      )}
-    </Pressable>
-  );
-}
-
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
     card: {
@@ -219,16 +172,6 @@ const makeStyles = (colors: Colors) =>
       borderColor: colors.border,
     },
     title: { fontSize: 13, fontWeight: '600', color: colors.muted, marginBottom: space.sm },
-    segmented: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.sm },
-    chip: {
-      paddingHorizontal: space.md,
-      paddingVertical: 6,
-      borderRadius: 16,
-      backgroundColor: colors.background,
-    },
-    chipOn: { backgroundColor: colors.accent },
-    chipText: { fontSize: 13, color: colors.text },
-    chipTextOn: { color: colors.onAccent, fontWeight: '600' },
     banner: {
       backgroundColor: colors.warningBg,
       padding: space.md,
@@ -251,7 +194,6 @@ const makeStyles = (colors: Colors) =>
     buttonTextDanger: { color: colors.onLoss },
     buttonDanger: { backgroundColor: colors.loss },
     disabled: { opacity: 0.5 },
-    chipBordered: { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
     field: { marginBottom: space.md },
     fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
     input: {

@@ -1,7 +1,10 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-/** The screens above the tabs (docs/app-plan.md §1). */
+/**
+ * The screens above the drawer and tabs (docs/app-plan.md §1). `Tabs` is the drawer with the
+ * header and the five tabs; every other route is a pushed detail screen.
+ */
 export type RootStackParams = {
   Tabs: undefined;
   PositionDetail: { assetId: string };
@@ -9,13 +12,10 @@ export type RootStackParams = {
   BrokerDetail: { accountId: string };
   Allocation: undefined;
   Performance: undefined;
-  ReturnCalculator: undefined;
-  ClosedPositions: undefined;
   TransactionDetail: { id: string };
   EditTransaction: { id: string };
   Certificados: undefined;
   FactorUpdate: undefined;
-  Settings: undefined;
 };
 
 export const useRootNavigation = () => useNavigation<NativeStackNavigationProp<RootStackParams>>();

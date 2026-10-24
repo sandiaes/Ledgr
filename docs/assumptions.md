@@ -3,7 +3,7 @@
 Assumptions made by `packages/core`, approved as **provisional** on 2026-10-21 (#1–#20),
 2026-10-22 (#23–#28, prices, snapshots and value now) and 2026-10-23 (#29–#34, the app's
 KPIs, decisions D1–D7 in `docs/app-plan.md` §9; #1, #3, #5, #17, #19, #21 and #22 changed
-the same day; #37–#39 written with slice 5c, 2026-10-24; #40 with slice 5d, the same day; #41 with slice 5e, the same day). Each one
+the same day; #37–#39 written with slice 5c, 2026-10-24; #40 with slice 5d, the same day; #41 with slice 5e, the same day; #42 with slice U1, the same day). Each one
 stays `unverified` until it has been checked against an official source (or the owner's
 own records), and is then updated here with the source.
 
@@ -56,6 +56,7 @@ Paths are relative to `packages/core/src/` unless stated.
 | 39  | Certificado factor entry    | unverified         |
 | 40  | Asset scope (certificados)  | unverified         |
 | 41  | Return calculator           | unverified         |
+| 42  | Chart range return          | unverified         |
 
 "Out of scope (tax)" means: **out of scope: tax reports will come from importing broker
 report exports, not from this ledger.** These items describe how the performance numbers
@@ -721,3 +722,28 @@ is stored or written to the ledger.
   `averageMonthlyNetPurchases`, `projectionDefaults`, `parseProjectionForm`,
   `returnOutsideWarningRange`), `buildProjection` in `views.ts`;
   `apps/mobile/src/calculator/`.
+
+## UI overhaul
+
+### 42. Return under the value vs net invested chart
+
+The Dashboard shows, for the selected chart range, only the range's return (docs/kpis.md
+§4.1, decision D4 of `docs/design.md`): the **market gain** in € and the **TWR** in %.
+
+- The window is (S, T]. S is the date of the range's first chart point (1M, 3M, YTD, 1Y: the
+  first snapshot on or after the range start; with no snapshot in the range the window is
+  empty and both figures are "—"). For All, S is the day before the first row in scope, where
+  V = NI = 0, the same start as Since start.
+- Market gain = (V(T) − V(S)) − (NI(T) − NI(S)): the capital gain made in the window. Income
+  and fee rows are not in it (they are not in net invested either). For All it is
+  V(T) − NI(T) = R + U.
+- The TWR is the usual chain of steps (#17) over the window, cumulative and never annualized.
+  It counts income and fee rows (docs/kpis.md §0.1), so the two figures can differ in sign
+  when income is large next to the price move. For All it equals the Since start TWR.
+- The asset scope applies (#40): the series, flows and NI are those of the rows in scope.
+- The old "value change" and "net invested change" lines are no longer shown; core still
+  computes them.
+
+- Status: unverified
+- Implemented in: `returns.ts` (`seriesReturn`), `DashboardChartSeries.periodReturn` in
+  `views.ts`; `apps/mobile/src/dashboard/cards.tsx`.

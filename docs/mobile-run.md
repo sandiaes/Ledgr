@@ -73,9 +73,15 @@ terminal to reload, `Ctrl+C` to stop.
 What you should see: Sign in → **Two-factor code** (every sign-in, a 6-digit code from your
 authenticator) → Dashboard. On the first sign-in the app lock is turned on if the phone has
 a screen lock or fingerprint; from then on Ledgr asks for it when it opens and after 1
-minute in the background (More → Settings → Security to change it). Screenshots are
-blocked by default (More → Settings → Block screenshots). The eye icon at the top hides
-every amount.
+minute in the background (menu button → Security to change it). Screenshots are
+blocked by default (menu button → Security → Block screenshots). The eye icon at the top
+right hides every amount and percentage. The app starts in the dark theme on a new install
+(menu button → Appearance).
+
+The side menu (drawer) and the header use `react-native-gesture-handler`, `react-native-reanimated` and
+`react-native-worklets`. All three are inside Expo Go for SDK 58 at the versions `package.json` pins, so
+there is nothing to build to try them. The **APK** (step 5) needs a fresh `eas build`, because an APK
+only contains the native modules it was built with.
 
 After changing `.env`, restart with `npx expo start --clear` (the values are built into the
 bundle).
@@ -233,4 +239,4 @@ eas build --platform android --profile preview
 | App lock switch is greyed out                                    | Set a screen lock (PIN, pattern or fingerprint) on the phone.                                                                                    |
 | "live prices unavailable" under the total                        | value-now did not answer; the dashboard uses the latest stored quotes and closes.                                                                |
 | "Figures do not reconcile: … value-now … differs"                | The deployed functions run an older core: redeploy them (`docs/prices.md`, "Redeploying after an update").                                       |
-| Screenshots come out black                                       | That is screenshot blocking; turn it off in More if you need one.                                                                                |
+| Screenshots come out black                                       | That is screenshot blocking; turn it off in the menu (Security) if you need one.                                                                 |

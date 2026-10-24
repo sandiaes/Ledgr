@@ -4,7 +4,9 @@ import { AppRoot } from '../AppRoot';
 import { TIME_ZONE } from '../data/usePortfolio';
 import { formatDate } from '../format';
 import { fakeAuth, fakeData, fakeServices, portfolioLedger } from '../test/fakes';
-import { MASK } from '../ui/Money';
+import { AMOUNT_TEXT } from '../test/leaks';
+import { goToNew } from '../test/nav';
+import { MASK } from '../ui/Amount';
 
 jest.mock('react-native-gifted-charts', () => ({
   LineChart: () => null,
@@ -24,13 +26,13 @@ async function openApp(settings: { hideValues?: boolean } = {}) {
   const { auth, state } = fakeAuth({ level: 'aal2' });
   const services = fakeServices({ auth, data, settings });
   await render(<AppRoot services={services} />);
-  await screen.findByText('Total value');
+  await screen.findByText('Total gain');
   return { data, state, services };
 }
 
 async function openNew(settings: { hideValues?: boolean } = {}) {
   const app = await openApp(settings);
-  await fireEvent.press(screen.getByText('New'));
+  await goToNew();
   await screen.findByLabelText('Type Buy');
   return app;
 }
@@ -112,8 +114,8 @@ describe('New transaction: validation', () => {
     const data = fakeData(fixture);
     const { auth } = fakeAuth({ level: 'aal2' });
     await render(<AppRoot services={fakeServices({ auth, data })} />);
-    await screen.findByText('Total value');
-    await fireEvent.press(screen.getByText('New'));
+    await screen.findByText('Total gain');
+    await goToNew();
     await fireEvent.press(await screen.findByLabelText('Type Sell'));
     await type('Date', addDays(today, -1));
     await fireEvent.press(screen.getByLabelText('Pick VWCE'));
@@ -164,7 +166,7 @@ describe('New transaction: validation', () => {
   it('derives the unit price from the total; dividends take the amount received', async () => {
     await openNew();
     await fillBuy('VWCE', { quantity: '3', total: '100' });
-    expect(screen.getByText('€33.33')).toBeOnTheScreen();
+    expect(screen.getByText('33,33\u00A0€')).toBeOnTheScreen();
     expect(screen.getByText('per unit')).toBeOnTheScreen();
     expect(screen.getByText(/broker actually charged/)).toBeOnTheScreen();
 
@@ -187,7 +189,7 @@ describe('New transaction: confirm and save', () => {
     await fireEvent.press(review());
 
     expect(screen.getByText('Check and save')).toBeOnTheScreen();
-    expect(screen.getByText('€601.00')).toBeOnTheScreen(); // cost with the fee
+    expect(screen.getByText('601,00\u00A0€')).toBeOnTheScreen(); // cost with the fee
     const [atIbkr, overall] = screen.getAllByTestId('resulting-position');
     expect(
       within(atIbkr!)
@@ -199,7 +201,7 @@ describe('New transaction: confirm and save', () => {
         .getAllByTestId('units')
         .map((u) => u.props.children),
     ).toEqual(['15', '20']);
-    expect(within(atIbkr!).getByText('€1,201.00')).toBeOnTheScreen(); // cost basis after
+    expect(within(atIbkr!).getByText('1.201,00\u00A0€')).toBeOnTheScreen(); // cost basis after
 
     const ledgerReads = data.ledger.mock.calls.length;
     await fireEvent.press(screen.getByText('Save'));
@@ -226,8 +228,8 @@ describe('New transaction: confirm and save', () => {
     // The form starts again with a new id; the dashboard counts the new units.
     expect(screen.getByText('Review')).toBeOnTheScreen();
     await fireEvent.press(screen.getByText('Dashboard'));
-    // was €6,590.82; + 5 VWCE at €150
-    expect((await screen.findAllByText('€7,340.82')).length).toBeGreaterThan(0);
+    // was 6.590,82 €; + 5 VWCE at 150 €
+    expect((await screen.findAllByText('7.340,82\u00A0€')).length).toBeGreaterThan(0);
   });
 
   it('a sell shows the realized gain of this sale (FIFO in its broker)', async () => {
@@ -239,7 +241,7 @@ describe('New transaction: confirm and save', () => {
     await fireEvent.press(review());
     // Degiro's lot cost 100 a unit: 300 - 200
     expect(screen.getByText('Realized gain of this sale')).toBeOnTheScreen();
-    expect(screen.getByText('+€100.00')).toBeOnTheScreen();
+    expect(screen.getByText('+100,00\u00A0€')).toBeOnTheScreen();
   });
 
   it('Save is disabled while saving, and a double tap inserts one row', async () => {
@@ -362,7 +364,7 @@ describe('Activity', () => {
     await fireEvent.press(await screen.findByText('Delete'));
     expect(screen.getByText('Delete this row?')).toBeOnTheScreen();
     expect(screen.getByText(/It cannot be deleted: the sale of/)).toBeOnTheScreen();
-    expect(screen.getByText(/at IBKR on 2 Jun 2025 would have only/)).toBeOnTheScreen();
+    expect(screen.getByText(/at IBKR on 02\/06\/2025 would have only/)).toBeOnTheScreen();
     const confirm = screen.getAllByText('Delete').at(-1)!;
     expect(confirm).toBeDisabled();
     await fireEvent.press(confirm);
@@ -373,7 +375,7 @@ describe('Activity', () => {
     const { data } = await openActivity();
     await fireEvent.press(screen.getByLabelText('Dividend VWCE 2025-06-20'));
     await fireEvent.press(await screen.findByText('Delete'));
-    expect(screen.getByText('Dividend · VWCE · Degiro · 20 Jun 2025')).toBeOnTheScreen();
+    expect(screen.getByText('Dividend · VWCE · Degiro · 20/06/2025')).toBeOnTheScreen();
     expect(data.deleteTransaction).not.toHaveBeenCalled(); // only after the confirmation
     await fireEvent.press(screen.getAllByText('Delete').at(-1)!);
     await waitFor(() => expect(data.deleteTransaction).toHaveBeenCalledWith('d1'));
@@ -429,7 +431,7 @@ describe('Activity', () => {
     });
     const { auth } = fakeAuth({ level: 'aal2' });
     await render(<AppRoot services={fakeServices({ auth, data: fakeData(fixture) })} />);
-    await screen.findByText('Total value');
+    await screen.findByText('Total gain');
     await fireEvent.press(screen.getByText('Activity'));
     await fireEvent.press(await screen.findByLabelText('Buy VWCE 2025-01-02'));
     await fireEvent.press(await screen.findByText('Edit'));
@@ -446,10 +448,10 @@ describe('Activity', () => {
 
 describe('hide values in the new screens', () => {
   const expectMasked = () => {
-    const figures = [...screen.queryAllByTestId('money'), ...screen.queryAllByTestId('units')];
+    const figures = screen.queryAllByTestId(/money|units|pct/);
     expect(figures.length).toBeGreaterThan(0);
     for (const f of figures) expect(f).toHaveTextContent(MASK);
-    expect(screen.queryByText(/[€$]\s?\d/)).toBeNull();
+    expect(screen.queryByText(AMOUNT_TEXT)).toBeNull();
   };
 
   it('the sell form, the confirm screen and Activity', async () => {

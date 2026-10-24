@@ -4,6 +4,7 @@ import {
   d,
   buy,
   dividend,
+  expectClose,
   expectDec,
   fee,
   interest,
@@ -150,6 +151,25 @@ describe('buildDashboard', () => {
     expect(v.series.All.points.map((p) => p.date)).toEqual(['2025-04-30', '2025-05-30', T]);
     expect(v.series.All.chart).toEqual(v.series.All.points);
     expect(Object.keys(v.series)).toEqual(['1M', '3M', 'YTD', '1Y', 'All']);
+  });
+
+  it('gives each chart range its return: market gain and TWR (docs/kpis.md §4.1)', () => {
+    const v = ok(input());
+    // 1M: from the 30 May snapshot (900, NI 650). Market gain (962.5 - 900) - (750 - 650) =
+    // -37.5; TWR (962.5 - 100 bought on 1 Jun) / 900 - 1 = -1/24.
+    const month = v.series['1M'].periodReturn;
+    expect([month.start, month.end]).toEqual(['2025-05-30', T]);
+    expectDec(month.marketGainEur, '-37.5');
+    if (!month.twr.ok) throw new Error('expected a TWR');
+    expectClose(month.twr.cumulative, d('-1').div(24), '1e-40');
+    // All: from the day before the first row; gain V - NI = R + U = 212.5, TWR = Since start.
+    const all = v.series.All.periodReturn;
+    expect(all.start).toBe('2025-01-01');
+    expectDec(all.marketGainEur, '212.5');
+    const sinceStart = v.returns[0]!.twr;
+    if (!all.twr.ok || !sinceStart.ok) throw new Error('expected a TWR');
+    expectDec(all.twr.cumulative, sinceStart.cumulative);
+    expectDec(all.marketGainEur, v.gains.realizedEur.plus(v.gains.unrealizedEur));
   });
 
   it('gives the three return periods, all from the start here', () => {

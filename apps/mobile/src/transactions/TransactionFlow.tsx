@@ -27,7 +27,8 @@ import { useLedger, useRefreshAfterWrite, useToday } from '../data/usePortfolio'
 import { formatDate } from '../format';
 import { useServices, type Ledger } from '../services';
 import { assetLabel, assetName, brokerLabel, useNames, type Names } from '../ui/labels';
-import { Amount, Money, Units } from '../ui/Money';
+import { Amount } from '../ui/Amount';
+import { Money, Units } from '../ui/Money';
 import { Banner, Button, Card, Chip, Field, FieldError, Line } from '../ui/parts';
 import { space, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';

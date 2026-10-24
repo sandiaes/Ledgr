@@ -346,6 +346,64 @@ export function valueSeries(
   };
 }
 
+/** The return of a chart range, shown under the chart (docs/kpis.md §4.1). */
+export interface SeriesReturn {
+  /** S: the window runs over (S, T]. For 'All', the day before the first row in scope. */
+  start: IsoDate;
+  end: IsoDate;
+  /**
+   * (V(T) - V(S)) - (NI(T) - NI(S)): the capital gain made in the window, leaving income
+   * and fee rows out like net invested. Null when the window is empty.
+   */
+  marketGainEur: Decimal | null;
+  /** TWR over (S, T], cumulative (never annualized). */
+  twr: TwrFigure;
+}
+
+/**
+ * The return for a chart range (docs/kpis.md §4.1). `series` is the `valueSeries` of that
+ * range (scoped like `input`), whose first point is S and whose last is today's. 'All' starts
+ * the day before the first row in scope (V = NI = 0), the same start as "Since start", so
+ * its market gain is V(T) - NI(T) = R + U and its TWR is the Since start TWR. The TWR counts
+ * income and fee rows (docs/kpis.md §0.1) and the market gain does not, so the two can
+ * differ in sign.
+ */
+export function seriesReturn(
+  input: ReturnsInput,
+  series: ValueSeries,
+  range: SeriesRange,
+): SeriesReturn {
+  const ctx = context(input);
+  const end = ctx.today;
+  const now = series.points[series.points.length - 1] as ValueSnapshot;
+  const empty = (message: string): SeriesReturn => ({
+    start: end,
+    end,
+    marketGainEur: null,
+    twr: { ok: false, reason: ctx.first === null ? 'no-flows' : 'twr-undefined', message },
+  });
+  if (range === 'All') {
+    if (ctx.first === null) return empty('No ledger rows');
+    const start = addDays(ctx.first, -1);
+    return {
+      start,
+      end,
+      marketGainEur: now.valueEur.minus(now.netInvestedEur),
+      twr: twrFigure(ctx, start, ZERO, end, ctx.valueToday, null),
+    };
+  }
+  const first = series.points[0] as ValueSnapshot;
+  if (first.date >= end) return empty('No snapshot in the range');
+  return {
+    start: first.date,
+    end,
+    marketGainEur: now.valueEur
+      .minus(first.valueEur)
+      .minus(now.netInvestedEur.minus(first.netInvestedEur)),
+    twr: twrFigure(ctx, first.date, first.valueEur, end, ctx.valueToday, null),
+  };
+}
+
 /** One month or year of the Performance tables (docs/kpis.md §5). */
 export interface CalendarReturn {
   /** 'YYYY-MM' or 'YYYY'. */

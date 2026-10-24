@@ -1,7 +1,8 @@
 # Mobile UI overhaul: design system and plan
 
-Status: **Phase A approved 2026-10-24 with the decisions in §10.** No slice is built yet;
-nothing in `apps/mobile` has changed. This is a restyle and restructure of `apps/mobile`: no financial calculation
+Status: **Phase A approved 2026-10-24 with the decisions in §10. Slice U1 built
+2026-10-24** (what differs from the text below is in "Built in U1"); U2 and U3 are not built.
+This is a restyle and restructure of `apps/mobile`: no financial calculation
 changes, and the UI language stays English. The one new figure (the chart's period return,
 §6.1) is a combination of figures core already computes; it is defined in `docs/kpis.md`
 §4.1 and computed in `packages/core`, like every other number.
@@ -9,6 +10,35 @@ changes, and the UI language stays English. The one new figure (the chart's peri
 Contents: 1 principles · 2 colour tokens · 3 typography · 4 spacing, radii, motion ·
 5 icons · 6 shared components · 7 screens (text wireframes) · 8 slices U1–U3 · 9 risks and
 checks · 10 decisions to confirm.
+
+## Built in U1 (2026-10-24)
+
+Everything in §8 U1 is built. Where the build differs from the text of this document:
+
+- **Drawer content.** The drawer holds the controls of the old Settings screen as they were
+  (Appearance, Privacy, Security, Data, Certificados, Sign out, version), under the section
+  titles of §6.2, so sign-out, the lock and the theme stay reachable until U3 restyles them.
+  "New transaction options" is a placeholder line until U3. The content is built the first time
+  the drawer opens (the job runs are not fetched before). Its privacy switch is labelled
+  "Hide amounts" and is the eye's switch.
+- **Closed positions** is no longer a route of its own: it was the same list as Positions ›
+  Closed, which stays.
+- **Pushed screens** show the header in back mode plus a `title2` title in the content (the
+  old stack title); each screen's own restyle is U2.
+- **`Badge`** text is `muted` on `pressed`, not `faint`: `faint` on `pressed` is 4.3:1 in the
+  light theme. The contrast test checks `faint` on `background`, `surface` and `raised`, and
+  `muted` on `pressed`.
+- **Segment changes** are not animated (the header and the skeleton are; "Remove animations"
+  is respected). Re-pressing the current tab does not scroll to the top (not asked for in U1).
+- **The "+" button**: 56 dp circle with a 4 dp ring in the screen colour; the ring's edge is
+  12 dp above the bar, so 48 dp of the circle is inside the bar, which is where Android
+  delivers touches.
+- **Settings**: `newTxTypes` is parsed and defaulted (both off), not used until U3. A new
+  install starts in Dark; settings stored without an Appearance read as System (no migration).
+- **Tests added**: formatter, theme contrast (all three grounds), header, drawer, Android back
+  order, tab bar, one dashboard build, top movers layout, chart return, privacy on every
+  screen, and two source scans (no colour value outside `theme.ts`, no amount formatter outside
+  `ui/Amount.tsx`).
 
 ## 1. Principles
 

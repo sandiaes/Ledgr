@@ -20,7 +20,8 @@ import {
   useNames,
   type Names,
 } from '../ui/labels';
-import { Amount, Money, Units } from '../ui/Money';
+import { Amount } from '../ui/Amount';
+import { Money, Units } from '../ui/Money';
 import { Banner, Button, Card, Line } from '../ui/parts';
 import { space, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';

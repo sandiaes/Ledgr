@@ -40,6 +40,7 @@ describe('public API', () => {
       'dayChange',
       'periodReturns',
       'valueSeries',
+      'seriesReturn',
       'monthlyReturns',
       'yearlyReturns',
       'bestWorstMonth',
