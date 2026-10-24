@@ -219,7 +219,7 @@ point (_T_, _V(T)_, _NI(T)_). Ranges: **1M** from `addMonths(T, −1)`, **3M**
 snapshot. The chart reads the selected range's first and last points: value change and the
 change in net invested. Long ranges are thinned for drawing only (`docs/app-plan.md` §5).
 
-### 4.1 Return for the chart's range (proposed 2026-10-24, `docs/design.md` §10 Q4; not built)
+### 4.1 Return for the chart's range (approved 2026-10-24, `docs/design.md` §10 D4; slice U1)
 
 Under the value vs net invested chart the Dashboard shows only the selected range's return,
 replacing "value change" and "net invested change". For a range with window (_S_, _T_]:

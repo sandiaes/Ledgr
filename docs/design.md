@@ -1,7 +1,7 @@
 # Mobile UI overhaul: design system and plan
 
-Status: **Phase A, proposed 2026-10-24, waiting for approval.** Nothing in `apps/mobile` has
-changed yet. This is a restyle and restructure of `apps/mobile`: no financial calculation
+Status: **Phase A approved 2026-10-24 with the decisions in §10.** No slice is built yet;
+nothing in `apps/mobile` has changed. This is a restyle and restructure of `apps/mobile`: no financial calculation
 changes, and the UI language stays English. The one new figure (the chart's period return,
 §6.1) is a combination of figures core already computes; it is defined in `docs/kpis.md`
 §4.1 and computed in `packages/core`, like every other number.
@@ -161,7 +161,7 @@ everywhere, 24 dp, one stroke weight. No brand icons or assets.
 | Row navigation       | `chevron-forward` (faint)                                                                                                                                                                                               |
 | Drawer sections      | `contrast-outline` Appearance, `eye-outline` Privacy, `add-circle-outline` New transaction, `lock-closed-outline` Security, `cloud-done-outline` Data, `document-text-outline` Certificados, `log-out-outline` Sign out |
 | Empty / error states | `leaf-outline` (empty), `cloud-offline-outline` (error), `search-outline` (no match)                                                                                                                                    |
-| Transaction types    | `arrow-down` buy, `arrow-up` sell, `cash-outline` dividend/interest, `remove-circle-outline` fee                                                                                                                        |
+| Transaction types    | `arrow-down` buy, `arrow-up` sell, `cash-outline` dividend/interest, `swap-horizontal` other (listed in Activity only)                                                                                                  |
 
 ## 6. Shared components
 
@@ -177,19 +177,19 @@ their stack header.
 ```
 collapsed, 56 dp (surface, hairline divider below)
 ┌──────────────────────────────────────────────┐
-│ ☰            € 14.250,50  ▾               👁 │
+│ ☰            14.250,50 €  ▾               👁 │
 │             Excluding certificados           │  ← only when the toggle is off (caption,
 └──────────────────────────────────────────────┘     warning colour, inside the 56 dp)
 
 expanded (overlay sliding down from under the bar, `raised`, 180 ms)
 ┌──────────────────────────────────────────────┐
-│ ☰            € 14.250,50  ▴               👁 │
+│ ☰            14.250,50 €  ▴               👁 │
 ├──────────────────────────────────────────────┤
 │  PORTFOLIO VALUE                             │
-│  € 14.250,50                       (display) │
+│  14.250,50 €                       (display) │
 │                                              │
 │  TODAY'S RESULT          TOTAL RESULT        │
-│  +€ 85,10                +€ 2.031,77         │
+│  +85,10 €                +2.031,77 €         │
 │  +0,60%                  +16,63%             │
 │                                              │
 │  Excluding certificados · as of 14:05        │
@@ -204,8 +204,8 @@ expanded (overlay sliding down from under the bar, `raised`, 180 ms)
 - **Figures** come from one `PortfolioSummary` context at the layout level that runs
   `useDashboard()` once; the Dashboard screen reads the same context instead of building its
   own (so the core build runs once, not twice). Portfolio value = _V(T)_; Today's result =
-  day change € and % (`kpis.md` §2); Total result = total gain _G_ (`kpis.md` §1) and a % to
-  confirm (§10 Q1). All in the current asset scope, with the "Excluding certificados"
+  day change € and % (`kpis.md` §2); Total result = total gain _G_ (`kpis.md` §1) and the TWR
+  Since start, cumulative (`kpis.md` §3; §10 D1). All in the current asset scope, with the "Excluding certificados"
   indicator when the toggle is off.
 - **States**: loading → a skeleton bar in place of the value; error or unvalued (no FX rate)
   → "—" and the expand shows the reason in one line; privacy on → every figure is `•••••`.
@@ -243,7 +243,6 @@ Content (U1 ships the shell with today's Settings content moved in as is; U3 res
 │ NEW TRANSACTION OPTIONS    │
 │ Dividend              [ ]  │
 │ Interest              [ ]  │
-│ Fee                   [ ]  │
 │ ────────────────────────── │
 │ SECURITY                   │
 │ App lock              [●]  │
@@ -279,14 +278,15 @@ top.
 strings in the chart tooltips and calculator inputs:
 
 ```ts
-<Amount value={d} />                       // € 14.250,50
-<Amount value={d} sign tone />             // +€ 85,10 in gain colour
-<Amount value={d} currency="USD" dp={2} /> // US$ 412,37
+<Amount value={d} />                       // 14.250,50 €
+<Amount value={d} sign tone />             // +85,10 € in gain colour
+<Amount value={d} currency="USD" dp={2} /> // 412,37 USD
 <Amount value={d} kind="units" />          // 3,5
 <Amount value={d} kind="pct" sign tone />  // +0,60%
 ```
 
-- Masked with `•••••` whenever privacy is on (`kind="pct"` per §10 Q2). Masked amounts keep
+- Masked with `•••••` whenever privacy is on, **percentages included** (§10 D2; today's
+  `Pct` stays visible while hidden, U1 changes that). Masked amounts keep
   their sign hidden too, and the tone is dropped, so nothing about the amount leaks.
 - `useMaskedText()` from the same module for the few places that need a string (chart
   tooltip, the calculator's text inputs, accessibility labels).
@@ -297,7 +297,7 @@ strings in the chart tooltips and calculator inputs:
   currency code.
 - **Formatter** (`format.ts`, still one module, still string arithmetic on `Decimal` with
   `toFixed`, never `Intl` or JS numbers; see §9 R3): pt-PT separators, `.` for thousands and
-  `,` for decimals, grouping from 4 digits (1.250,50). Currency placement per §10 Q3. Minus
+  `,` for decimals, grouping from 4 digits (1.250,50). Currency after the amount with a no-break space (`14.250,50 €`, other currencies by code: `412,37 USD`; §10 D3). Minus
   stays `−` (U+2212), plus `+`. Percent `+1,23%`. Dates `24/10/2026`, `24/10` within the
   current year, times `14:05` (24 h). Month names stay English (`Oct 2026` in Performance):
   the UI language does not change, only separators and the numeric date order do.
@@ -319,7 +319,7 @@ figure, right-aligned, tabular), optional leading icon/badge and trailing chevro
 divider between rows; pressed state `pressed`; min height 56 dp.
 
 ```
-AAPL                                   € 1.230,40
+AAPL                                   1.230,40 €
 Apple Inc. · 5 units                       +3,21%
 ───────────────────────────────────────────────
 ```
@@ -370,13 +370,13 @@ as of 14:05 · prices 22/10
 ⚠ 2 prices stale ▾                               ← freshness (only when it applies)
 
 GAIN
-Total gain                          +€ 2.031,77
-  Realized                            +€ 412,00
-  Unrealized              +€ 1.401,22   +11,02%
-  Income                              +€ 260,55
-  Other costs                          −€ 42,00
+Total gain                          +2.031,77 €
+  Realized                            +412,00 €
+  Unrealized              +1.401,22 €   +11,02%
+  Income                              +260,55 €
+  Other costs                          −42,00 €
 ──────────────────────────────────────────────
-Net invested                        € 12.218,73
+Net invested                        12.218,73 €
 
 RETURNS                [ Since start | YTD | 1Y ]
 XIRR                    TWR
@@ -388,16 +388,16 @@ VALUE VS NET INVESTED
    ╱‾‾╲__╱‾‾‾‾  (value, accent, area)
   ─ ─ ─ ─ ─ ─   (net invested, dashed)
 [ 1M | 3M | YTD | 1Y● | All ]
-Return 1Y      +€ 1.104,30 · +8,42%         ← only this (kpis §4.1)
+Return 1Y      +1.104,30 € · +8,42%         ← only this (kpis §4.1)
 ●Value  ┄Net invested
 
 ALLOCATION BY TYPE
-(donut)  ● Stocks   52,10%  € 7.424,51
-         ● ETFs     30,00%  € 4.275,15 …
+(donut)  ● Stocks   52,10%  7.424,51 €
+         ● ETFs     30,00%  4.275,15 € …
 By broker, currency and asset ›
 
 TOP MOVERS          [ Day | Total ]  [ € | % ]
-AAPL                            +€ 42,10     ← € selected: € main (headline)
+AAPL                            +42,10 €     ← € selected: € main (headline)
 Apple Inc.                         +1,20%    ← % under it (sub)
 …
 ```
@@ -405,7 +405,7 @@ Apple Inc.                         +1,20%    ← % under it (sub)
 - The old header card's total and day change move to the TopBar (not duplicated); its
   freshness notes stay on the Dashboard.
 - **Chart**: "value change" and "net invested change" lines are removed; one line shows the
-  period's market gain € and its TWR % (§10 Q4 for the "All" window).
+  period's market gain € and its TWR % (§10 D4 for the "All" window).
 - **Top movers**: with € selected the € amount is the main figure (`headline`) and the % sits
   under it (`sub`); with % selected, the % is the main figure and € under it. Ranking is
   unchanged (`kpis.md` §7).
@@ -418,7 +418,7 @@ Apple Inc.                         +1,20%    ← % under it (sub)
 as of 14:05 · prices 22/10
 [ All | By broker | By type | Closed ]     ← sticky with the search row
 🔍 Search ticker, name, ISIN      Sort ▾  Filter
-AAPL                         € 1.230,40
+AAPL                         1.230,40 €
 Apple Inc. · 5 units  stale      +3,21%
 ──────────────────────────────────────
 …   (FlatList, virtualized)
@@ -445,9 +445,9 @@ the contributions vs market gain bar chart in a `ChartFrame`; best/worst month a
 as of 14:05
 [ Asset ▾ ] [ Broker ▾ ] [ Type ▾ ] [ Dates ▾ ]   ← chips, horizontal scroll
 OCTOBER 2026                                       ← sticky section header
-↓ AAPL · Buy                         −€ 1.000,00
+↓ AAPL · Buy                         −1.000,00 €
   24/10 · Degiro · 5 units
-↑ VWCE · Sell                         +€ 550,00
+↑ VWCE · Sell                         +550,00 €
 …   (SectionList, virtualized)
 ```
 
@@ -459,21 +459,22 @@ restyled on `raised`. Behaviour unchanged.
 ```
 as of 14:05
 [  Buy  |  Sell  ]                      ← default: only these two
-[  Buy  |  Sell  |  Dividend  |  Interest  |  Fee  ]   ← with all three switched on
+[  Buy  |  Sell  |  Dividend  |  Interest  ]   ← with both switched on
 ASSET           AAPL · Apple Inc.            ›
 DATE            24/10/2026
 BROKER          Degiro                       ▾
 QUANTITY        [ 5            ]
-TOTAL VALUE (€) [ 1.000,00     ]   = € 200,00 per unit
-FEE (€)         [ 0            ]
+TOTAL VALUE (€) [ 1.000,00     ]   = 200,00 € per unit
 [            Review            ]        ← disabled until valid
 ```
 
-The "More" button goes away; Dividend, Interest and Fee appear only when switched on in the
-drawer (each persisted, all off by default). If a type is switched off while selected, the
+The "More" button goes away; Dividend and Interest appear only when switched on in the
+drawer (each persisted, both off by default). There is no Fee type (§10 D5). If a type is switched off while selected, the
 form falls back to Buy. Validation, the confirm screen (summary + resulting position) and
 double-submit protection (client UUID, disabled Save with spinner) stay exactly as they are;
-only their styling changes. **Fee needs core support first** (§10 Q5). The form is a
+only their styling changes. **The Fee field is hidden** for new rows (§10 D5): it is saved as 0, exactly as when the
+field is left empty today. Edit shows it only for a row that already has a fee, so editing
+never drops a stored fee. The form is a
 `ScrollView` with `keyboardShouldPersistTaps` and the tab bar hidden while the keyboard is up.
 
 ### 7.6 Calculator (U3)
@@ -516,7 +517,7 @@ the app is usable between slices.
 ### U1 — design system, header, drawer shell, footer, Dashboard
 
 - `theme.ts`: new tokens (§2), `type`, `radius`, `space.xxl/xxxl`; contrast test.
-- Settings: default appearance **Dark**; new `newTxTypes { dividend, interest, fee }` (all
+- Settings: default appearance **Dark** for new installs (§10 D6); new `newTxTypes { dividend, interest }` (both
   false), parsed defensively like the others; Privacy = the existing `hideValues` (one switch).
 - `format.ts`: pt-PT separators and numeric dates (§6.4); its tests updated.
 - `ui/`: `T`, `Amount` (+ `useMaskedText`, `MASK = '•••••'`), `Section`, `ListRow`,
@@ -546,7 +547,7 @@ filters, sorting and figures unchanged; existing tests kept green.
 ### U3 — drawer content, New transaction, Calculator, Certificados, sign-in, MFA, lock
 
 Drawer restyled into its final sections (§6.2); New transaction type selector driven by the
-drawer toggles (and Fee, if approved, §10 Q5); Calculator as a tab; Certificados and Factor
+drawer toggles (Dividend, Interest), the Fee field hidden (§10 D5); Calculator as a tab; Certificados and Factor
 update; sign-in, MFA, no-authenticator, lock and startup error screens. `Money`/`Units` and
 `Card`/`Segmented` deleted once unused. `docs/app-plan.md` §1 updated to the new navigation.
 
@@ -563,26 +564,28 @@ update; sign-in, MFA, no-authenticator, lock and startup error screens. `Money`/
 | R7  | **Back-button order** depends on listener order between our `BackHandler` and the navigator's.                                                                                                                                         | The TopBar checks the drawer status explicitly instead of relying on order; a test fires a hardware back three times and asserts drawer closes, then header collapses, then the screen leaves.                                                                                                 |
 | R8  | **Double build of the dashboard** (header + Dashboard).                                                                                                                                                                                | One `PortfolioSummary` provider; a test asserts `buildDashboard` runs once per data change.                                                                                                                                                                                                    |
 
-## 10. Decisions to confirm before U1
+## 10. Decisions (confirmed 2026-10-24)
 
-- **Q1 Total result %** in the expanded header. There is no "total return %" KPI yet. I
-  recommend the **TWR Since start** (cumulative), which core already computes and the
-  Returns section shows; alternative: _G_ ÷ total bought (needs a new core figure).
-- **Q2 Percentages with privacy on.** The header masks all its figures, as asked. Elsewhere,
-  percentages are shown today while amounts are hidden (they reveal no amount). I recommend
-  keeping that rule outside the header; or mask every % too.
-- **Q3 Currency format.** `EUR 14.250,50` (your example), `14.250,50 €` (the usual pt-PT
-  order), or `€ 14.250,50`. Wireframes above use `€ 14.250,50`; I will use whichever you pick
-  everywhere, with other currencies by code (`USD 412,37`).
-- **Q4 The chart's "All" range return.** I propose "All" runs from the day before the first
-  row (the same start as XIRR/TWR Since start), so its market gain equals _V(T)_ − _NI(T)_ =
-  _R_ + _U_ and its % equals TWR Since start; the other ranges run from the range's first
-  chart point. Defined in `docs/kpis.md` §4.1 (proposed).
-- **Q5 Fee in New transaction.** The form (core `FORM_TRANSACTION_TYPES`) does not offer fee
-  rows today. Adding it needs a small, tested core change in U3: `fee` as a form type with
-  amount, date, broker and an optional asset, flow + amount (`kpis.md` §0); Buy, Sell,
-  Dividend and Interest validation untouched. Approve, or keep the Fee toggle out for now?
-- **Q6 Dark as default** applies when nothing is saved yet. If any toggle was ever changed on
-  your phone, the saved settings hold "System" and it would stay on System. I can switch a
-  saved "System" to Dark once (a settings version bump), or leave it for you to pick Dark in
-  the drawer.
+- **D1 Total result %** in the expanded header = the **TWR Since start**, cumulative
+  (`kpis.md` §3), which core already computes. The € figure is the total gain _G_ (§1).
+- **D2 Privacy masks percentages too**, everywhere: every amount, unit count and percentage
+  shows `•••••` while privacy is on (header, lists, charts' tooltips, calculator). Signs and
+  gain/loss colours are hidden with them. Replaces the earlier rule "percentages stay"
+  (`docs/app-plan.md` §6).
+- **D3 Currency in pt-PT order**: `14.250,50 €`, `+85,10 €`, `−1.000,00 €` (no-break space
+  before the symbol); other currencies by code after the amount, `412,37 USD`.
+- **D4 The chart's "All" range** starts the day before the first row in scope (as Since
+  start); the other ranges start at their first chart point. `docs/kpis.md` §4.1, approved.
+- **D5 No Fee type; the Fee field is hidden.** A filled Fee field is saved
+  (`transactions.fees`) and changes the buy's cost, the sell's proceeds, net invested,
+  realized gain and the returns; left empty it is saved as 0. Since it will not be used:
+  - New transaction no longer shows the field; new Buy and Sell rows are saved with fee 0,
+    the same row an empty field produces today. Core validation is unchanged (an empty fee
+    is already valid).
+  - Edit shows the field only when the row being edited already has a non-zero fee (imported
+    rows can), so an edit never silently drops a stored fee; there it works as today.
+  - The drawer's New transaction options are **Dividend and Interest** only (both off by
+    default); there is no Fee toggle and no fee transaction type in the form.
+  - Not deleted outright, because existing rows carry fees and Edit must keep them.
+- **D6 Dark is the default for new installs only.** A phone with saved settings keeps its
+  saved Appearance (no migration); the owner picks Dark in the drawer.
