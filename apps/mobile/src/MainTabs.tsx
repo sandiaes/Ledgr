@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { ComponentProps } from 'react';
 import { ActivityScreen } from './activity/ActivityScreen';
@@ -21,7 +21,7 @@ import { SettingsScreen } from './settings/SettingsScreen';
 import { EditTransactionScreen } from './transactions/EditTransactionScreen';
 import { NewTransactionScreen } from './transactions/NewTransactionScreen';
 import { EyeButton } from './ui/EyeButton';
-import { colors } from './ui/theme';
+import { useTheme } from './ui/ThemeProvider';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 const Tab = createBottomTabNavigator();
@@ -32,15 +32,26 @@ const icon =
     <Ionicons name={name} color={color} size={size} />
   );
 
-const theme = {
-  ...DefaultTheme,
-  colors: { ...DefaultTheme.colors, background: colors.background },
-};
 const eye = () => <EyeButton />;
 
 function Tabs() {
+  const { colors } = useTheme();
   return (
-    <Tab.Navigator screenOptions={{ tabBarActiveTintColor: colors.accent, headerRight: eye }}>
+    <Tab.Navigator
+      screenOptions={{
+        headerRight: eye,
+        tabBarActiveTintColor: colors.tabBar.active,
+        tabBarInactiveTintColor: colors.tabBar.inactive,
+        tabBarStyle: {
+          backgroundColor: colors.tabBar.background,
+          borderTopColor: colors.tabBar.border,
+        },
+        headerStyle: { backgroundColor: colors.surface },
+        headerTintColor: colors.text,
+        headerTitleStyle: { color: colors.text },
+        sceneStyle: { backgroundColor: colors.background },
+      }}
+    >
       <Tab.Screen
         name="Dashboard"
         component={DashboardScreen}
@@ -76,9 +87,30 @@ function Tabs() {
 
 /** The tabs, with the detail screens stacked above them (docs/app-plan.md §1). */
 export function MainTabs() {
+  const { colors, scheme } = useTheme();
+  const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+  const theme = {
+    ...base,
+    colors: {
+      ...base.colors,
+      primary: colors.accent,
+      background: colors.background,
+      card: colors.surface,
+      text: colors.text,
+      border: colors.border,
+    },
+  };
   return (
     <NavigationContainer theme={theme}>
-      <Stack.Navigator screenOptions={{ headerRight: eye }}>
+      <Stack.Navigator
+        screenOptions={{
+          headerRight: eye,
+          headerStyle: { backgroundColor: colors.surface },
+          headerTintColor: colors.text,
+          headerTitleStyle: { color: colors.text },
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      >
         <Stack.Screen
           name="Tabs"
           component={Tabs}

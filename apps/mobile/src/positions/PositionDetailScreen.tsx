@@ -19,7 +19,8 @@ import { Amount, Money, Pct, Units } from '../ui/Money';
 import { Banner, Button, Card, Line, Segmented } from '../ui/parts';
 import { PortfolioScreen } from '../ui/PortfolioScreen';
 import { excludesCertificados } from '../ui/Scope';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 import { Badge, ValuationBadge } from './PositionRowView';
 import { PriceChart } from './PriceChart';
 
@@ -41,6 +42,7 @@ export function PositionDetailScreen() {
 }
 
 function Detail(props: { view: PositionsView; market: Market; assetId: string; names: Names }) {
+  const styles = useStyles(makeStyles);
   const { view, assetId, names } = props;
   const navigation = useRootNavigation();
   const p = view.details[assetId];
@@ -188,6 +190,7 @@ function Detail(props: { view: PositionsView; market: Market; assetId: string; n
 
 /** Split-adjusted closes from the asset's whole (paginated) price history. */
 function PriceCard(props: { assetId: string; currency: string; market: Market; today: IsoDate }) {
+  const styles = useStyles(makeStyles);
   const [range, setRange] = useState<SeriesRange>('1Y');
   const history = usePriceHistory(props.assetId, true);
   const series = useMemo(
@@ -235,6 +238,7 @@ function PriceCard(props: { assetId: string; currency: string; market: Market; t
 
 /** Certificados: each held subscription with its units, latest factor and value. */
 function Subscriptions({ detail, today }: { detail: PositionDetail; today: IsoDate }) {
+  const styles = useStyles(makeStyles);
   const year = today.slice(0, 4);
   return (
     <Card title="Subscriptions (value from factor)">
@@ -268,20 +272,21 @@ function Subscriptions({ detail, today }: { detail: PositionDetail; today: IsoDa
   );
 }
 
-const styles = StyleSheet.create({
-  caption: { fontSize: 13, color: colors.muted },
-  total: { fontSize: 28, fontWeight: '700', color: colors.text, marginVertical: space.xs },
-  day: { fontSize: 15, fontWeight: '600' },
-  priceLine: { marginTop: space.xs },
-  figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline', flexWrap: 'wrap' },
-  strong: { fontWeight: '700', color: colors.text },
-  small: { fontSize: 13, color: colors.text },
-  muted: { color: colors.muted, fontSize: 12 },
-  note: { color: colors.muted, fontSize: 11, marginTop: space.xs },
-  block: {
-    paddingVertical: space.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  buttons: { marginHorizontal: space.lg },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    caption: { fontSize: 13, color: colors.muted },
+    total: { fontSize: 28, fontWeight: '700', color: colors.text, marginVertical: space.xs },
+    day: { fontSize: 15, fontWeight: '600' },
+    priceLine: { marginTop: space.xs },
+    figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline', flexWrap: 'wrap' },
+    strong: { fontWeight: '700', color: colors.text },
+    small: { fontSize: 13, color: colors.text },
+    muted: { color: colors.muted, fontSize: 12 },
+    note: { color: colors.muted, fontSize: 11, marginTop: space.xs },
+    block: {
+      paddingVertical: space.xs,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    buttons: { marginHorizontal: space.lg },
+  });

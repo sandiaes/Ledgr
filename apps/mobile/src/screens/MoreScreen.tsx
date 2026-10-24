@@ -2,9 +2,11 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { useRootNavigation, type RootStackParams } from '../navigation';
 import { Card } from '../ui/parts';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 
 function Link(props: { label: string; to: keyof RootStackParams; children?: ReactNode }) {
+  const styles = useStyles(makeStyles);
   const navigation = useRootNavigation();
   return (
     <Pressable
@@ -20,6 +22,7 @@ function Link(props: { label: string; to: keyof RootStackParams; children?: Reac
 
 /** Certificados, the portfolio screens and Settings. */
 export function MoreScreen() {
+  const styles = useStyles(makeStyles);
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Card title="Portfolio">
@@ -35,10 +38,11 @@ export function MoreScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  content: { paddingTop: space.lg, paddingBottom: space.xl },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.sm, gap: space.md },
-  rowText: { flex: 1 },
-  label: { fontSize: 15, color: colors.text },
-  chevron: { fontSize: 20, color: colors.muted },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    content: { paddingTop: space.lg, paddingBottom: space.xl },
+    row: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.sm, gap: space.md },
+    rowText: { flex: 1 },
+    label: { fontSize: 15, color: colors.text },
+    chevron: { fontSize: 20, color: colors.muted },
+  });

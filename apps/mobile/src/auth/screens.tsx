@@ -1,20 +1,15 @@
 import { verifyCode } from '@ledgr/client';
 import { useState, type ReactNode } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, StyleSheet, Text, View } from 'react-native';
 import { useServices } from '../services';
-import { Button } from '../ui/parts';
-import { colors, space } from '../ui/theme';
+import { Button, Input } from '../ui/parts';
+import { space, type Colors } from '../ui/theme';
+import { useColors, useStyles } from '../ui/ThemeProvider';
 import { useGate } from './AuthGate';
 import { errorCode } from './errors';
 
 function Screen(props: { title: string; children: ReactNode }) {
+  const styles = useStyles(makeStyles);
   return (
     <KeyboardAvoidingView behavior="height" style={styles.screen}>
       <View style={styles.box}>
@@ -29,6 +24,8 @@ function Screen(props: { title: string; children: ReactNode }) {
 }
 
 export function LoadingScreen() {
+  const styles = useStyles(makeStyles);
+  const colors = useColors();
   return (
     <View style={styles.screen}>
       <ActivityIndicator color={colors.accent} />
@@ -38,6 +35,7 @@ export function LoadingScreen() {
 
 /** The configuration is unsafe or incomplete: names the variable, never its value. */
 export function StartupErrorScreen({ problem }: { problem: string }) {
+  const styles = useStyles(makeStyles);
   return (
     <Screen title="Cannot start">
       <Text style={styles.text}>{problem}</Text>
@@ -49,6 +47,7 @@ export function StartupErrorScreen({ problem }: { problem: string }) {
 }
 
 export function SignInScreen() {
+  const styles = useStyles(makeStyles);
   const { auth } = useServices();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -66,7 +65,7 @@ export function SignInScreen() {
 
   return (
     <Screen title="Sign in">
-      <TextInput
+      <Input
         style={styles.input}
         placeholder="Email"
         autoCapitalize="none"
@@ -75,7 +74,7 @@ export function SignInScreen() {
         value={email}
         onChangeText={setEmail}
       />
-      <TextInput
+      <Input
         style={styles.input}
         placeholder="Password"
         secureTextEntry
@@ -96,6 +95,7 @@ export function SignInScreen() {
 
 /** Every aal1 session lands here: a 6-digit TOTP code from the authenticator app. */
 export function MfaChallengeScreen({ factorId }: { factorId: string }) {
+  const styles = useStyles(makeStyles);
   const { auth } = useServices();
   const { evaluate, signOut } = useGate();
   const [code, setCode] = useState('');
@@ -123,7 +123,7 @@ export function MfaChallengeScreen({ factorId }: { factorId: string }) {
   return (
     <Screen title="Two-factor code">
       <Text style={styles.text}>Enter the 6-digit code from your authenticator app.</Text>
-      <TextInput
+      <Input
         style={[styles.input, styles.code]}
         placeholder="123456"
         keyboardType="number-pad"
@@ -143,6 +143,7 @@ export function MfaChallengeScreen({ factorId }: { factorId: string }) {
 
 /** Signed in, but no verified TOTP factor: enrollment happens in the desktop app. */
 export function NoAuthenticatorScreen() {
+  const styles = useStyles(makeStyles);
   const { signOut } = useGate();
   return (
     <Screen title="Set up two-factor sign-in first">
@@ -157,6 +158,7 @@ export function NoAuthenticatorScreen() {
 }
 
 export function GateErrorScreen({ code }: { code: string }) {
+  const styles = useStyles(makeStyles);
   const { evaluate, signOut } = useGate();
   return (
     <Screen title="Cannot check your sign-in">
@@ -167,23 +169,15 @@ export function GateErrorScreen({ code }: { code: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, justifyContent: 'center', backgroundColor: colors.background },
-  box: { padding: space.xl },
-  brand: { fontSize: 15, fontWeight: '700', color: colors.accent, marginBottom: space.sm },
-  title: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: space.lg },
-  text: { fontSize: 15, color: colors.text, lineHeight: 21, marginBottom: space.md },
-  hint: { fontSize: 13, color: colors.muted },
-  input: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: space.md,
-    paddingVertical: space.md,
-    fontSize: 16,
-    marginBottom: space.md,
-  },
-  code: { fontSize: 24, letterSpacing: 6, textAlign: 'center' },
-  error: { color: colors.loss, marginBottom: space.sm },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    screen: { flex: 1, justifyContent: 'center', backgroundColor: colors.background },
+    box: { padding: space.xl },
+    brand: { fontSize: 15, fontWeight: '700', color: colors.accent, marginBottom: space.sm },
+    title: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: space.lg },
+    text: { fontSize: 15, color: colors.text, lineHeight: 21, marginBottom: space.md },
+    hint: { fontSize: 13, color: colors.muted },
+    input: { paddingVertical: space.md, marginBottom: space.md },
+    code: { fontSize: 24, letterSpacing: 6, textAlign: 'center' },
+    error: { color: colors.loss, marginBottom: space.sm },
+  });

@@ -5,7 +5,8 @@ import { formatDate, formatTime } from '../format';
 import { Money } from '../ui/Money';
 import { Banner, Card } from '../ui/parts';
 import { IncludeCertificadosSwitch, NothingInScope, ScopeNote } from '../ui/Scope';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 import {
   AllocationCard,
   ChartCard,
@@ -18,6 +19,7 @@ import {
 } from './cards';
 
 export function DashboardScreen() {
+  const styles = useStyles(makeStyles);
   const state = useDashboard();
   const assets: AssetNames = useMemo(
     () => new Map(state.status === 'ready' ? state.ledger.assets.map((a) => [a.id, a]) : []),
@@ -88,10 +90,11 @@ export function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  content: { paddingTop: space.md, paddingBottom: space.xl },
-  status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
-  asOf: { color: colors.muted, fontSize: 12, marginHorizontal: space.lg, marginBottom: space.sm },
-  caption: { fontSize: 13, color: colors.muted },
-  total: { fontSize: 32, fontWeight: '700', color: colors.text, marginVertical: space.xs },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    content: { paddingTop: space.md, paddingBottom: space.xl },
+    status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
+    asOf: { color: colors.muted, fontSize: 12, marginHorizontal: space.lg, marginBottom: space.sm },
+    caption: { fontSize: 13, color: colors.muted },
+    total: { fontSize: 32, fontWeight: '700', color: colors.text, marginVertical: space.xs },
+  });

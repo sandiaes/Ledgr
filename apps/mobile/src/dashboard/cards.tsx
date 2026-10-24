@@ -17,8 +17,10 @@ import { useRootNavigation } from '../navigation';
 import { typeLabel } from '../ui/labels';
 import { Money, Pct } from '../ui/Money';
 import { Banner, Card, Segmented } from '../ui/parts';
-import { colors, space } from '../ui/theme';
-import { AllocationDonut, typeColor } from './AllocationDonut';
+import { space, type Colors } from '../ui/theme';
+import { useColors, useStyles } from '../ui/ThemeProvider';
+import { useSliceColors } from '../ui/sliceColors';
+import { AllocationDonut } from './AllocationDonut';
 import { ValueChart } from './ValueChart';
 
 export type AssetNames = ReadonlyMap<string, AssetRecord>;
@@ -28,6 +30,7 @@ const label = (assets: AssetNames, id: string) => {
 };
 
 function Line(props: { label: string; children: ReactNode; strong?: boolean }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.line}>
       <Text style={[styles.lineLabel, props.strong && styles.strong]}>{props.label}</Text>
@@ -37,6 +40,7 @@ function Line(props: { label: string; children: ReactNode; strong?: boolean }) {
 }
 
 export function HeaderCard({ view, assets }: { view: DashboardView; assets: AssetNames }) {
+  const styles = useStyles(makeStyles);
   return (
     <Card>
       <Text style={styles.caption}>Total value</Text>
@@ -53,6 +57,7 @@ export function HeaderCard({ view, assets }: { view: DashboardView; assets: Asse
 
 /** "2 prices stale", "1 price pending", "CA factor 41 days old"; tap for the assets. */
 function Freshness({ view, assets }: { view: DashboardView; assets: AssetNames }) {
+  const styles = useStyles(makeStyles);
   const [open, setOpen] = useState(false);
   const { stalePrices, pendingPrices, caFactor } = view.freshness;
   const notes: string[] = [];
@@ -91,6 +96,7 @@ function Freshness({ view, assets }: { view: DashboardView; assets: AssetNames }
 }
 
 export function GainCard({ view }: { view: DashboardView }) {
+  const styles = useStyles(makeStyles);
   const g = view.gains;
   return (
     <Card title="Gain">
@@ -132,6 +138,7 @@ const REASONS: Record<string, string> = {
 const reason = (r: string) => REASONS[r] ?? 'cannot be computed';
 
 function XirrValue({ f }: { f: XirrFigure }) {
+  const styles = useStyles(makeStyles);
   if (!f.ok) return <Failed why={f.reason} />;
   return (
     <>
@@ -146,6 +153,7 @@ function XirrValue({ f }: { f: XirrFigure }) {
 }
 
 function TwrValue({ f }: { f: TwrFigure }) {
+  const styles = useStyles(makeStyles);
   if (!f.ok) return <Failed why={f.reason} />;
   return (
     <>
@@ -162,6 +170,7 @@ function TwrValue({ f }: { f: TwrFigure }) {
 }
 
 function Failed({ why }: { why: string }) {
+  const styles = useStyles(makeStyles);
   return (
     <>
       <Text style={styles.figure}>—</Text>
@@ -171,6 +180,7 @@ function Failed({ why }: { why: string }) {
 }
 
 export function ReturnsCard({ returns }: { returns: readonly PeriodReturn[] }) {
+  const styles = useStyles(makeStyles);
   const [period, setPeriod] = useState<ReturnPeriod>('sinceStart');
   const navigation = useRootNavigation();
   const r = returns.find((x) => x.period === period);
@@ -200,6 +210,8 @@ export function ReturnsCard({ returns }: { returns: readonly PeriodReturn[] }) {
 }
 
 export function ChartCard({ view }: { view: DashboardView }) {
+  const styles = useStyles(makeStyles);
+  const colors = useColors();
   const [range, setRange] = useState<SeriesRange>('1Y');
   const s = view.series[range];
   return (
@@ -226,6 +238,7 @@ export function ChartCard({ view }: { view: DashboardView }) {
 
 /** A "see more" link at the bottom of a card. */
 function More(props: { label: string; onPress(): void }) {
+  const styles = useStyles(makeStyles);
   return (
     <Pressable onPress={props.onPress} accessibilityRole="link" style={styles.more}>
       <Text style={styles.moreText}>{props.label} ›</Text>
@@ -234,12 +247,14 @@ function More(props: { label: string; onPress(): void }) {
 }
 
 export function AllocationCard({ view }: { view: DashboardView }) {
+  const styles = useStyles(makeStyles);
   const navigation = useRootNavigation();
+  const { typeColor } = useSliceColors();
   if (view.allocation.length === 0) return null;
   return (
     <Card title="Allocation by type">
       <View style={styles.allocation}>
-        <AllocationDonut slices={view.allocation} />
+        <AllocationDonut slices={view.allocation} colorOf={typeColor} />
         <View style={styles.allocationLegend}>
           {view.allocation.map((s) => (
             <View key={s.key} style={styles.legendRow}>
@@ -260,6 +275,7 @@ export function AllocationCard({ view }: { view: DashboardView }) {
 }
 
 export function MoversCard({ view, assets }: { view: DashboardView; assets: AssetNames }) {
+  const styles = useStyles(makeStyles);
   const [span, setSpan] = useState<'day' | 'total'>('day');
   const [by, setBy] = useState<'eur' | 'pct'>('eur');
   const navigation = useRootNavigation();
@@ -328,40 +344,41 @@ export function ReconcileBanner({ view }: { view: DashboardView }) {
   return <Banner tone="warning">Figures do not reconcile: {checks.join('; ')}.</Banner>;
 }
 
-const styles = StyleSheet.create({
-  caption: { fontSize: 13, color: colors.muted },
-  total: { fontSize: 32, fontWeight: '700', color: colors.text, marginVertical: space.xs },
-  dayChange: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
-  dayText: { fontSize: 16, fontWeight: '600' },
-  muted: { color: colors.muted, fontSize: 13 },
-  small: { color: colors.muted, fontSize: 12 },
-  strong: { fontWeight: '700', fontSize: 16, color: colors.text },
-  notes: { marginTop: space.sm },
-  noteList: { marginTop: space.xs, gap: 2 },
-  warning: { color: colors.warningText, fontSize: 13, fontWeight: '600' },
-  line: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
-  lineLabel: { color: colors.text, fontSize: 14 },
-  lineValue: { flexDirection: 'row', gap: space.sm, alignItems: 'baseline' },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-    marginVertical: space.sm,
-  },
-  columns: { flexDirection: 'row' },
-  column: { flex: 1 },
-  figure: { fontSize: 22, fontWeight: '700', color: colors.text },
-  legend: { flexDirection: 'row', gap: space.lg, marginVertical: space.sm },
-  allocation: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
-  allocationLegend: { flex: 1, gap: space.xs },
-  legendRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.xs },
-  dot: { fontSize: 12 },
-  legendLabel: { flex: 1, fontSize: 13, color: colors.text },
-  legendPct: { fontSize: 13, color: colors.text, minWidth: 52, textAlign: 'right' },
-  moverTabs: { flexDirection: 'row', justifyContent: 'space-between' },
-  mover: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: space.sm },
-  moverName: { flex: 1 },
-  ticker: { fontSize: 14, fontWeight: '600', color: colors.text },
-  moverPct: { minWidth: 64, textAlign: 'right', fontSize: 13 },
-  more: { marginTop: space.sm, alignSelf: 'flex-end' },
-  moreText: { color: colors.accent, fontSize: 13 },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    caption: { fontSize: 13, color: colors.muted },
+    total: { fontSize: 32, fontWeight: '700', color: colors.text, marginVertical: space.xs },
+    dayChange: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
+    dayText: { fontSize: 16, fontWeight: '600' },
+    muted: { color: colors.muted, fontSize: 13 },
+    small: { color: colors.muted, fontSize: 12 },
+    strong: { fontWeight: '700', fontSize: 16, color: colors.text },
+    notes: { marginTop: space.sm },
+    noteList: { marginTop: space.xs, gap: 2 },
+    warning: { color: colors.warningText, fontSize: 13, fontWeight: '600' },
+    line: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+    lineLabel: { color: colors.text, fontSize: 14 },
+    lineValue: { flexDirection: 'row', gap: space.sm, alignItems: 'baseline' },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginVertical: space.sm,
+    },
+    columns: { flexDirection: 'row' },
+    column: { flex: 1 },
+    figure: { fontSize: 22, fontWeight: '700', color: colors.text },
+    legend: { flexDirection: 'row', gap: space.lg, marginVertical: space.sm },
+    allocation: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
+    allocationLegend: { flex: 1, gap: space.xs },
+    legendRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.xs },
+    dot: { fontSize: 12 },
+    legendLabel: { flex: 1, fontSize: 13, color: colors.text },
+    legendPct: { fontSize: 13, color: colors.text, minWidth: 52, textAlign: 'right' },
+    moverTabs: { flexDirection: 'row', justifyContent: 'space-between' },
+    mover: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: space.sm },
+    moverName: { flex: 1 },
+    ticker: { fontSize: 14, fontWeight: '600', color: colors.text },
+    moverPct: { minWidth: 64, textAlign: 'right', fontSize: 13 },
+    more: { marginTop: space.sm, alignSelf: 'flex-end' },
+    moreText: { color: colors.accent, fontSize: 13 },
+  });

@@ -4,7 +4,8 @@ import { useGate } from '../auth/AuthGate';
 import { useServices } from '../services';
 import { useSettings } from '../settings/SettingsProvider';
 import { Button } from '../ui/parts';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 
 /**
  * Biometric / device-PIN lock over the signed-in app (docs/app-plan.md §6): on a cold
@@ -63,6 +64,7 @@ export function LockGate({ children }: { children: ReactNode }) {
 }
 
 function LockScreen({ onUnlock }: { onUnlock(): Promise<void> }) {
+  const styles = useStyles(makeStyles);
   const { signOut } = useGate();
   const [failed, setFailed] = useState(false);
   const unlock = useCallback(() => {
@@ -90,13 +92,14 @@ function LockScreen({ onUnlock }: { onUnlock(): Promise<void> }) {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: space.xl,
-    backgroundColor: colors.background,
-  },
-  title: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: space.md },
-  text: { fontSize: 15, color: colors.muted },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      justifyContent: 'center',
+      padding: space.xl,
+      backgroundColor: colors.background,
+    },
+    title: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: space.md },
+    text: { fontSize: 15, color: colors.muted },
+  });

@@ -1,19 +1,26 @@
 import type { JobRunSummary } from '@ledgr/client';
 import Constants from 'expo-constants';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { errorCode } from '../auth/errors';
 import { useGate } from '../auth/AuthGate';
 import { useJobRuns } from '../data/usePortfolio';
 import { formatDateTime } from '../format';
 import { useServices, type SecurityLevel } from '../services';
 import { Badge } from '../positions/PositionRowView';
-import { Button, Card, Segmented } from '../ui/parts';
-import { colors, space } from '../ui/theme';
-import { LOCK_TIMEOUTS, type LockTimeout } from './settings';
+import { Button, Card, Segmented, Switch } from '../ui/parts';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
+import {
+  APPEARANCES,
+  LOCK_TIMEOUTS,
+  type AppearancePreference,
+  type LockTimeout,
+} from './settings';
 import { useSettings } from './SettingsProvider';
 
 function Row(props: { label: string; hint?: string; children: ReactNode }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.row}>
       <View style={styles.rowText}>
@@ -24,6 +31,12 @@ function Row(props: { label: string; hint?: string; children: ReactNode }) {
     </View>
   );
 }
+
+const APPEARANCE_LABELS: Record<AppearancePreference, string> = {
+  system: 'System',
+  light: 'Light',
+  dark: 'Dark',
+};
 
 const TIMEOUT_LABELS: Record<LockTimeout, string> = {
   0: 'Immediately',
@@ -38,6 +51,7 @@ function RunLine(props: {
   run: JobRunSummary | null | undefined;
   loading: boolean;
 }) {
+  const styles = useStyles(makeStyles);
   const { run } = props;
   return (
     <Row label={props.label}>
@@ -62,6 +76,7 @@ function RunLine(props: {
 
 /** Lock, privacy, the daily jobs' last runs, sign out and the version (docs/app-plan.md §1). */
 export function SettingsScreen() {
+  const styles = useStyles(makeStyles);
   const { device, projectRef } = useServices();
   const { signOut } = useGate();
   const runs = useJobRuns();
@@ -78,6 +93,14 @@ export function SettingsScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
+      <Card title="Appearance">
+        <Segmented
+          options={APPEARANCES.map((a) => ({ value: a, label: APPEARANCE_LABELS[a] }))}
+          value={settings.appearance}
+          onChange={(appearance) => update({ appearance })}
+        />
+        <Text style={styles.hint}>System follows the phone’s light or dark setting.</Text>
+      </Card>
       <Card title="Security">
         <Row
           label="App lock"
@@ -143,13 +166,14 @@ export function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  content: { paddingTop: space.lg, paddingBottom: space.xl },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.sm, gap: space.md },
-  rowText: { flex: 1 },
-  label: { fontSize: 15, color: colors.text },
-  hint: { fontSize: 12, color: colors.muted, marginTop: 2, marginBottom: space.xs },
-  value: { fontSize: 14, color: colors.text },
-  run: { flexDirection: 'row', gap: space.xs, alignItems: 'center' },
-  footer: { textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: space.md },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    content: { paddingTop: space.lg, paddingBottom: space.xl },
+    row: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.sm, gap: space.md },
+    rowText: { flex: 1 },
+    label: { fontSize: 15, color: colors.text },
+    hint: { fontSize: 12, color: colors.muted, marginTop: 2, marginBottom: space.xs },
+    value: { fontSize: 14, color: colors.text },
+    run: { flexDirection: 'row', gap: space.xs, alignItems: 'center' },
+    footer: { textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: space.md },
+  });

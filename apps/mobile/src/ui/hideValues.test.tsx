@@ -8,10 +8,7 @@ import { fakeAuth, fakeData, fakeServices, sampleLedger } from '../test/fakes';
 import { MASK, Money, Pct } from './Money';
 
 jest.mock('../dashboard/ValueChart', () => ({ ValueChart: () => null }));
-jest.mock('../dashboard/AllocationDonut', () => ({
-  AllocationDonut: () => null,
-  typeColor: () => '#000',
-}));
+jest.mock('../dashboard/AllocationDonut', () => ({ AllocationDonut: () => null }));
 
 const today = localDate(new Date(), TIME_ZONE);
 

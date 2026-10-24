@@ -8,10 +8,12 @@ import { assetLabel, brokerLabel, TRANSACTION_TYPE_LABELS, useNames } from '../u
 import { Amount, Money, Units } from '../ui/Money';
 import { Card } from '../ui/parts';
 import { PortfolioScreen } from '../ui/PortfolioScreen';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 
 /** The asset's ledger rows, newest first. */
 export function AssetTransactionsScreen() {
+  const styles = useStyles(makeStyles);
   const { assetId } = useRootRoute<'AssetTransactions'>().params;
   const state = usePortfolio(buildPositions);
   const ledger = state.status === 'ready' ? state.ledger : null;
@@ -72,15 +74,16 @@ export function AssetTransactionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    paddingVertical: space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline' },
-  type: { fontSize: 14, fontWeight: '600', color: colors.text },
-  total: { fontSize: 14, color: colors.text },
-  muted: { color: colors.muted, fontSize: 12, fontWeight: '400' },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    row: {
+      paddingVertical: space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+    figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline' },
+    type: { fontSize: 14, fontWeight: '600', color: colors.text },
+    total: { fontSize: 14, color: colors.text },
+    muted: { color: colors.muted, fontSize: 12, fontWeight: '400' },
+  });

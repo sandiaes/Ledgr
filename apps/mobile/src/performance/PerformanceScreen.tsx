@@ -7,7 +7,8 @@ import { Badge } from '../positions/PositionRowView';
 import { Money, Pct } from '../ui/Money';
 import { Card, Line, Segmented } from '../ui/parts';
 import { PortfolioScreen } from '../ui/PortfolioScreen';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 import { ContributionsChart } from './ContributionsChart';
 
 type Unit = 'month' | 'year';
@@ -23,6 +24,7 @@ export function PerformanceScreen() {
 }
 
 function Performance({ view }: { view: PerformanceView }) {
+  const styles = useStyles(makeStyles);
   const [unit, setUnit] = useState<Unit>('month');
   const periods = unit === 'month' ? view.months : view.years;
   if (view.months.length === 0) {
@@ -68,6 +70,7 @@ function Extreme({ label, m }: { label: string; m: CalendarReturn | null }) {
 }
 
 function PeriodRow({ p, unit }: { p: CalendarReturn; unit: Unit }) {
+  const styles = useStyles(makeStyles);
   const current = unit === 'month' ? 'MTD' : 'YTD';
   return (
     <View style={styles.period} testID="period-row">
@@ -100,18 +103,19 @@ function PeriodRow({ p, unit }: { p: CalendarReturn; unit: Unit }) {
   );
 }
 
-const styles = StyleSheet.create({
-  period: {
-    paddingVertical: space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  title: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  name: { fontSize: 14, fontWeight: '600', color: colors.text },
-  ret: { fontSize: 14, fontWeight: '600', color: colors.text },
-  figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline', flexWrap: 'wrap' },
-  small: { fontSize: 12, color: colors.text },
-  muted: { color: colors.muted, fontSize: 12, fontWeight: '400' },
-  note: { color: colors.muted, fontSize: 11, marginTop: space.xs },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    period: {
+      paddingVertical: space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+    title: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+    name: { fontSize: 14, fontWeight: '600', color: colors.text },
+    ret: { fontSize: 14, fontWeight: '600', color: colors.text },
+    figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline', flexWrap: 'wrap' },
+    small: { fontSize: 12, color: colors.text },
+    muted: { color: colors.muted, fontSize: 12, fontWeight: '400' },
+    note: { color: colors.muted, fontSize: 11, marginTop: space.xs },
+  });

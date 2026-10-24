@@ -151,7 +151,10 @@ deleted, but not edited in the app.
 
 ### More / Settings
 
-Biometric lock (on/off, lock after 0 / 1 / 5 / 15 minutes in the background), hide values
+Appearance (System default, Light, Dark; saved in AsyncStorage with the other toggles, applied
+before the first screen renders; System follows the phone live; every colour comes from
+`apps/mobile/src/ui/theme.ts`, and a test fails on any colour value elsewhere), biometric lock
+(on/off, lock after 0 / 1 / 5 / 15 minutes in the background), hide values
 (on/off), block screenshots (on/off), last price update and last snapshot (time and status
 from `job_runs`), sign out, app version (and the Supabase project ref, so a wrong `.env`
 is visible).

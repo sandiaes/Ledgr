@@ -4,7 +4,8 @@ import { formatPeriod } from '../format';
 import { useRootNavigation } from '../navigation';
 import { assetLabel, assetName, type Names } from '../ui/labels';
 import { Amount, Money, Pct, Units } from '../ui/Money';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 
 export function Badge({
   text,
@@ -13,6 +14,7 @@ export function Badge({
   text: string;
   tone?: 'warning' | 'muted' | 'danger';
 }) {
+  const styles = useStyles(makeStyles);
   const toneStyle =
     tone === 'muted'
       ? styles.badgeMuted
@@ -40,6 +42,7 @@ export function PositionRowView(props: {
   /** False in a broker's rows: day change is per asset. */
   showDay?: boolean;
 }) {
+  const styles = useStyles(makeStyles);
   const { row, names } = props;
   const navigation = useRootNavigation();
   const ca = row.certificado;
@@ -100,30 +103,31 @@ export function PositionRowView(props: {
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    paddingVertical: space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    gap: 2,
-  },
-  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  title: { flexDirection: 'row', alignItems: 'center', gap: space.xs, flexShrink: 1 },
-  ticker: { fontSize: 15, fontWeight: '600', color: colors.text, flexShrink: 1 },
-  value: { fontSize: 15, fontWeight: '600', color: colors.text },
-  name: { flex: 1, color: colors.muted, fontSize: 12, marginRight: space.sm },
-  figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline', flexWrap: 'wrap' },
-  small: { fontSize: 13 },
-  muted: { color: colors.muted, fontSize: 12 },
-  badge: {
-    fontSize: 10,
-    fontWeight: '600',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  badgeWarning: { backgroundColor: colors.warningBg, color: colors.warningText },
-  badgeMuted: { backgroundColor: colors.background, color: colors.muted },
-  badgeDanger: { backgroundColor: colors.errorBg, color: colors.loss },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    row: {
+      paddingVertical: space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      gap: 2,
+    },
+    line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+    title: { flexDirection: 'row', alignItems: 'center', gap: space.xs, flexShrink: 1 },
+    ticker: { fontSize: 15, fontWeight: '600', color: colors.text, flexShrink: 1 },
+    value: { fontSize: 15, fontWeight: '600', color: colors.text },
+    name: { flex: 1, color: colors.muted, fontSize: 12, marginRight: space.sm },
+    figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline', flexWrap: 'wrap' },
+    small: { fontSize: 13 },
+    muted: { color: colors.muted, fontSize: 12 },
+    badge: {
+      fontSize: 10,
+      fontWeight: '600',
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 8,
+      overflow: 'hidden',
+    },
+    badgeWarning: { backgroundColor: colors.warningBg, color: colors.warningText },
+    badgeMuted: { backgroundColor: colors.background, color: colors.muted },
+    badgeDanger: { backgroundColor: colors.errorBg, color: colors.loss },
+  });

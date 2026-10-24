@@ -3,7 +3,8 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Badge } from '../positions/PositionRowView';
 import { Button, Field } from '../ui/parts';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 
 const MAX_SHOWN = 8;
 
@@ -21,6 +22,7 @@ export function AssetPicker(props: {
   /** Shown when there is nothing to pick (e.g. nothing held to sell). */
   emptyText: string;
 }) {
+  const styles = useStyles(makeStyles);
   const [query, setQuery] = useState('');
   // Searching when asked to, or while nothing is picked (an asset just added appears in the
   // ledger a moment after its save resolves).
@@ -104,18 +106,19 @@ export function AssetPicker(props: {
   );
 }
 
-const styles = StyleSheet.create({
-  block: { marginBottom: space.md },
-  label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
-  selected: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  flex: { flex: 1 },
-  ticker: { fontSize: 15, fontWeight: '600', color: colors.text },
-  muted: { fontSize: 12, color: colors.muted },
-  link: { color: colors.accent, fontWeight: '600' },
-  error: { fontSize: 13, color: colors.loss, marginTop: 4 },
-  option: {
-    paddingVertical: space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    block: { marginBottom: space.md },
+    label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
+    selected: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+    flex: { flex: 1 },
+    ticker: { fontSize: 15, fontWeight: '600', color: colors.text },
+    muted: { fontSize: 12, color: colors.muted },
+    link: { color: colors.accent, fontWeight: '600' },
+    error: { fontSize: 13, color: colors.loss, marginTop: 4 },
+    option: {
+      paddingVertical: space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+  });

@@ -13,7 +13,8 @@ import { errorCode } from '../auth/errors';
 import { useLedger, useRefreshAfterWrite } from '../data/usePortfolio';
 import { useServices } from '../services';
 import { Banner, Button, Card, Chip, Field, Segmented } from '../ui/parts';
-import { colors, space } from '../ui/theme';
+import { space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 import { assetIssueText } from './messages';
 
 const TYPES: { value: FormAssetType; label: string }[] = [
@@ -35,6 +36,7 @@ const EXCHANGE_NAMES: Record<string, string> = {
  * Saved with price_source 'manual': "price pending" until prices-daily resolves the symbol.
  */
 export function AddAssetForm(props: { onDone(assetId: string): void; onCancel(): void }) {
+  const styles = useStyles(makeStyles);
   const { data: api, newId } = useServices();
   const ledger = useLedger();
   const refresh = useRefreshAfterWrite();
@@ -164,9 +166,10 @@ export function AddAssetForm(props: { onDone(assetId: string): void; onCancel():
   );
 }
 
-const styles = StyleSheet.create({
-  label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.md },
-  error: { fontSize: 13, color: colors.loss, marginTop: -space.sm, marginBottom: space.md },
-  note: { fontSize: 12, color: colors.muted, marginBottom: space.sm },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.md },
+    error: { fontSize: 13, color: colors.loss, marginTop: -space.sm, marginBottom: space.md },
+    note: { fontSize: 12, color: colors.muted, marginBottom: space.sm },
+  });
