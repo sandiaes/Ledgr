@@ -3,7 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatPeriod } from '../format';
 import { useRootNavigation } from '../navigation';
 import { assetLabel, assetName, type Names } from '../ui/labels';
-import { Amount, Money, Pct, Units } from '../ui/Money';
+import { Amount } from '../ui/Amount';
+import { Money, Pct, Units } from '../ui/Money';
 import { space, type Colors } from '../ui/theme';
 import { useStyles } from '../ui/ThemeProvider';
 

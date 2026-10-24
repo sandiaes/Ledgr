@@ -4,7 +4,9 @@ import { AppRoot } from '../AppRoot';
 import { TIME_ZONE } from '../data/usePortfolio';
 import { parseSettings } from '../settings/settings';
 import { fakeAuth, fakeData, fakeServices, portfolioLedger } from '../test/fakes';
-import { MASK } from './Money';
+import { AMOUNT_TEXT } from '../test/leaks';
+import { goToCertificados } from '../test/nav';
+import { MASK } from './Amount';
 
 jest.mock('react-native-gifted-charts', () => ({
   LineChart: () => null,
@@ -40,7 +42,7 @@ async function openApp(settings: { hideValues?: boolean; includeCertificados?: b
   const { auth } = fakeAuth({ level: 'aal2' });
   const services = fakeServices({ auth, data, settings });
   const view = await render(<AppRoot services={services} />);
-  await screen.findByText('Total value');
+  await screen.findByText('Total gain');
   return { data, services, view };
 }
 
@@ -55,23 +57,23 @@ describe('Include certificados de aforro', () => {
   it('is on by default; off recomputes the Dashboard at once, without fetching again', async () => {
     const { data } = await openApp();
     expect(screen.getByLabelText(SWITCH)).toHaveProp('value', true);
-    expect(screen.getAllByText('€6,590.82').length).toBeGreaterThan(0);
-    expect(screen.getByText('+€547.82')).toBeOnTheScreen();
+    expect(screen.getAllByText('6.590,82\u00A0€').length).toBeGreaterThan(0);
+    expect(screen.getByText('+547,82\u00A0€')).toBeOnTheScreen();
     expect(screen.queryByTestId('scope-note')).toBeNull();
     const before = calls(data);
 
     await switchOff();
     expect(screen.getByLabelText(SWITCH)).toHaveProp('value', false);
-    expect(screen.getAllByText('€5,486.00').length).toBeGreaterThan(0); // 6,590.82 − 1,104.82
-    expect(screen.getByText('+€443.00')).toBeOnTheScreen(); // total gain
-    expect(screen.getByText('€5,050.00')).toBeOnTheScreen(); // net invested
-    expect(screen.queryAllByText('€6,590.82')).toEqual([]);
+    expect(screen.getAllByText('5.486,00\u00A0€').length).toBeGreaterThan(0); // 6,590.82 − 1,104.82
+    expect(screen.getByText('+443,00\u00A0€')).toBeOnTheScreen(); // total gain
+    expect(screen.getByText('5.050,00\u00A0€')).toBeOnTheScreen(); // net invested
+    expect(screen.queryAllByText('6.590,82\u00A0€')).toEqual([]);
     expect(screen.getByTestId('scope-note')).toHaveTextContent('Excluding certificados');
     expect(calls(data)).toEqual(before);
 
     await switchOn();
-    expect(screen.getAllByText('€6,590.82').length).toBeGreaterThan(0);
-    expect(screen.getByText('+€547.82')).toBeOnTheScreen();
+    expect(screen.getAllByText('6.590,82\u00A0€').length).toBeGreaterThan(0);
+    expect(screen.getByText('+547,82\u00A0€')).toBeOnTheScreen();
     expect(screen.queryByTestId('scope-note')).toBeNull();
     expect(calls(data)).toEqual(before);
   });
@@ -96,8 +98,8 @@ describe('Include certificados de aforro', () => {
     const cards = screen.getAllByTestId('broker-card');
     expect(cards.map((c) => c.props.accessibilityLabel)).toEqual(['Degiro', 'IBKR']);
     const total = screen.getByText('All brokers').parent!.parent!;
-    expect(within(total).getByText('€5,486.00')).toBeOnTheScreen();
-    expect(within(total).getByText('+€443.00')).toBeOnTheScreen();
+    expect(within(total).getByText('5.486,00\u00A0€')).toBeOnTheScreen();
+    expect(within(total).getByText('+443,00\u00A0€')).toBeOnTheScreen();
     expect(screen.queryByText(/do not add up/)).toBeNull();
 
     await fireEvent.press(screen.getByText('Closed'));
@@ -125,35 +127,31 @@ describe('Include certificados de aforro', () => {
     expect(screen.getByText('Filter')).toBeOnTheScreen(); // no active filter left
   });
 
-  it.each(['Allocation', 'Performance', 'Closed positions'])(
-    'reaches %s (from More), with the note',
-    async (name) => {
-      await openApp();
-      await switchOff();
-      await fireEvent.press(screen.getByText('More'));
-      await fireEvent.press(await screen.findByText(name));
-      await screen.findAllByText(/as of/);
-      expect(screen.getAllByTestId('scope-note').length).toBeGreaterThan(0);
-      if (name === 'Allocation') {
-        await fireEvent.press(screen.getByText('Broker'));
-        const groups = screen
-          .getAllByTestId('allocation-row')
-          .map((r) => within(r).getAllByText(/./)[1]?.props.children);
-        expect(groups).toEqual(['Degiro', 'IBKR']);
-        expect(screen.getByText('3 largest positions')).toBeOnTheScreen();
-      }
-      if (name === 'Performance') {
-        await fireEvent.press(screen.getByText('Yearly'));
-        const year2025 = screen
-          .getAllByTestId('period-row')
-          .find((r) => within(r).queryByText('2025'));
-        expect(within(year2025!).getByText('+€5,050.00')).toBeOnTheScreen(); // contributions
-      }
-      if (name === 'Closed positions') {
-        expect(screen.getAllByTestId('closed-row')).toHaveLength(1);
-      }
-    },
-  );
+  it.each([
+    ['Allocation', 'By broker, currency and asset ›'],
+    ['Performance', 'Monthly and yearly returns ›'],
+  ])('reaches %s (from the Dashboard), with the note', async (name, link) => {
+    await openApp();
+    await switchOff();
+    await fireEvent.press(screen.getByText(link));
+    await screen.findAllByText(/as of/);
+    expect(screen.getAllByTestId('scope-note').length).toBeGreaterThan(0);
+    if (name === 'Allocation') {
+      await fireEvent.press(screen.getByText('Broker'));
+      const groups = screen
+        .getAllByTestId('allocation-row')
+        .map((r) => within(r).getAllByText(/./)[1]?.props.children);
+      expect(groups).toEqual(['Degiro', 'IBKR']);
+      expect(screen.getByText('3 largest positions')).toBeOnTheScreen();
+    }
+    if (name === 'Performance') {
+      await fireEvent.press(screen.getByText('Yearly'));
+      const year2025 = screen
+        .getAllByTestId('period-row')
+        .find((r) => within(r).queryByText('2025'));
+      expect(within(year2025!).getByText('+5.050,00\u00A0€')).toBeOnTheScreen(); // contributions
+    }
+  });
 
   it('the Allocation types sum to 100% without certificados', async () => {
     await openApp({ includeCertificados: false });
@@ -161,7 +159,7 @@ describe('Include certificados de aforro', () => {
     await screen.findByText('Concentration');
     const pcts = screen
       .getAllByTestId('allocation-row')
-      .map((r) => dec(within(r).getByText(/%$/).props.children.replace('%', '')));
+      .map((r) => dec(within(r).getByText(/%$/).props.children.replace('%', '').replace(',', '.')));
     expect(pcts.reduce((s, p) => s.plus(p), dec('0')).toString()).toBe('100');
     expect(screen.queryByText('Certificados')).toBeNull();
   });
@@ -198,7 +196,7 @@ describe('Include certificados de aforro', () => {
     // The next start reads the stored value back.
     await openApp({ includeCertificados: false });
     expect(screen.getByLabelText(SWITCH)).toHaveProp('value', false);
-    expect(screen.getAllByText('€5,486.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('5.486,00\u00A0€').length).toBeGreaterThan(0);
     expect(screen.getByTestId('scope-note')).toBeOnTheScreen();
   });
 
@@ -207,7 +205,7 @@ describe('Include certificados de aforro', () => {
     fixture.ledger.ca.factors = [{ subscriptionId: 's1', month: '2025-01-01', factor: dec('1.1') }];
     const { auth } = fakeAuth({ level: 'aal2' });
     await render(<AppRoot services={fakeServices({ auth, data: fakeData(fixture) })} />);
-    await screen.findByText('Total value');
+    await screen.findByText('Total gain');
     expect(screen.getByText(/CA factor \d+ days old/)).toBeOnTheScreen();
     await switchOff();
     expect(screen.queryByText(/CA factor/)).toBeNull();
@@ -216,10 +214,9 @@ describe('Include certificados de aforro', () => {
 
   it('the certificados screen and the factor update still work when they are excluded', async () => {
     await openApp({ includeCertificados: false });
-    await fireEvent.press(screen.getByText('More'));
-    await fireEvent.press(await screen.findByText('Certificados'));
+    await goToCertificados();
     const row = (await screen.findAllByTestId('ca-row'))[0]!;
-    expect(within(row).getByText('€1,104.82')).toBeOnTheScreen();
+    expect(within(row).getByText('1.104,82\u00A0€')).toBeOnTheScreen();
     await fireEvent.press(screen.getByText('Update factors'));
     expect(await screen.findAllByTestId('factor-line')).toHaveLength(1);
   });
@@ -249,12 +246,12 @@ describe('Include certificados de aforro', () => {
   it('hide values still masks every amount with certificados excluded', async () => {
     await openApp({ hideValues: true, includeCertificados: false });
     const expectMasked = () => {
-      const figures = [...screen.queryAllByTestId('money'), ...screen.queryAllByTestId('units')];
+      const figures = screen.queryAllByTestId(/money|units|pct/);
       expect(figures.length).toBeGreaterThan(0);
       for (const f of figures) expect(f).toHaveTextContent(MASK);
-      expect(screen.queryByText(/[€$]\s?\d/)).toBeNull();
+      expect(screen.queryByText(AMOUNT_TEXT)).toBeNull();
     };
-    expect(screen.getByTestId('scope-note')).toBeOnTheScreen();
+    expect(screen.getAllByTestId('scope-note').length).toBeGreaterThan(0);
     expectMasked();
     await fireEvent.press(screen.getByText('Positions'));
     await screen.findAllByTestId('position-row');

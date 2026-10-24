@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthGateProvider, useGate } from './auth/AuthGate';
 import {
@@ -20,13 +21,15 @@ import { ThemeProvider } from './ui/ThemeProvider';
 export function AppRoot({ services }: { services: Services }) {
   return (
     <ServicesProvider services={services}>
-      <SafeAreaProvider>
-        <SettingsProvider>
-          <ThemeProvider>
-            <Session />
-          </ThemeProvider>
-        </SettingsProvider>
-      </SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <SettingsProvider>
+            <ThemeProvider>
+              <Session />
+            </ThemeProvider>
+          </SettingsProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     </ServicesProvider>
   );
 }

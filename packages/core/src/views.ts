@@ -39,11 +39,13 @@ import {
   bestWorstMonth,
   monthlyReturns,
   periodReturns,
+  seriesReturn,
   valueSeries,
   yearlyReturns,
   type CalendarReturn,
   type PeriodReturn,
   type SeriesRange,
+  type SeriesReturn,
   type ValueSeries,
   type ValueSnapshot,
 } from './returns';
@@ -96,6 +98,8 @@ export interface DashboardFreshness {
 export interface DashboardChartSeries extends ValueSeries {
   /** `points` thinned to at most CHART_MAX_POINTS, for drawing only. */
   chart: ValueSnapshot[];
+  /** The range's return, the only figure shown under the chart (docs/kpis.md §4.1). */
+  periodReturn: SeriesReturn;
 }
 
 /** What every view says about its scope (docs/kpis.md §0.2). */
@@ -268,11 +272,25 @@ export function buildDashboard(input: PortfolioInput): Dashboard {
   const netInvestedEur = snapshot.netContributionsEur;
   const costBasisEur = snapshot.totalCostBasisEur;
   const now: ValueSnapshot = { date: today, valueEur: totalValueEur, netInvestedEur };
+  const returnsInput = {
+    transactions,
+    snapshots: input.snapshots,
+    today,
+    valueTodayEur: totalValueEur,
+    scope,
+  };
 
   const series = Object.fromEntries(
     SERIES_RANGES.map((range) => {
       const s = valueSeries(input.snapshots, now, range, { scope, transactions });
-      return [range, { ...s, chart: thinSeries(s.points, CHART_MAX_POINTS) }];
+      return [
+        range,
+        {
+          ...s,
+          chart: thinSeries(s.points, CHART_MAX_POINTS),
+          periodReturn: seriesReturn(returnsInput, s, range),
+        },
+      ];
     }),
   ) as Record<SeriesRange, DashboardChartSeries>;
 
@@ -290,13 +308,7 @@ export function buildDashboard(input: PortfolioInput): Dashboard {
     dayChange: { changeEur: day.changeEur, changePct: day.changePct },
     gains,
     unrealizedPct: costBasisEur.isZero() ? null : gains.unrealizedEur.div(costBasisEur),
-    returns: periodReturns({
-      transactions,
-      snapshots: input.snapshots,
-      today,
-      valueTodayEur: totalValueEur,
-      scope,
-    }),
+    returns: periodReturns(returnsInput),
     series,
     allocation: allocation(holdings, 'assetType', scope),
     movers: {

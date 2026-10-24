@@ -1,9 +1,8 @@
 import type { Decimal, PricePoint } from '@ledgr/core';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
-import { formatAmount, formatDate } from '../format';
-import { useHideValues } from '../settings/SettingsProvider';
-import { MASK } from '../ui/Money';
+import { formatDate } from '../format';
+import { useMaskedText } from '../ui/Amount';
 import { space, type Colors } from '../ui/theme';
 import { useColors, useStyles } from '../ui/ThemeProvider';
 
@@ -15,7 +14,7 @@ export function PriceChart(props: { points: readonly PricePoint[]; currency: str
   const styles = useStyles(makeStyles);
   const colors = useColors();
   const { points, currency } = props;
-  const [hidden] = useHideValues();
+  const masked = useMaskedText();
   const { width } = useWindowDimensions();
   const chartWidth = Math.max(width - 4 * space.lg - 8, 120);
   if (points.length < 2) {
@@ -49,9 +48,7 @@ export function PriceChart(props: { points: readonly PricePoint[]; currency: str
           return (
             <View style={styles.label}>
               <Text style={styles.labelDate}>{formatDate(p.date)}</Text>
-              <Text style={styles.labelValue}>
-                {hidden ? MASK : formatAmount(p.close, currency)}
-              </Text>
+              <Text style={styles.labelValue}>{masked(p.close, { currency })}</Text>
             </View>
           );
         },

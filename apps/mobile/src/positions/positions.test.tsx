@@ -3,7 +3,8 @@ import { fireEvent, render, screen, within } from '@testing-library/react-native
 import { AppRoot } from '../AppRoot';
 import { TIME_ZONE } from '../data/usePortfolio';
 import { fakeAuth, fakeData, fakeServices, portfolioLedger } from '../test/fakes';
-import { MASK } from '../ui/Money';
+import { AMOUNT_TEXT } from '../test/leaks';
+import { MASK } from '../ui/Amount';
 
 jest.mock('react-native-gifted-charts', () => ({
   LineChart: () => null,
@@ -19,7 +20,7 @@ async function openApp(settings: { hideValues?: boolean } = {}) {
   const data = fakeData(fixture);
   const { auth } = fakeAuth({ level: 'aal2' });
   await render(<AppRoot services={fakeServices({ auth, data, settings })} />);
-  await screen.findByText('Total value');
+  await screen.findByText('Total gain');
   return data;
 }
 
@@ -33,8 +34,14 @@ async function openPositions(settings: { hideValues?: boolean } = {}) {
 const order = () =>
   screen.getAllByTestId('position-row').map((r) => r.props.accessibilityLabel as string);
 
-/** "€1,486.00" / "+€12.00" / "−€5.00" -> Decimal (the test reads what is on screen). */
-const amount = (text: string): Decimal => dec(text.replace(/[€,+]/g, '').replace('−', '-'));
+/** "1.486,00 €" / "+12,00 €" / "−5,00 €" -> Decimal (the test reads what is on screen). */
+const amount = (text: string): Decimal =>
+  dec(
+    text
+      .replace(/[€\s\u00A0+.]/g, '')
+      .replace(',', '.')
+      .replace('−', '-'),
+  );
 const shown = (el: Parameters<typeof within>[0]) =>
   within(el)
     .getAllByTestId('money')
@@ -59,7 +66,7 @@ describe('Positions: sorting', () => {
     await fireEvent.press(screen.getByText('Weight'));
     expect(order()).toEqual(['AAPL', CA, 'VWCE', 'BTC']);
 
-    // Day %: VWCE +7.14%, the others 0 (ties by asset id).
+    // Day %: VWCE +7,14%, the others 0 (ties by asset id).
     await fireEvent.press(screen.getByText('Day change %'));
     expect(order()).toEqual(['AAPL', 'BTC', CA, 'VWCE']);
     await fireEvent.press(screen.getByText('Highest first'));
@@ -122,9 +129,9 @@ describe('Positions: search and filters', () => {
     await openPositions();
     const row = screen.getAllByTestId('position-row')[2]!;
     expect(row.props.accessibilityLabel).toBe(CA);
-    expect(within(row).getByText('€1,104.82')).toBeOnTheScreen();
-    expect(within(row).getByText('1,000')).toBeOnTheScreen();
-    expect(within(row).getByText('€1.10482')).toBeOnTheScreen();
+    expect(within(row).getByText('1.104,82\u00A0€')).toBeOnTheScreen();
+    expect(within(row).getByText('1.000')).toBeOnTheScreen();
+    expect(within(row).getByText('1,10482\u00A0€')).toBeOnTheScreen();
   });
 });
 
@@ -132,8 +139,8 @@ describe('Positions: by broker', () => {
   it('broker values and gains add up exactly to the portfolio totals', async () => {
     await openApp();
     // The Dashboard's total value and total gain.
-    expect(screen.getAllByText('€6,590.82').length).toBeGreaterThan(0);
-    expect(screen.getByText('+€547.82')).toBeOnTheScreen();
+    expect(screen.getAllByText('6.590,82\u00A0€').length).toBeGreaterThan(0);
+    expect(screen.getByText('+547,82\u00A0€')).toBeOnTheScreen();
     await fireEvent.press(screen.getByText('Positions'));
     await fireEvent.press(await screen.findByText('By broker'));
 
@@ -159,11 +166,11 @@ describe('Positions: by broker', () => {
     const rows = screen.getAllByTestId('position-row');
     const ibkr = rows.slice(-2); // the Positions tab stays mounted underneath
     expect(ibkr.map((r) => r.props.accessibilityLabel)).toEqual(['VWCE', 'AAPL']);
-    expect(within(ibkr[0]!).getByText('€750.00')).toBeOnTheScreen();
+    expect(within(ibkr[0]!).getByText('750,00\u00A0€')).toBeOnTheScreen();
     expect(within(ibkr[0]!).getByText('5')).toBeOnTheScreen();
-    expect(screen.getByText('+€90.00')).toBeOnTheScreen(); // realized (MSFT)
-    expect(screen.getByText('−€5.00')).toBeOnTheScreen(); // other costs
-    expect(screen.getAllByText('+€431.00').length).toBeGreaterThan(0); // gain
+    expect(screen.getByText('+90,00\u00A0€')).toBeOnTheScreen(); // realized (MSFT)
+    expect(screen.getByText('−5,00\u00A0€')).toBeOnTheScreen(); // other costs
+    expect(screen.getAllByText('+431,00\u00A0€').length).toBeGreaterThan(0); // gain
   });
 });
 
@@ -176,8 +183,8 @@ describe('Position detail', () => {
     const split = screen.getAllByTestId('broker-split');
     expect(split.map((s) => shown(s)[0]?.toString())).toEqual(['1500', '750']);
     expect(screen.getAllByTestId('open-lot')).toHaveLength(2);
-    expect(screen.getByText('+€650.00')).toBeOnTheScreen(); // unrealized
-    expect(screen.getByText('+€12.00')).toBeOnTheScreen(); // income
+    expect(screen.getByText('+650,00\u00A0€')).toBeOnTheScreen(); // unrealized
+    expect(screen.getByText('+12,00\u00A0€')).toBeOnTheScreen(); // income
     expect(data.priceHistory).toHaveBeenCalledWith('vwce');
 
     await fireEvent.press(screen.getByText('Transactions'));
@@ -194,8 +201,8 @@ describe('Position detail', () => {
     await fireEvent.press(screen.getByLabelText(CA));
     const subs = await screen.findAllByTestId('ca-subscription');
     expect(subs).toHaveLength(1);
-    expect(within(subs[0]!).getByText('€1.10482')).toBeOnTheScreen();
-    expect(within(subs[0]!).getByText('€1,104.82')).toBeOnTheScreen();
+    expect(within(subs[0]!).getByText('1,10482\u00A0€')).toBeOnTheScreen();
+    expect(within(subs[0]!).getByText('1.104,82\u00A0€')).toBeOnTheScreen();
     expect(data.priceHistory).not.toHaveBeenCalled();
   });
 });
@@ -207,8 +214,8 @@ describe('Closed positions', () => {
     expect(screen.getByText(/Performance, not tax/)).toBeOnTheScreen();
     const rows = screen.getAllByTestId('closed-row');
     expect(rows.map((r) => r.props.accessibilityLabel)).toEqual(['MSFT']);
-    expect(within(rows[0]!).getByText('+€90.00')).toBeOnTheScreen();
-    expect(within(rows[0]!).getByText('+16.67%')).toBeOnTheScreen();
+    expect(within(rows[0]!).getByText('+90,00\u00A0€')).toBeOnTheScreen();
+    expect(within(rows[0]!).getByText('+16,67%')).toBeOnTheScreen();
     await fireEvent.press(rows[0]!);
     expect(within(rows[0]!).getByText('IBKR')).toBeOnTheScreen();
   });
@@ -216,16 +223,16 @@ describe('Closed positions', () => {
 
 describe('hide values on every new screen', () => {
   const expectMasked = () => {
-    const figures = [...screen.queryAllByTestId('money'), ...screen.queryAllByTestId('units')];
+    const figures = screen.queryAllByTestId(/money|units|pct/);
     expect(figures.length).toBeGreaterThan(0);
     for (const f of figures) expect(f).toHaveTextContent(MASK);
-    expect(screen.queryByText(/[€$]\s?\d/)).toBeNull();
+    expect(screen.queryByText(AMOUNT_TEXT)).toBeNull();
+    expect(screen.queryByText(/\d%/)).toBeNull(); // percentages are masked too
   };
 
   it('Positions (all segments), Position detail, Transactions', async () => {
     await openPositions({ hideValues: true });
     expectMasked();
-    expect(screen.getAllByText('+7.14%').length).toBeGreaterThan(0); // percentages stay
     for (const segment of ['By broker', 'By type', 'Closed', 'All']) {
       await fireEvent.press(screen.getByText(segment));
       expectMasked();
@@ -246,10 +253,12 @@ describe('hide values on every new screen', () => {
     expectMasked();
   });
 
-  it.each(['Allocation', 'Performance', 'Closed positions'])('%s (from More)', async (name) => {
+  it.each([
+    ['Allocation', 'By broker, currency and asset ›'],
+    ['Performance', 'Monthly and yearly returns ›'],
+  ])('%s (from the Dashboard)', async (_name, link) => {
     await openApp({ hideValues: true });
-    await fireEvent.press(screen.getByText('More'));
-    await fireEvent.press(await screen.findByText(name));
+    await fireEvent.press(screen.getByText(link));
     await screen.findAllByText(/as of/);
     expectMasked();
   });
@@ -268,6 +277,6 @@ describe('Allocation', () => {
       'AforroNet',
     ]);
     expect(screen.getByText('4 largest positions')).toBeOnTheScreen();
-    expect(screen.getAllByText('100.00%').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('100,00%').length).toBeGreaterThan(0);
   });
 });

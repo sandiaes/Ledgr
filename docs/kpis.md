@@ -219,7 +219,7 @@ point (_T_, _V(T)_, _NI(T)_). Ranges: **1M** from `addMonths(T, −1)`, **3M**
 snapshot. The chart reads the selected range's first and last points: value change and the
 change in net invested. Long ranges are thinned for drawing only (`docs/app-plan.md` §5).
 
-### 4.1 Return for the chart's range (approved 2026-10-24, `docs/design.md` §10 D4; slice U1)
+### 4.1 Return for the chart's range (approved 2026-10-24, `docs/design.md` §10 D4; built in slice U1, #42)
 
 Under the value vs net invested chart the Dashboard shows only the selected range's return,
 replacing "value change" and "net invested change". For a range with window (_S_, _T_]:
@@ -331,30 +331,31 @@ exceeds 35 days**. Factor update screen: change vs last month = new − previous
 Built in slices 5a-core and 5b (2026-10-23); the apps call these and only format the
 result.
 
-| KPI                                         | `packages/core` function (file)                               |
-| ------------------------------------------- | ------------------------------------------------------------- |
-| Lots, per-account holdings (§0, §8)         | `runFifo` (`fifo.ts`), `computeHoldings` → `Holding.accounts` |
-| Total value, cost, _R_, _U_, _I_, _C_, _G_  | `gainsSummary` (`gains.ts`); per broker `accountSummaries`    |
-| Net invested                                | `netInvestedEur` (`gains.ts`)                                 |
-| Flows _F(d)_                                | `flowEur`, `dailyFlows` (`cashflows.ts`)                      |
-| Day change (§2)                             | `dayChange` (`daychange.ts`)                                  |
-| XIRR, TWR: Since start, YTD, 1Y (§3)        | `periodReturns` (`returns.ts`)                                |
-| Value vs contributions (§4)                 | `valueSeries` (`returns.ts`)                                  |
-| Monthly, yearly, best / worst month (§5)    | `monthlyReturns`, `yearlyReturns`, `bestWorstMonth`           |
-| Allocation, top 5 / 10 (§6)                 | `allocation`, `concentration` (`allocation.ts`)               |
-| Top positions, top movers (§6, §7)          | `topPositions`, `topMovers` (`movers.ts`)                     |
-| Closed positions (§8)                       | `closedPositions` (`closed.ts`)                               |
-| Position, split by broker, open lots (§8)   | `positionDetail` (`positions.ts`)                             |
-| Position price chart, asset transactions    | `priceSeries`, `assetTransactions` (`positions.ts`)           |
-| Positions, Allocation, Performance screens  | `buildPositions`, `buildAllocation`, `buildPerformance`       |
-| Units held, most that can be sold on a date | `unitsHeld`, `maxDisposable` (`validation.ts`)                |
-| Certificado subscription, factor age (§8)   | `certificadoSubscriptions` (`certificados.ts`)                |
-| Factor update: change vs last month (§8)    | `factorChange`, `factorUpdateLines` (`certificados.ts`)       |
-| Asset scope (§0.2)                          | `scope.ts`; a `scope` option (`docs/app-plan.md` §10.3)       |
-| Return calculator: projection (§11)         | `projectGrowth`, `projectMonthByMonth` (`projection.ts`)      |
-| Calculator defaults (§11.4)                 | `projectionDefaults` (`projection.ts`), `buildProjection`     |
-| Average net monthly purchases (§11.4)       | `averageMonthlyNetPurchases` (`projection.ts`)                |
-| Calculator form and limits (§11.1)          | `parseProjectionForm` (`projection.ts`)                       |
+| KPI                                         | `packages/core` function (file)                                    |
+| ------------------------------------------- | ------------------------------------------------------------------ |
+| Lots, per-account holdings (§0, §8)         | `runFifo` (`fifo.ts`), `computeHoldings` → `Holding.accounts`      |
+| Total value, cost, _R_, _U_, _I_, _C_, _G_  | `gainsSummary` (`gains.ts`); per broker `accountSummaries`         |
+| Net invested                                | `netInvestedEur` (`gains.ts`)                                      |
+| Flows _F(d)_                                | `flowEur`, `dailyFlows` (`cashflows.ts`)                           |
+| Day change (§2)                             | `dayChange` (`daychange.ts`)                                       |
+| XIRR, TWR: Since start, YTD, 1Y (§3)        | `periodReturns` (`returns.ts`)                                     |
+| Value vs contributions (§4)                 | `valueSeries` (`returns.ts`)                                       |
+| Return for the chart's range (§4.1)         | `seriesReturn` (`returns.ts`), `DashboardChartSeries.periodReturn` |
+| Monthly, yearly, best / worst month (§5)    | `monthlyReturns`, `yearlyReturns`, `bestWorstMonth`                |
+| Allocation, top 5 / 10 (§6)                 | `allocation`, `concentration` (`allocation.ts`)                    |
+| Top positions, top movers (§6, §7)          | `topPositions`, `topMovers` (`movers.ts`)                          |
+| Closed positions (§8)                       | `closedPositions` (`closed.ts`)                                    |
+| Position, split by broker, open lots (§8)   | `positionDetail` (`positions.ts`)                                  |
+| Position price chart, asset transactions    | `priceSeries`, `assetTransactions` (`positions.ts`)                |
+| Positions, Allocation, Performance screens  | `buildPositions`, `buildAllocation`, `buildPerformance`            |
+| Units held, most that can be sold on a date | `unitsHeld`, `maxDisposable` (`validation.ts`)                     |
+| Certificado subscription, factor age (§8)   | `certificadoSubscriptions` (`certificados.ts`)                     |
+| Factor update: change vs last month (§8)    | `factorChange`, `factorUpdateLines` (`certificados.ts`)            |
+| Asset scope (§0.2)                          | `scope.ts`; a `scope` option (`docs/app-plan.md` §10.3)            |
+| Return calculator: projection (§11)         | `projectGrowth`, `projectMonthByMonth` (`projection.ts`)           |
+| Calculator defaults (§11.4)                 | `projectionDefaults` (`projection.ts`), `buildProjection`          |
+| Average net monthly purchases (§11.4)       | `averageMonthlyNetPurchases` (`projection.ts`)                     |
+| Calculator form and limits (§11.1)          | `parseProjectionForm` (`projection.ts`)                            |
 
 ## 11. Return calculator (projection, slice 5e)
 

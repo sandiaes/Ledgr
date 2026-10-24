@@ -5,6 +5,7 @@ import type { AssetType } from '@ledgr/core';
 import { StyleSheet, Text, View } from 'react-native';
 import { useIncludeCertificados } from '../settings/SettingsProvider';
 import { Card, Switch } from './parts';
+import { T } from './T';
 import { space, type Colors } from './theme';
 import { useStyles } from './ThemeProvider';
 
@@ -17,7 +18,7 @@ export function IncludeCertificadosSwitch() {
   const [on, set] = useIncludeCertificados();
   return (
     <View style={styles.switchRow}>
-      <Text style={styles.label}>Include certificados de aforro</Text>
+      <T variant="body">Include certificados de aforro</T>
       <Switch value={on} onValueChange={set} accessibilityLabel="Include certificados de aforro" />
     </View>
   );

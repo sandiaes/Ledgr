@@ -42,8 +42,7 @@ function ClosedItem({ c, names }: { c: ClosedPosition; names: Names }) {
           {assetName(names, c.assetId)}
         </Text>
         <Text style={styles.muted}>
-          {formatDate(c.firstBuy)} {c.firstBuy.slice(0, 4)} → {formatDate(c.lastSale)}{' '}
-          {c.lastSale.slice(0, 4)}
+          {formatDate(c.firstBuy)} → {formatDate(c.lastSale)}
         </Text>
       </View>
       {open ? (

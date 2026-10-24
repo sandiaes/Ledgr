@@ -5,6 +5,7 @@ import { AppRoot } from '../AppRoot';
 import { createSupabaseData } from '../data/supabaseData';
 import { TIME_ZONE } from '../data/usePortfolio';
 import { fakeAuth, fakeData, fakeServices, sampleLedger, token } from '../test/fakes';
+import { goToNew } from '../test/nav';
 
 jest.mock('../dashboard/ValueChart', () => ({ ValueChart: () => null }));
 jest.mock('../dashboard/AllocationDonut', () => ({ AllocationDonut: () => null }));
@@ -18,7 +19,7 @@ describe('MFA gating', () => {
     await render(<AppRoot services={fakeServices({ auth, data })} />);
 
     expect(await screen.findByText('Two-factor code')).toBeOnTheScreen();
-    expect(screen.queryByText('Total value')).toBeNull();
+    expect(screen.queryByText('Total gain')).toBeNull();
     expect(screen.queryByText(/No transactions yet/)).toBeNull();
     expect(data.valueNow).not.toHaveBeenCalled();
     expect(data.ledger).not.toHaveBeenCalled();
@@ -34,9 +35,9 @@ describe('MFA gating', () => {
     await fireEvent.changeText(await screen.findByLabelText('Authenticator code'), '123456');
     await fireEvent.press(screen.getByText('Verify'));
 
-    expect(await screen.findByText('Total value')).toBeOnTheScreen();
+    expect(await screen.findByText('Total gain')).toBeOnTheScreen();
     // The total (also the only type in the allocation legend).
-    expect((await screen.findAllByText('€1,500.00')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('1.500,00\u00A0€')).length).toBeGreaterThan(0);
     expect(data.ledger).toHaveBeenCalled();
   });
 
@@ -57,7 +58,7 @@ describe('MFA gating', () => {
     const data = fakeData(empty);
     await render(<AppRoot services={fakeServices({ auth, data })} />);
 
-    expect(await screen.findByText('No transactions yet.')).toBeOnTheScreen();
+    expect(await screen.findByText('No transactions yet')).toBeOnTheScreen();
     expect(data.ledger).toHaveBeenCalledTimes(1);
   });
 
@@ -71,7 +72,7 @@ describe('MFA gating', () => {
     await render(<AppRoot services={fakeServices({ auth, data })} />);
 
     expect(await screen.findByText('Two-factor code')).toBeOnTheScreen();
-    expect(screen.queryByText('No transactions yet.')).toBeNull();
+    expect(screen.queryByText('No transactions yet')).toBeNull();
   });
 });
 
@@ -232,8 +233,8 @@ describe('writes', () => {
       throw new MfaRequiredError();
     });
     await render(<AppRoot services={fakeServices({ auth, data })} />);
-    await screen.findByText('Total value');
-    await fireEvent.press(screen.getByText('New'));
+    await screen.findByText('Total gain');
+    await goToNew();
     await fireEvent.press(await screen.findByLabelText('Pick VWCE'));
     await fireEvent.changeText(screen.getByLabelText('Quantity'), '1');
     await fireEvent.changeText(screen.getByLabelText('Total value (€)'), '150');

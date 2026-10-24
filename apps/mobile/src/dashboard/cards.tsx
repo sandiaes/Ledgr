@@ -11,17 +11,23 @@ import type {
 } from '@ledgr/core';
 import { SERIES_RANGES } from '@ledgr/core';
 import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { formatDate } from '../format';
 import { useRootNavigation } from '../navigation';
+import { Amount } from '../ui/Amount';
+import { ChartFrame } from '../ui/ChartFrame';
+import { Chip } from '../ui/Chip';
 import { typeLabel } from '../ui/labels';
-import { Money, Pct } from '../ui/Money';
-import { Banner, Card, Segmented } from '../ui/parts';
-import { space, type Colors } from '../ui/theme';
-import { useColors, useStyles } from '../ui/ThemeProvider';
+import { ListRow } from '../ui/ListRow';
+import { Banner } from '../ui/parts';
+import { Section } from '../ui/Section';
+import { SegmentedControl } from '../ui/SegmentedControl';
 import { useSliceColors } from '../ui/sliceColors';
+import { T } from '../ui/T';
+import { radius, space, type Colors } from '../ui/theme';
+import { useStyles } from '../ui/ThemeProvider';
 import { AllocationDonut } from './AllocationDonut';
-import { ValueChart } from './ValueChart';
+import { CHART_HEIGHT, ValueChart } from './ValueChart';
 
 export type AssetNames = ReadonlyMap<string, AssetRecord>;
 const label = (assets: AssetNames, id: string) => {
@@ -29,34 +35,25 @@ const label = (assets: AssetNames, id: string) => {
   return a?.ticker || a?.name || 'Unknown asset';
 };
 
-function Line(props: { label: string; children: ReactNode; strong?: boolean }) {
+/** A label on the left, a figure on the right. */
+function Line(props: { label: string; children: ReactNode; strong?: boolean; sub?: boolean }) {
   const styles = useStyles(makeStyles);
   return (
     <View style={styles.line}>
-      <Text style={[styles.lineLabel, props.strong && styles.strong]}>{props.label}</Text>
+      <T
+        variant={props.strong ? 'headline' : 'body'}
+        tone={props.sub ? 'muted' : 'text'}
+        style={styles.lineLabel}
+      >
+        {props.label}
+      </T>
       <View style={styles.lineValue}>{props.children}</View>
     </View>
   );
 }
 
-export function HeaderCard({ view, assets }: { view: DashboardView; assets: AssetNames }) {
-  const styles = useStyles(makeStyles);
-  return (
-    <Card>
-      <Text style={styles.caption}>Total value</Text>
-      <Money value={view.totalValueEur} style={styles.total} />
-      <View style={styles.dayChange}>
-        <Money value={view.dayChange.changeEur} sign colored style={styles.dayText} />
-        <Pct value={view.dayChange.changePct} sign colored style={styles.dayText} />
-        <Text style={styles.muted}> today</Text>
-      </View>
-      <Freshness view={view} assets={assets} />
-    </Card>
-  );
-}
-
 /** "2 prices stale", "1 price pending", "CA factor 41 days old"; tap for the assets. */
-function Freshness({ view, assets }: { view: DashboardView; assets: AssetNames }) {
+export function Freshness({ view, assets }: { view: DashboardView; assets: AssetNames }) {
   const styles = useStyles(makeStyles);
   const [open, setOpen] = useState(false);
   const { stalePrices, pendingPrices, caFactor } = view.freshness;
@@ -68,26 +65,31 @@ function Freshness({ view, assets }: { view: DashboardView; assets: AssetNames }
   if (notes.length === 0) return null;
   const year = view.today.slice(0, 4);
   return (
-    <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" style={styles.notes}>
-      <Text style={styles.warning}>
+    <Pressable
+      onPress={() => setOpen(!open)}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      style={styles.notes}
+    >
+      <T variant="sub" tone="warning" style={styles.bold}>
         {notes.join(' · ')} {open ? '▴' : '▾'}
-      </Text>
+      </T>
       {open ? (
         <View style={styles.noteList}>
           {stalePrices.map((f) => (
-            <Text key={`s${f.assetId}`} style={styles.muted}>
+            <T key={`s${f.assetId}`} variant="sub" tone="muted">
               {label(assets, f.assetId)}: last price {formatDate(f.asOf, year)}
-            </Text>
+            </T>
           ))}
           {pendingPrices.map((f) => (
-            <Text key={`p${f.assetId}`} style={styles.muted}>
+            <T key={`p${f.assetId}`} variant="sub" tone="muted">
               {label(assets, f.assetId)}: no price yet, valued at its trade price
-            </Text>
+            </T>
           ))}
           {caFactor?.stale ? (
-            <Text style={styles.muted}>
+            <T variant="sub" tone="muted">
               Certificados: oldest factor from {formatDate(caFactor.asOf, year)}
-            </Text>
+            </T>
           ) : null}
         </View>
       ) : null}
@@ -95,32 +97,32 @@ function Freshness({ view, assets }: { view: DashboardView; assets: AssetNames }
   );
 }
 
-export function GainCard({ view }: { view: DashboardView }) {
+export function GainSection({ view }: { view: DashboardView }) {
   const styles = useStyles(makeStyles);
   const g = view.gains;
   return (
-    <Card title="Gain">
+    <Section title="Gain">
       <Line label="Total gain" strong>
-        <Money value={g.totalReturnEur} sign colored style={styles.strong} />
+        <Amount value={g.totalReturnEur} sign tone variant="headline" />
       </Line>
-      <Line label="Realized">
-        <Money value={g.realizedEur} sign />
+      <Line label="Realized" sub>
+        <Amount value={g.realizedEur} sign />
       </Line>
-      <Line label="Unrealized">
-        <Money value={g.unrealizedEur} sign />
-        <Pct value={view.unrealizedPct} sign style={styles.muted} />
+      <Line label="Unrealized" sub>
+        <Amount value={g.unrealizedEur} sign />
+        <Amount kind="pct" value={view.unrealizedPct} sign variant="sub" style={styles.faintText} />
       </Line>
-      <Line label="Income">
-        <Money value={g.incomeNetEur} sign />
+      <Line label="Income" sub>
+        <Amount value={g.incomeNetEur} sign />
       </Line>
-      <Line label="Other costs">
-        <Money value={g.otherCostsEur.neg()} sign />
+      <Line label="Other costs" sub>
+        <Amount value={g.otherCostsEur.neg()} sign />
       </Line>
       <View style={styles.divider} />
       <Line label="Net invested">
-        <Money value={view.netInvestedEur} />
+        <Amount value={view.netInvestedEur} />
       </Line>
-    </Card>
+    </Section>
   );
 }
 
@@ -138,130 +140,177 @@ const REASONS: Record<string, string> = {
 const reason = (r: string) => REASONS[r] ?? 'cannot be computed';
 
 function XirrValue({ f }: { f: XirrFigure }) {
-  const styles = useStyles(makeStyles);
   if (!f.ok) return <Failed why={f.reason} />;
   return (
     <>
-      <Pct value={f.displayRate} sign colored style={styles.figure} />
-      {f.annualized ? (
-        <Text style={styles.small}>a year</Text>
-      ) : (
-        <Text style={styles.small}>not annualized</Text>
-      )}
+      <Amount kind="pct" value={f.displayRate} sign tone variant="title2" />
+      <T variant="caption" tone="muted">
+        {f.annualized ? 'a year' : 'not annualized'}
+      </T>
     </>
   );
 }
 
 function TwrValue({ f }: { f: TwrFigure }) {
-  const styles = useStyles(makeStyles);
   if (!f.ok) return <Failed why={f.reason} />;
   return (
     <>
-      <Pct value={f.cumulative} sign colored style={styles.figure} />
+      <Amount kind="pct" value={f.cumulative} sign tone variant="title2" />
       {f.annualized ? (
-        <Text style={styles.small}>
-          <Pct value={f.annualized} sign style={styles.small} /> a year
-        </Text>
+        <T variant="caption" tone="muted">
+          <Amount kind="pct" value={f.annualized} sign variant="caption" /> a year
+        </T>
       ) : (
-        <Text style={styles.small}>cumulative</Text>
+        <T variant="caption" tone="muted">
+          cumulative
+        </T>
       )}
     </>
   );
 }
 
 function Failed({ why }: { why: string }) {
-  const styles = useStyles(makeStyles);
   return (
     <>
-      <Text style={styles.figure}>—</Text>
-      <Text style={styles.small}>{reason(why)}</Text>
+      <T variant="title2">—</T>
+      <T variant="caption" tone="muted">
+        {reason(why)}
+      </T>
     </>
   );
 }
 
-export function ReturnsCard({ returns }: { returns: readonly PeriodReturn[] }) {
+export function ReturnsSection({ returns }: { returns: readonly PeriodReturn[] }) {
   const styles = useStyles(makeStyles);
   const [period, setPeriod] = useState<ReturnPeriod>('sinceStart');
   const navigation = useRootNavigation();
   const r = returns.find((x) => x.period === period);
   return (
-    <Card title="Returns">
-      <Segmented options={PERIODS} value={period} onChange={setPeriod} />
+    <Section
+      title="Returns"
+      action={<SegmentedControl compact options={PERIODS} value={period} onChange={setPeriod} />}
+    >
       {r ? (
         <>
           <View style={styles.columns}>
             <View style={styles.column}>
-              <Text style={styles.caption}>XIRR</Text>
+              <T variant="caption" tone="muted">
+                XIRR
+              </T>
               <XirrValue f={r.xirr} />
             </View>
             <View style={styles.column}>
-              <Text style={styles.caption}>TWR</Text>
+              <T variant="caption" tone="muted">
+                TWR
+              </T>
               <TwrValue f={r.twr} />
             </View>
           </View>
           {r.fromStart && period !== 'sinceStart' ? (
-            <Text style={styles.small}>The portfolio started inside this period: since start.</Text>
+            <T variant="caption" tone="muted" style={styles.gap}>
+              The portfolio started inside this period: since start.
+            </T>
           ) : null}
         </>
       ) : null}
       <More label="Monthly and yearly returns" onPress={() => navigation.navigate('Performance')} />
-    </Card>
+    </Section>
   );
 }
 
-export function ChartCard({ view }: { view: DashboardView }) {
+/**
+ * The value vs net invested chart. Under it only the selected range's return: the market
+ * gain in € and the time-weighted % (docs/kpis.md §4.1), not the changes in value and in
+ * net invested.
+ */
+export function ChartSection({ view }: { view: DashboardView }) {
   const styles = useStyles(makeStyles);
-  const colors = useColors();
   const [range, setRange] = useState<SeriesRange>('1Y');
   const s = view.series[range];
+  const twr = s.periodReturn.twr;
   return (
-    <Card title="Value and net invested">
-      <Segmented
-        options={SERIES_RANGES.map((r) => ({ value: r, label: r }))}
-        value={range}
-        onChange={setRange}
-      />
-      <ValueChart points={s.chart} />
-      <View style={styles.legend}>
-        <Text style={[styles.small, { color: colors.value }]}>● Value</Text>
-        <Text style={[styles.small, { color: colors.invested }]}>● Net invested</Text>
-      </View>
-      <Line label="Value change">
-        <Money value={s.valueChangeEur} sign colored />
-      </Line>
-      <Line label="Net invested change">
-        <Money value={s.netInvestedChangeEur} sign />
-      </Line>
-    </Card>
+    <Section title="Value vs net invested" testID="chart-section">
+      <ChartFrame
+        height={CHART_HEIGHT}
+        empty={s.chart.length < 2}
+        controls={
+          <SegmentedControl
+            options={SERIES_RANGES.map((r) => ({ value: r, label: r }))}
+            value={range}
+            onChange={setRange}
+          />
+        }
+        summary={
+          <View style={styles.line} testID="period-return">
+            <T variant="body">Return {range}</T>
+            <View style={styles.lineValue}>
+              <Amount value={s.periodReturn.marketGainEur} sign tone variant="headline" />
+              <T variant="sub" tone="faint">
+                ·
+              </T>
+              <Amount
+                kind="pct"
+                value={twr.ok ? twr.cumulative : null}
+                sign
+                tone
+                variant="headline"
+              />
+            </View>
+          </View>
+        }
+        legend={
+          <>
+            <View style={styles.legendItem}>
+              <View style={styles.legendValue} />
+              <T variant="caption" tone="muted">
+                Value
+              </T>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={styles.legendInvested} />
+              <T variant="caption" tone="muted">
+                Net invested
+              </T>
+            </View>
+          </>
+        }
+      >
+        <ValueChart points={s.chart} />
+      </ChartFrame>
+    </Section>
   );
 }
 
-/** A "see more" link at the bottom of a card. */
+/** A "see more" link at the bottom of a section. */
 function More(props: { label: string; onPress(): void }) {
   const styles = useStyles(makeStyles);
   return (
     <Pressable onPress={props.onPress} accessibilityRole="link" style={styles.more}>
-      <Text style={styles.moreText}>{props.label} ›</Text>
+      <T variant="sub" tone="accent">
+        {props.label} ›
+      </T>
     </Pressable>
   );
 }
 
-export function AllocationCard({ view }: { view: DashboardView }) {
+export function AllocationSection({ view }: { view: DashboardView }) {
   const styles = useStyles(makeStyles);
   const navigation = useRootNavigation();
   const { typeColor } = useSliceColors();
   if (view.allocation.length === 0) return null;
   return (
-    <Card title="Allocation by type">
+    <Section title="Allocation by type">
       <View style={styles.allocation}>
         <AllocationDonut slices={view.allocation} colorOf={typeColor} />
         <View style={styles.allocationLegend}>
           {view.allocation.map((s) => (
             <View key={s.key} style={styles.legendRow}>
-              <Text style={[styles.dot, { color: typeColor(s.key) }]}>●</Text>
-              <Text style={styles.legendLabel}>{typeLabel(s.key)}</Text>
-              <Pct value={s.weight} style={styles.legendPct} />
-              <Money value={s.valueEur} style={styles.small} />
+              <View style={[styles.dot, { backgroundColor: typeColor(s.key) }]} />
+              <T variant="sub" style={styles.legendLabel}>
+                {typeLabel(s.key)}
+              </T>
+              <Amount kind="pct" value={s.weight} variant="sub" style={styles.legendPct} />
+              <Amount value={s.valueEur} variant="caption" style={styles.legendAmount} />
             </View>
           ))}
         </View>
@@ -270,63 +319,93 @@ export function AllocationCard({ view }: { view: DashboardView }) {
         label="By broker, currency and asset"
         onPress={() => navigation.navigate('Allocation')}
       />
-    </Card>
+    </Section>
   );
 }
 
-export function MoversCard({ view, assets }: { view: DashboardView; assets: AssetNames }) {
+type MoverBy = 'eur' | 'pct';
+
+/**
+ * One top mover. The selected unit is the main figure and the other sits under it: with €
+ * selected the € change is the headline and the % is under it; with % selected it is the
+ * other way round (docs/design.md §7.1). A position opened today has no % and shows "new".
+ */
+export function MoverRow(props: {
+  mover: Mover;
+  by: MoverBy;
+  assets: AssetNames;
+  last: boolean;
+  onPress(): void;
+}) {
+  const { mover: m, by } = props;
+  const eur = (variant: 'headline' | 'sub') => (
+    <Amount value={m.changeEur} sign tone variant={variant} />
+  );
+  const pct = (variant: 'headline' | 'sub') =>
+    m.openedToday ? (
+      <T variant={variant} tone="muted">
+        new
+      </T>
+    ) : (
+      <Amount kind="pct" value={m.changePct} sign tone variant={variant} />
+    );
+  return (
+    <ListRow
+      testID="mover-row"
+      title={label(props.assets, m.assetId)}
+      subtitle={props.assets.get(m.assetId)?.name ?? ''}
+      right={by === 'eur' ? eur('headline') : pct('headline')}
+      rightSub={by === 'eur' ? pct('sub') : eur('sub')}
+      onPress={props.onPress}
+      last={props.last}
+    />
+  );
+}
+
+export function MoversSection({ view, assets }: { view: DashboardView; assets: AssetNames }) {
   const styles = useStyles(makeStyles);
   const [span, setSpan] = useState<'day' | 'total'>('day');
-  const [by, setBy] = useState<'eur' | 'pct'>('eur');
+  const [by, setBy] = useState<MoverBy>('eur');
   const navigation = useRootNavigation();
   const lists = view.movers[by][span];
-  const row = (m: Mover) => (
-    <Pressable
-      key={m.assetId}
-      style={styles.mover}
-      onPress={() => navigation.navigate('PositionDetail', { assetId: m.assetId })}
-      accessibilityRole="button"
-    >
-      <View style={styles.moverName}>
-        <Text style={styles.ticker}>{label(assets, m.assetId)}</Text>
-        <Text style={styles.small} numberOfLines={1}>
-          {assets.get(m.assetId)?.name ?? ''}
-        </Text>
-      </View>
-      <Money value={m.changeEur} sign colored />
-      {m.openedToday ? (
-        <Text style={[styles.small, styles.moverPct]}>new</Text>
-      ) : (
-        <Pct value={m.changePct} sign colored style={styles.moverPct} />
-      )}
-    </Pressable>
-  );
-  const none = lists.up.length === 0 && lists.down.length === 0;
+  const movers = [...lists.up, ...lists.down];
   return (
-    <Card title="Top movers">
-      <View style={styles.moverTabs}>
-        <Segmented
-          options={[
-            { value: 'day', label: 'Day' },
-            { value: 'total', label: 'Total' },
-          ]}
-          value={span}
-          onChange={setSpan}
+    <Section
+      title="Top movers"
+      action={
+        <View style={styles.moverControls}>
+          <SegmentedControl
+            compact
+            options={[
+              { value: 'day', label: 'Day' },
+              { value: 'total', label: 'Total' },
+            ]}
+            value={span}
+            onChange={setSpan}
+          />
+          <View style={styles.units}>
+            <Chip label="€" selected={by === 'eur'} onPress={() => setBy('eur')} />
+            <Chip label="%" selected={by === 'pct'} onPress={() => setBy('pct')} />
+          </View>
+        </View>
+      }
+    >
+      {movers.length === 0 ? (
+        <T variant="sub" tone="muted">
+          No changes to show.
+        </T>
+      ) : null}
+      {movers.map((m, i) => (
+        <MoverRow
+          key={m.assetId}
+          mover={m}
+          by={by}
+          assets={assets}
+          last={i === movers.length - 1}
+          onPress={() => navigation.navigate('PositionDetail', { assetId: m.assetId })}
         />
-        <Segmented
-          options={[
-            { value: 'eur', label: '€' },
-            { value: 'pct', label: '%' },
-          ]}
-          value={by}
-          onChange={setBy}
-        />
-      </View>
-      {none ? <Text style={styles.muted}>No changes to show.</Text> : null}
-      {lists.up.map(row)}
-      {lists.up.length > 0 && lists.down.length > 0 ? <View style={styles.divider} /> : null}
-      {lists.down.map(row)}
-    </Card>
+      ))}
+    </Section>
   );
 }
 
@@ -346,39 +425,45 @@ export function ReconcileBanner({ view }: { view: DashboardView }) {
 
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
-    caption: { fontSize: 13, color: colors.muted },
-    total: { fontSize: 32, fontWeight: '700', color: colors.text, marginVertical: space.xs },
-    dayChange: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
-    dayText: { fontSize: 16, fontWeight: '600' },
-    muted: { color: colors.muted, fontSize: 13 },
-    small: { color: colors.muted, fontSize: 12 },
-    strong: { fontWeight: '700', fontSize: 16, color: colors.text },
-    notes: { marginTop: space.sm },
+    bold: { fontWeight: '600' },
+    faintText: { color: colors.faint },
+    notes: { marginHorizontal: space.lg, marginBottom: space.lg },
     noteList: { marginTop: space.xs, gap: 2 },
-    warning: { color: colors.warningText, fontSize: 13, fontWeight: '600' },
-    line: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
-    lineLabel: { color: colors.text, fontSize: 14 },
+    line: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      paddingVertical: space.xs,
+      gap: space.md,
+    },
+    lineLabel: { flexShrink: 1 },
     lineValue: { flexDirection: 'row', gap: space.sm, alignItems: 'baseline' },
     divider: {
       height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
+      backgroundColor: colors.divider,
       marginVertical: space.sm,
     },
     columns: { flexDirection: 'row' },
-    column: { flex: 1 },
-    figure: { fontSize: 22, fontWeight: '700', color: colors.text },
-    legend: { flexDirection: 'row', gap: space.lg, marginVertical: space.sm },
+    column: { flex: 1, gap: 2 },
+    gap: { marginTop: space.sm },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+    // The value line is solid and the net invested line dashed, as in the chart.
+    legendValue: { width: 16, height: 2, backgroundColor: colors.value },
+    legendInvested: {
+      width: 16,
+      height: 0,
+      borderTopWidth: 2,
+      borderStyle: 'dashed',
+      borderColor: colors.invested,
+    },
     allocation: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
-    allocationLegend: { flex: 1, gap: space.xs },
-    legendRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.xs },
-    dot: { fontSize: 12 },
-    legendLabel: { flex: 1, fontSize: 13, color: colors.text },
-    legendPct: { fontSize: 13, color: colors.text, minWidth: 52, textAlign: 'right' },
-    moverTabs: { flexDirection: 'row', justifyContent: 'space-between' },
-    mover: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: space.sm },
-    moverName: { flex: 1 },
-    ticker: { fontSize: 14, fontWeight: '600', color: colors.text },
-    moverPct: { minWidth: 64, textAlign: 'right', fontSize: 13 },
-    more: { marginTop: space.sm, alignSelf: 'flex-end' },
-    moreText: { color: colors.accent, fontSize: 13 },
+    allocationLegend: { flex: 1, gap: space.sm },
+    legendRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+    dot: { width: 8, height: 8, borderRadius: radius.pill },
+    legendLabel: { flex: 1 },
+    legendPct: { minWidth: 52, textAlign: 'right' },
+    legendAmount: { color: colors.muted },
+    moverControls: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+    units: { flexDirection: 'row', gap: space.xs },
+    more: { marginTop: space.sm, alignSelf: 'flex-end', minHeight: 32, justifyContent: 'center' },
   });

@@ -1,18 +1,39 @@
 // The only file in the app that may contain colour values (`pnpm check` enforces it, see
-// `noHardCodedColors.test.ts`). Everything else asks the theme for a token.
+// `noHardCodedColors.test.ts`). Everything else asks the theme for a token. The values are
+// the ones of docs/design.md §2; `theme.test.tsx` checks their contrast.
 
 export interface Colors {
+  /** App background (near-black in dark, not pure black). */
   background: string;
-  /** Cards, list rows, dialogs. */
+  /** Header, tab bar, input fields. */
   surface: string;
+  /** Drawer, expanded header, sheets, dialogs, tooltips. */
+  raised: string;
+  /** Pressed row or button, the track of a segmented control, skeleton base. */
+  pressed: string;
+  /** Hairline between rows and sections. */
+  divider: string;
   text: string;
+  /** Secondary text: labels, names under tickers. */
   muted: string;
+  /** Tertiary text: "as of", captions, axis labels, disabled. */
+  faint: string;
+  /** The skeleton highlight (it pulses between `pressed` and this). */
+  skeleton: string;
+  /** Behind the drawer. */
+  scrim: string;
   border: string;
   accent: string;
+  /** Selected segment and chip background. */
+  accentSoft: string;
   /** Text and icons on an `accent` fill. */
   onAccent: string;
   gain: string;
   loss: string;
+  /** Tint behind a gain pill. */
+  gainSoft: string;
+  /** Tint behind a loss pill. */
+  lossSoft: string;
   /** Text and icons on a `loss` fill. */
   onLoss: string;
   warningBg: string;
@@ -20,6 +41,8 @@ export interface Colors {
   errorBg: string;
   /** Value line / price line in charts. */
   value: string;
+  /** The area under the value line: `color` fading from `startOpacity` to `endOpacity`. */
+  valueFill: { color: string; startOpacity: number; endOpacity: number };
   /** Net invested line in charts. */
   invested: string;
   contributions: string;
@@ -42,22 +65,32 @@ export interface Colors {
 }
 
 export const lightColors: Colors = {
-  background: '#f4f5f7',
-  surface: '#ffffff',
-  text: '#16181d',
-  muted: '#5b6472',
-  border: '#e5e7eb',
-  accent: '#2f5bd3',
-  onAccent: '#ffffff',
-  gain: '#0f7a44',
-  loss: '#c62828',
-  onLoss: '#ffffff',
-  warningBg: '#fff6db',
-  warningText: '#7a5600',
-  errorBg: '#fdecec',
-  value: '#2f5bd3',
-  invested: '#6b7585',
-  contributions: '#6b7585',
+  background: '#F6F7F9',
+  surface: '#FFFFFF',
+  raised: '#FFFFFF',
+  pressed: '#ECEEF1',
+  divider: '#E3E6EA',
+  text: '#111418',
+  muted: '#56606C',
+  faint: '#67707C',
+  skeleton: '#E0E3E8',
+  scrim: 'rgba(17,20,24,0.4)',
+  border: '#E3E6EA',
+  accent: '#2E59BF',
+  accentSoft: '#E6ECF8',
+  onAccent: '#FFFFFF',
+  gain: '#11764A',
+  loss: '#BF3329',
+  gainSoft: '#E5F3EC',
+  lossSoft: '#FBE9E7',
+  onLoss: '#FFFFFF',
+  warningBg: '#FFF4D6',
+  warningText: '#7A5600',
+  errorBg: '#FBE9E7',
+  value: '#2E59BF',
+  valueFill: { color: '#2E59BF', startOpacity: 0.12, endOpacity: 0 },
+  invested: '#67707C',
+  contributions: '#67707C',
   types: { stock: '#2f5bd3', etf: '#0f7a44', crypto: '#b86e00', certificado_aforro: '#8e44ad' },
   palette: [
     '#2f5bd3',
@@ -72,60 +105,113 @@ export const lightColors: Colors = {
     '#3949ab',
   ],
   chart: {
-    axis: '#c4c9d2',
-    pointer: '#5b6472',
-    tooltipBg: '#ffffff',
-    tooltipBorder: '#c4c9d2',
+    axis: '#E3E6EA',
+    pointer: '#56606C',
+    tooltipBg: '#FFFFFF',
+    tooltipBorder: '#E3E6EA',
   },
-  tabBar: { background: '#ffffff', border: '#e5e7eb', active: '#2f5bd3', inactive: '#5b6472' },
-  input: { background: '#ffffff', border: '#9aa3b2', text: '#16181d', placeholder: '#5b6472' },
-  modal: { backdrop: 'rgba(0,0,0,0.4)', surface: '#ffffff' },
-  switch: { trackOff: '#c4c9d2', trackOn: '#9db5f0', thumbOff: '#f4f5f7', thumbOn: '#2f5bd3' },
+  tabBar: { background: '#FFFFFF', border: '#E3E6EA', active: '#111418', inactive: '#67707C' },
+  input: { background: '#FFFFFF', border: '#848D99', text: '#111418', placeholder: '#56606C' },
+  modal: { backdrop: 'rgba(17,20,24,0.4)', surface: '#FFFFFF' },
+  switch: { trackOff: '#C5CBD3', trackOn: '#A9BCE6', thumbOff: '#F6F7F9', thumbOn: '#2E59BF' },
 };
 
 export const darkColors: Colors = {
-  background: '#0e1014',
-  surface: '#181b21',
-  text: '#eceef2',
-  muted: '#9ca5b4',
-  border: '#2c313a',
-  accent: '#7ea3ff',
-  onAccent: '#0e1014',
-  gain: '#4cc38a',
-  loss: '#ff7a70',
-  onLoss: '#0e1014',
-  warningBg: '#3a2f10',
-  warningText: '#f5d58a',
-  errorBg: '#3d1b1b',
-  value: '#7ea3ff',
-  invested: '#8c96a6',
-  contributions: '#8c96a6',
-  types: { stock: '#7ea3ff', etf: '#4cc38a', crypto: '#f0a63a', certificado_aforro: '#c58be0' },
+  background: '#0C0E11',
+  surface: '#15181D',
+  raised: '#1C2026',
+  pressed: '#23282F',
+  divider: '#262B32',
+  text: '#ECEFF3',
+  muted: '#A0A8B4',
+  faint: '#858E9A',
+  skeleton: '#2C323A',
+  scrim: 'rgba(0,0,0,0.6)',
+  border: '#2C313A',
+  accent: '#8FADE6',
+  accentSoft: '#1F2A3D',
+  onAccent: '#0C0E11',
+  gain: '#5DC28F',
+  loss: '#F2827A',
+  gainSoft: '#15281F',
+  lossSoft: '#2E1A19',
+  onLoss: '#0C0E11',
+  warningBg: '#2B2514',
+  warningText: '#E6C47E',
+  errorBg: '#2E1A19',
+  value: '#8FADE6',
+  valueFill: { color: '#8FADE6', startOpacity: 0.18, endOpacity: 0 },
+  invested: '#858E9A',
+  contributions: '#858E9A',
+  // The old hues, about 15% less saturated so they sit with the accent.
+  types: { stock: '#88A7F5', etf: '#55BA8A', crypto: '#E2A348', certificado_aforro: '#C391DA' },
   palette: [
-    '#7ea3ff',
-    '#4cc38a',
-    '#f0a63a',
-    '#c58be0',
-    '#ff7a70',
-    '#4fc3cc',
-    '#c9a28f',
-    '#f06ea8',
-    '#9ccc65',
-    '#9fa8f5',
+    '#88A7F5',
+    '#55BA8A',
+    '#E2A348',
+    '#C391DA',
+    '#F4837B',
+    '#58BBC3',
+    '#C5A493',
+    '#E678A9',
+    '#9BC46D',
+    '#A5ADEF',
   ],
   chart: {
-    axis: '#444b57',
-    pointer: '#9ca5b4',
-    tooltipBg: '#232830',
-    tooltipBorder: '#444b57',
+    axis: '#262B32',
+    pointer: '#A0A8B4',
+    tooltipBg: '#1C2026',
+    tooltipBorder: '#2C313A',
   },
-  tabBar: { background: '#181b21', border: '#2c313a', active: '#7ea3ff', inactive: '#9ca5b4' },
-  input: { background: '#181b21', border: '#5b6472', text: '#eceef2', placeholder: '#9ca5b4' },
-  modal: { backdrop: 'rgba(0,0,0,0.65)', surface: '#232830' },
-  switch: { trackOff: '#444b57', trackOn: '#3d5fb0', thumbOff: '#9ca5b4', thumbOn: '#7ea3ff' },
+  tabBar: { background: '#15181D', border: '#262B32', active: '#ECEFF3', inactive: '#858E9A' },
+  input: { background: '#15181D', border: '#5F6874', text: '#ECEFF3', placeholder: '#A0A8B4' },
+  modal: { backdrop: 'rgba(0,0,0,0.6)', surface: '#1C2026' },
+  switch: { trackOff: '#3A414B', trackOn: '#3B4F78', thumbOff: '#A0A8B4', thumbOn: '#8FADE6' },
 };
 
 export type Scheme = 'light' | 'dark';
 export const themes: Record<Scheme, Colors> = { light: lightColors, dark: darkColors };
 
-export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
+/** The 4 dp grid. Screen side gutter is `lg`, between sections `xl`. */
+export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 } as const;
+
+/** `pill` for chips, segments and the round "+" button. */
+export const radius = { sm: 8, md: 12, lg: 16, pill: 999 } as const;
+
+/** Touch targets are at least this big (icons are 24 dp with a hit slop up to it). */
+export const TOUCH_TARGET = 48;
+
+/** Height of the collapsed header bar, below the status bar. */
+export const HEADER_HEIGHT = 56;
+
+export type TextVariant =
+  'display' | 'title1' | 'title2' | 'headline' | 'body' | 'sub' | 'caption' | 'overline';
+
+export interface TextStyleSpec {
+  fontSize: number;
+  lineHeight: number;
+  fontWeight: '400' | '600' | '700';
+  letterSpacing?: number;
+  textTransform?: 'uppercase';
+}
+
+/**
+ * Text styles, colour-free (docs/design.md §3). System font (Roboto on Android), nothing to
+ * load. Figures also get tabular digits in `T`, so columns line up and values do not jitter.
+ */
+export const type: Record<TextVariant, TextStyleSpec> = {
+  display: { fontSize: 34, lineHeight: 40, fontWeight: '700' },
+  title1: { fontSize: 28, lineHeight: 34, fontWeight: '600' },
+  title2: { fontSize: 20, lineHeight: 26, fontWeight: '600' },
+  headline: { fontSize: 16, lineHeight: 22, fontWeight: '600' },
+  body: { fontSize: 15, lineHeight: 20, fontWeight: '400' },
+  sub: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
+  caption: { fontSize: 12, lineHeight: 16, fontWeight: '400' },
+  overline: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '600',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+};

@@ -15,9 +15,9 @@ export function AllocationDonut(props: {
     <PieChart
       donut
       radius={64}
-      innerRadius={40}
-      innerCircleColor={colors.surface}
-      backgroundColor={colors.surface}
+      innerRadius={44}
+      innerCircleColor={colors.background}
+      backgroundColor={colors.background}
       data={props.slices.map((s, i) => ({ value: pixels(s.valueEur), color: colorOf(s.key, i) }))}
     />
   );

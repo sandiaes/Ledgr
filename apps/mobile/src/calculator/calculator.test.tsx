@@ -3,7 +3,8 @@ import { fireEvent, render, screen, within } from '@testing-library/react-native
 import { AppRoot } from '../AppRoot';
 import { TIME_ZONE } from '../data/usePortfolio';
 import { fakeAuth, fakeData, fakeServices, portfolioLedger } from '../test/fakes';
-import { MASK } from '../ui/Money';
+import { AMOUNT_TEXT } from '../test/leaks';
+import { MASK } from '../ui/Amount';
 
 jest.mock('react-native-gifted-charts', () => ({
   LineChart: () => null,
@@ -82,8 +83,7 @@ async function openCalculator(
   const services = fakeServices({ auth, data, settings });
   await render(<AppRoot services={services} />);
   await screen.findByText(/^as of /);
-  await fireEvent.press(await screen.findByText('More'));
-  await fireEvent.press(await screen.findByText('Return calculator'));
+  await fireEvent.press(screen.getByLabelText('Calculator'));
   await screen.findByLabelText(START);
   return { data, services };
 }
@@ -95,7 +95,7 @@ const setSwitch = (on: boolean) =>
   fireEvent(screen.getAllByLabelText(SWITCH).at(-1) as never, 'valueChange', on);
 
 describe('Return calculator', () => {
-  it('is under More and starts from the value now, the XIRR since start and the average purchases', async () => {
+  it('is the Calculator tab and starts from the value now, the XIRR since start and the average purchases', async () => {
     await openCalculator();
     expect(value(START)).toBe('4566.82');
     expect(value(CONTRIBUTION)).toBe('140.00');
@@ -106,7 +106,7 @@ describe('Return calculator', () => {
     // Which number was used, and over what period.
     const source = screen.getByTestId('return-source');
     expect(source).toHaveTextContent(
-      /^XIRR since start: -?\d+\.\d{2}% a year, from .* to .* \(\d+ days\)\.$/,
+      /^XIRR since start: −?\d+,\d{2}% a year, from .* to .* \(\d+ days\)\.$/,
     );
     expect(
       screen.getByText(
@@ -126,16 +126,16 @@ describe('Return calculator', () => {
     await type(START, '10000');
     await type(RETURN, '7');
     await type(CONTRIBUTION, '0');
-    expect(screen.getAllByText('€19,671.51').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('+€9,671.51').length).toBeGreaterThan(0);
-    expect(screen.getByText('49.17%')).toBeOnTheScreen();
+    expect(screen.getAllByText('19.671,51\u00A0€').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('+9.671,51\u00A0€').length).toBeGreaterThan(0);
+    expect(screen.getByText('49,17%')).toBeOnTheScreen();
     expect(screen.getByText('Total contributed')).toBeOnTheScreen();
     expect(screen.queryByText("Ending value in today's money")).toBeNull();
     const rows = screen.getAllByTestId('projection-row');
     expect(rows).toHaveLength(10);
     expect(within(rows[0] as never).getByText('After 1 year')).toBeOnTheScreen();
-    expect(within(rows[0] as never).getByText('€10,700.00')).toBeOnTheScreen();
-    expect(within(rows[1] as never).getByText('€11,449.00')).toBeOnTheScreen();
+    expect(within(rows[0] as never).getByText('10.700,00\u00A0€')).toBeOnTheScreen();
+    expect(within(rows[1] as never).getByText('11.449,00\u00A0€')).toBeOnTheScreen();
     expect(screen.getByTestId('growth-chart')).toBeOnTheScreen();
   });
 
@@ -145,20 +145,20 @@ describe('Return calculator', () => {
     await type(YEARS, '1');
     await type(RETURN, '0');
     await type(CONTRIBUTION, '100');
-    expect(screen.getAllByText('€2,200.00').length).toBeGreaterThan(1); // ending, contributed
-    expect(screen.getByText('0.00%')).toBeOnTheScreen();
+    expect(screen.getAllByText('2.200,00\u00A0€').length).toBeGreaterThan(1); // ending, contributed
+    expect(screen.getByText('0,00%')).toBeOnTheScreen();
 
     await type(CONTRIBUTION, '0');
     await type(YEARS, '2');
     await type(RETURN, '-10');
-    expect(screen.getAllByText('€810.00').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('−€190.00').length).toBeGreaterThan(0);
-    expect(screen.getByText('−23.46%')).toBeOnTheScreen();
+    expect(screen.getAllByText('810,00\u00A0€').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('−190,00\u00A0€').length).toBeGreaterThan(0);
+    expect(screen.getByText('−23,46%')).toBeOnTheScreen();
 
     await type(RETURN, '0');
     await type(INFLATION, '10');
     expect(screen.getByText("Ending value in today's money")).toBeOnTheScreen();
-    expect(screen.getByText('€826.45')).toBeOnTheScreen(); // 1,000 / 1.1^2
+    expect(screen.getByText('826,45\u00A0€')).toBeOnTheScreen(); // 1,000 / 1.1^2
 
     await type(YEARS, '1');
     await type('Extra months', '6');
@@ -174,11 +174,11 @@ describe('Return calculator', () => {
     await type(RETURN, '12');
     await type(CONTRIBUTION, '100');
     const ending = () => within(screen.getByTestId('projection-result')).getAllByTestId('money')[0];
-    expect(ending()).toHaveTextContent('€1,264.65'); // 100 x 0.12 / (1.12^(1/12) - 1)
+    expect(ending()).toHaveTextContent('1.264,65\u00A0€'); // 100 x 0.12 / (1.12^(1/12) - 1)
     await fireEvent.press(screen.getByText('Start of month'));
-    expect(ending()).toHaveTextContent('€1,276.65');
+    expect(ending()).toHaveTextContent('1.276,65\u00A0€');
     await fireEvent.press(screen.getByText('End of month'));
-    expect(ending()).toHaveTextContent('€1,264.65');
+    expect(ending()).toHaveTextContent('1.264,65\u00A0€');
   });
 
   it('turning certificados off updates the defaults of the fields that were not edited', async () => {
@@ -315,7 +315,7 @@ describe('Return calculator', () => {
     expect(screen.queryAllByTestId('projection-row')).toEqual([]);
   });
 
-  it('hide values masks the results and the amount fields, not the percentages', async () => {
+  it('hide values masks the results, the amount fields and the percentages', async () => {
     await openCalculator(fixture(), { hideValues: true });
     expect(value(START)).toBe(MASK);
     expect(value(CONTRIBUTION)).toBe(MASK);
@@ -323,9 +323,14 @@ describe('Return calculator', () => {
     const amounts = screen.getAllByTestId('money');
     expect(amounts.length).toBeGreaterThan(8); // result lines and the rows
     for (const a of amounts) expect(a).toHaveTextContent(MASK);
-    expect(screen.queryByText(/€\d/)).toBeNull();
+    expect(screen.queryByText(AMOUNT_TEXT)).toBeNull();
     expect(screen.getByText('Growth share of ending value')).toBeOnTheScreen();
-    expect(value(RETURN)).toMatch(/^-?\d+\.\d{2}$/); // a percentage stays
+    // A percentage is masked like an amount (decision D2), in the field and in the note.
+    expect(value(RETURN)).toBe(MASK);
+    expect(field(RETURN).props.editable).toBe(false);
+    expect(screen.getByTestId('return-source')).toHaveTextContent(/^XIRR since start: •••••/);
+    expect(screen.queryByText(/\d,\d{2}%/)).toBeNull(); // no figure; the warning range is text
+    for (const p of screen.getAllByTestId('pct')) expect(p).toHaveTextContent(MASK);
 
     await fireEvent.press(screen.getAllByLabelText('Show values').at(-1) as never);
     expect(value(START)).toBe('4566.82');

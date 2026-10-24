@@ -15,9 +15,10 @@ import {
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { usePortfolio } from '../data/usePortfolio';
-import { formatDate, formatPct } from '../format';
+import { formatDate } from '../format';
 import { useHideValues } from '../settings/SettingsProvider';
-import { MASK, Money, Pct } from '../ui/Money';
+import { Amount, MASK } from '../ui/Amount';
+import { Money, Pct } from '../ui/Money';
 import { Button, Card, Field, Line, Segmented } from '../ui/parts';
 import { PortfolioScreen } from '../ui/PortfolioScreen';
 import { IncludeCertificadosSwitch } from '../ui/Scope';
@@ -165,7 +166,8 @@ function Calculator(props: {
           label="Expected annual return (%)"
           hint="The effective annual rate (the yearly result, not a monthly rate times 12)."
           keyboardType="numeric"
-          value={returnText}
+          value={hidden ? MASK : returnText}
+          editable={!hidden}
           onChangeText={(customReturn) => change({ returnMode: 'custom', customReturn })}
           error={error('annualReturn')}
         />
@@ -282,8 +284,8 @@ function ReturnSource(props: {
   return (
     <>
       <Text style={styles.note} testID="return-source">
-        {name}: {formatPct(source.rate)} a year, from {formatDate(source.from, year)} to{' '}
-        {formatDate(source.to, year)} ({source.days} days).
+        {name}: <Amount kind="pct" value={source.rate} /> a year, from{' '}
+        {formatDate(source.from, year)} to {formatDate(source.to, year)} ({source.days} days).
         {source.shortHistory
           ? ' Less than a year of history: this is a short period turned into an annual rate.'
           : ''}

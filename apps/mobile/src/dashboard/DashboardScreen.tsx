@@ -1,41 +1,52 @@
 import { useMemo } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useDashboard } from '../data/usePortfolio';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { formatDate, formatTime } from '../format';
-import { Money } from '../ui/Money';
-import { Banner, Card } from '../ui/parts';
+import { usePortfolioSummary } from '../header/PortfolioSummary';
+import { EmptyState, ErrorState } from '../ui/EmptyState';
+import { Banner } from '../ui/parts';
 import { IncludeCertificadosSwitch, NothingInScope, ScopeNote } from '../ui/Scope';
-import { space, type Colors } from '../ui/theme';
-import { useStyles } from '../ui/ThemeProvider';
+import { SkeletonChart, SkeletonRows } from '../ui/Skeleton';
+import { T } from '../ui/T';
+import { space } from '../ui/theme';
+import { useColors } from '../ui/ThemeProvider';
 import {
-  AllocationCard,
-  ChartCard,
-  GainCard,
-  HeaderCard,
-  MoversCard,
+  AllocationSection,
+  ChartSection,
+  Freshness,
+  GainSection,
+  MoversSection,
   ReconcileBanner,
-  ReturnsCard,
+  ReturnsSection,
   type AssetNames,
 } from './cards';
 
 export function DashboardScreen() {
-  const styles = useStyles(makeStyles);
-  const state = useDashboard();
+  const colors = useColors();
+  const state = usePortfolioSummary();
   const assets: AssetNames = useMemo(
     () => new Map(state.status === 'ready' ? state.ledger.assets.map((a) => [a.id, a]) : []),
     [state],
   );
 
   const refresh = (
-    <RefreshControl refreshing={state.refreshing} onRefresh={() => void state.refresh()} />
+    <RefreshControl
+      refreshing={state.refreshing}
+      onRefresh={() => void state.refresh()}
+      colors={[colors.accent]}
+      progressBackgroundColor={colors.raised}
+    />
   );
   let body;
   if (state.status === 'loading') {
-    body = <Text style={styles.status}>Loading…</Text>;
-  } else if (state.status === 'error') {
     body = (
-      <Banner tone="error">Could not load the dashboard ({state.code}). Pull down to retry.</Banner>
+      <View style={styles.pad} testID="dashboard-loading">
+        <SkeletonRows n={5} />
+        <View style={styles.gap} />
+        <SkeletonChart />
+      </View>
     );
+  } else if (state.status === 'error') {
+    body = <ErrorState title="Could not load the dashboard" code={state.code} />;
   } else {
     const { view } = state;
     const year = view.today.slice(0, 4);
@@ -45,38 +56,30 @@ export function DashboardScreen() {
         : '';
     body = (
       <>
-        <Text style={styles.asOf}>
+        <T variant="caption" tone="faint" style={styles.asOf}>
           as of {formatTime(state.asOf)}
           {prices}
           {state.liveUnavailable ? ' · live prices unavailable' : ''}
-        </Text>
+        </T>
         {view.status === 'ok' ? <ScopeNote excludeTypes={view.excludeTypes} /> : null}
         {view.status === 'unvalued' ? (
-          <>
-            <Card>
-              <Text style={styles.caption}>Total value</Text>
-              <Money value={null} style={styles.total} />
-            </Card>
-            <Banner tone="warning">
-              No exchange rate for {view.currencies.join(', ')} on {formatDate(view.date, year)}:
-              the totals cannot be shown until the next rate is stored.
-            </Banner>
-          </>
+          <Banner tone="warning">
+            No exchange rate for {view.currencies.join(', ')} on {formatDate(view.date, year)}: the
+            totals cannot be shown until the next rate is stored.
+          </Banner>
         ) : view.empty ? (
-          <Card>
-            <Text style={styles.caption}>No transactions yet.</Text>
-          </Card>
+          <EmptyState title="No transactions yet" line="Add your first one with +" />
         ) : view.emptyInScope ? (
           <NothingInScope />
         ) : (
           <>
             <ReconcileBanner view={view} />
-            <HeaderCard view={view} assets={assets} />
-            <GainCard view={view} />
-            <ReturnsCard returns={view.returns} />
-            <ChartCard view={view} />
-            <AllocationCard view={view} />
-            <MoversCard view={view} assets={assets} />
+            <Freshness view={view} assets={assets} />
+            <GainSection view={view} />
+            <ReturnsSection returns={view.returns} />
+            <ChartSection view={view} />
+            <AllocationSection view={view} />
+            <MoversSection view={view} assets={assets} />
           </>
         )}
       </>
@@ -90,11 +93,9 @@ export function DashboardScreen() {
   );
 }
 
-const makeStyles = (colors: Colors) =>
-  StyleSheet.create({
-    content: { paddingTop: space.md, paddingBottom: space.xl },
-    status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
-    asOf: { color: colors.muted, fontSize: 12, marginHorizontal: space.lg, marginBottom: space.sm },
-    caption: { fontSize: 13, color: colors.muted },
-    total: { fontSize: 32, fontWeight: '700', color: colors.text, marginVertical: space.xs },
-  });
+const styles = StyleSheet.create({
+  content: { paddingTop: space.md, paddingBottom: space.xl },
+  pad: { paddingHorizontal: space.lg, paddingTop: space.md },
+  gap: { height: space.xl },
+  asOf: { marginHorizontal: space.lg, marginBottom: space.sm },
+});

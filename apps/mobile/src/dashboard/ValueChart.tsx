@@ -1,25 +1,28 @@
 import type { Decimal, ValueSnapshot } from '@ledgr/core';
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
-import { formatDate, formatEur } from '../format';
-import { useHideValues } from '../settings/SettingsProvider';
-import { MASK } from '../ui/Money';
-import { space, type Colors } from '../ui/theme';
+import { formatDate } from '../format';
+import { useMaskedText } from '../ui/Amount';
+import { T } from '../ui/T';
+import { radius, space, type Colors } from '../ui/theme';
 import { useColors, useStyles } from '../ui/ThemeProvider';
 
 /** Decimal -> number for pixel positions only; every label is formatted from the Decimal. */
 const pixels = (d: Decimal) => Number(d.toFixed(2));
 
-/** Value (blue) and net invested (grey) for the selected range; touch to scrub. */
+export const CHART_HEIGHT = 180;
+
+/**
+ * Value (accent line over a faint area) and net invested (dashed grey) for the selected
+ * range; touch to scrub. No axis labels or grid: a hairline baseline only (docs/design.md
+ * §6.9). The tooltip is masked with the same switch as every amount.
+ */
 export function ValueChart({ points }: { points: readonly ValueSnapshot[] }) {
   const styles = useStyles(makeStyles);
   const colors = useColors();
-  const [hidden] = useHideValues();
+  const masked = useMaskedText();
   const { width } = useWindowDimensions();
-  const chartWidth = Math.max(width - 4 * space.lg - 8, 120);
-  if (points.length < 2) {
-    return <Text style={styles.empty}>Not enough history for a chart yet.</Text>;
-  }
+  const chartWidth = Math.max(width - 2 * space.lg, 120);
   return (
     <LineChart
       data={points.map((p) => ({ value: pixels(p.valueEur) }))}
@@ -27,6 +30,13 @@ export function ValueChart({ points }: { points: readonly ValueSnapshot[] }) {
       color1={colors.value}
       color2={colors.invested}
       thickness={2}
+      thickness2={1.5}
+      strokeDashArray2={[6, 4]}
+      areaChart1
+      startFillColor1={colors.valueFill.color}
+      endFillColor1={colors.valueFill.color}
+      startOpacity1={colors.valueFill.startOpacity}
+      endOpacity1={colors.valueFill.endOpacity}
       hideDataPoints
       hideYAxisText
       yAxisLabelWidth={0}
@@ -35,25 +45,30 @@ export function ValueChart({ points }: { points: readonly ValueSnapshot[] }) {
       endSpacing={0}
       adjustToWidth
       width={chartWidth}
-      height={180}
+      height={CHART_HEIGHT}
       xAxisColor={colors.chart.axis}
+      xAxisThickness={StyleSheet.hairlineWidth}
       yAxisColor="transparent"
       pointerConfig={{
         pointerStripColor: colors.chart.pointer,
         pointerColor: colors.value,
         pointerLabelWidth: 150,
-        pointerLabelHeight: 60,
+        pointerLabelHeight: 64,
         autoAdjustPointerLabelPosition: true,
         pointerLabelComponent: (_items: unknown, _secondary: unknown, index: number) => {
           const p = points[index];
           if (!p) return null;
           return (
             <View style={styles.label}>
-              <Text style={styles.labelDate}>{formatDate(p.date)}</Text>
-              <Text style={styles.labelValue}>{hidden ? MASK : formatEur(p.valueEur)}</Text>
-              <Text style={styles.labelInvested}>
-                invested {hidden ? MASK : formatEur(p.netInvestedEur)}
-              </Text>
+              <T variant="caption" tone="muted">
+                {formatDate(p.date)}
+              </T>
+              <T variant="sub" tone="accent" figure style={styles.value}>
+                {masked(p.valueEur)}
+              </T>
+              <T variant="caption" tone="muted" figure>
+                invested {masked(p.netInvestedEur)}
+              </T>
             </View>
           );
         },
@@ -64,15 +79,12 @@ export function ValueChart({ points }: { points: readonly ValueSnapshot[] }) {
 
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
-    empty: { color: colors.muted, paddingVertical: space.lg },
     label: {
       backgroundColor: colors.chart.tooltipBg,
-      borderRadius: 6,
-      padding: space.xs,
+      borderRadius: radius.sm,
+      padding: space.sm,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.chart.tooltipBorder,
     },
-    labelDate: { fontSize: 11, color: colors.muted },
-    labelValue: { fontSize: 13, fontWeight: '600', color: colors.value },
-    labelInvested: { fontSize: 11, color: colors.muted },
+    value: { fontWeight: '600' },
   });
