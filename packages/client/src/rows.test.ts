@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { accountFromRow, snapshotFromRow, transactionFromRow, transactionToRow } from './rows';
+import {
+  accountFromRow,
+  SNAPSHOT_COLUMNS,
+  snapshotFromRow,
+  transactionFromRow,
+  transactionToRow,
+} from './rows';
 
 describe('row mappers', () => {
   it('parses numerics from text exactly and keeps month-level dates', () => {
@@ -78,6 +84,26 @@ describe('row mappers', () => {
       '12345.678901234567',
       '-10.5',
     ]);
+    expect(s.valueByTypeEur).toBeUndefined();
+  });
+
+  it('reads the per-type values when selected', () => {
+    const s = snapshotFromRow({
+      snapshot_date: '2026-10-22',
+      total_value_eur: '1111.000000000000000001',
+      net_contributions_eur: '900',
+      stock_value_eur: '100',
+      etf_value_eur: '10.000000000000000001',
+      crypto_value_eur: '1',
+      certificado_aforro_value_eur: '1000',
+    });
+    expect(Object.entries(s.valueByTypeEur ?? {}).map(([t, v]) => [t, v.toString()])).toEqual([
+      ['stock', '100'],
+      ['etf', '10.000000000000000001'],
+      ['crypto', '1'],
+      ['certificado_aforro', '1000'],
+    ]);
+    expect(SNAPSHOT_COLUMNS).toContain('certificado_aforro_value_eur::text');
   });
 });
 

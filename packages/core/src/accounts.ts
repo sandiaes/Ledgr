@@ -5,6 +5,7 @@ import { runFifo, type FifoOptions } from './fifo';
 import { rowIncomeNetEur, rowOtherCostEur } from './gains';
 import type { Holding } from './holdings';
 import { prepareLedger } from './ledger';
+import { scopeHoldings, scopeTransactions, type AssetScope } from './scope';
 import type { Transaction } from './types';
 
 /** One broker account's share of the portfolio (docs/kpis.md §8 "Broker"). */
@@ -28,7 +29,8 @@ export interface AccountSummary {
 
 /**
  * Gains per account, for every account with open lots or any realized gain, income or cost
- * up to `asOf`. Largest value first (ties by account id). Every figure is a sum of parts
+ * up to `asOf` (of the assets in `scope`, default all: an account with nothing in scope is
+ * not listed). Largest value first (ties by account id). Every figure is a sum of parts
  * that each belong to one account, so the accounts add up exactly to `gainsSummary`.
  * Throws MissingValuationError if any holding has no market value.
  */
@@ -37,8 +39,11 @@ export function accountSummaries(input: {
   holdings: readonly Holding[];
   asOf: IsoDate;
   caSubscriptions?: FifoOptions['caSubscriptions'];
+  scope?: AssetScope;
 }): AccountSummary[] {
-  const { transactions, holdings, asOf } = input;
+  const { asOf } = input;
+  const transactions = scopeTransactions(input.transactions, input.scope);
+  const holdings = scopeHoldings(input.holdings, input.scope);
   const unvalued = holdings.filter((h) => !h.marketValueEur).map((h) => h.assetId);
   if (unvalued.length > 0) throw new MissingValuationError([...new Set(unvalued)], asOf);
 

@@ -3,6 +3,7 @@ import { ZERO, type Decimal } from './decimal';
 import { runFifo, type FifoOptions } from './fifo';
 import { rowIncomeNetEur } from './gains';
 import { isAcquisition, prepareLedger } from './ledger';
+import { scopeTransactions, type AssetScope } from './scope';
 import type { Transaction } from './types';
 
 /** Realized results of one account in a closed position. */
@@ -38,14 +39,20 @@ export interface ClosedPosition {
 }
 
 /**
- * Fully closed positions as of `asOf`, by asset id. An asset closed and re-opened is not
- * listed (its realized gains belong to its open position).
+ * Fully closed positions as of `asOf`, by asset id, of the assets in `scope` (default
+ * all). An asset closed and re-opened is not listed (its realized gains belong to its open
+ * position).
  */
 export function closedPositions(
-  transactions: readonly Transaction[],
-  options: { asOf?: IsoDate; caSubscriptions?: FifoOptions['caSubscriptions'] } = {},
+  allTransactions: readonly Transaction[],
+  options: {
+    asOf?: IsoDate;
+    caSubscriptions?: FifoOptions['caSubscriptions'];
+    scope?: AssetScope;
+  } = {},
 ): ClosedPosition[] {
   const { asOf } = options;
+  const transactions = scopeTransactions(allTransactions, options.scope);
   const { openLots, disposals } = runFifo(transactions, {
     asOf,
     caSubscriptions: options.caSubscriptions,

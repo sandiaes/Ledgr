@@ -1,5 +1,6 @@
 import { dec, ZERO, type Decimal, type DecimalInput } from './decimal';
 import type { Holding } from './holdings';
+import { isFullScope, scopeHoldings, type AssetScope } from './scope';
 import type { AssetType, PriceQuote } from './types';
 
 /** One open position in the post-backfill sanity report. */
@@ -87,15 +88,20 @@ export interface ReconcileResult {
 /**
  * Checks that the figures agree with each other: V - NI = R + U exactly, every holding's
  * accounts add up to it, and (when given) value-now's totals match at numeric(38,18)
- * precision. A failure is shown, never silently fixed. Holdings must all be valued.
+ * precision. With a `scope` leaving assets out, the figures are those of the assets in
+ * scope and value-now's whole-portfolio totals are not compared. A failure is shown,
+ * never silently fixed. Holdings must all be valued.
  */
 export function reconcile(input: {
   holdings: readonly Holding[];
   gains: { realizedEur: Decimal; unrealizedEur: Decimal };
   netInvestedEur: Decimal;
   reference?: { totalValueEur: Decimal; costBasisEur: Decimal } | null;
+  scope?: AssetScope;
 }): ReconcileResult {
-  const { holdings, gains, reference } = input;
+  const { gains } = input;
+  const holdings = scopeHoldings(input.holdings, input.scope);
+  const reference = isFullScope(input.scope) ? input.reference : null;
   const issues: ReconcileIssue[] = [];
   const value = holdings.reduce((s, h) => s.plus(h.marketValueEur ?? ZERO), ZERO);
   const cost = holdings.reduce((s, h) => s.plus(h.costBasisEur), ZERO);

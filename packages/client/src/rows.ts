@@ -202,10 +202,29 @@ export const liveQuoteFromRow = (r: Row): LiveQuoteRecord => ({
   source: String(r.source),
 });
 
-export const SNAPSHOT_COLUMNS = 'snapshot_date,total_value_eur::text,net_contributions_eur::text';
+/** Value, net invested and the per-type values (for the asset scope, docs/kpis.md §0.2). */
+export const SNAPSHOT_COLUMNS =
+  'snapshot_date,total_value_eur::text,net_contributions_eur::text,stock_value_eur::text,' +
+  'etf_value_eur::text,crypto_value_eur::text,certificado_aforro_value_eur::text';
 
-export const snapshotFromRow = (r: Row): ValueSnapshot => ({
-  date: String(r.snapshot_date),
-  valueEur: dec(String(r.total_value_eur)),
-  netInvestedEur: dec(String(r.net_contributions_eur)),
-});
+/** The per-type value columns; all four or none. */
+const TYPE_COLUMNS: [AssetType, string][] = [
+  ['stock', 'stock_value_eur'],
+  ['etf', 'etf_value_eur'],
+  ['crypto', 'crypto_value_eur'],
+  ['certificado_aforro', 'certificado_aforro_value_eur'],
+];
+
+export const snapshotFromRow = (r: Row): ValueSnapshot => {
+  const s: ValueSnapshot = {
+    date: String(r.snapshot_date),
+    valueEur: dec(String(r.total_value_eur)),
+    netInvestedEur: dec(String(r.net_contributions_eur)),
+  };
+  if (TYPE_COLUMNS.every(([, c]) => r[c] !== undefined && r[c] !== null)) {
+    s.valueByTypeEur = Object.fromEntries(
+      TYPE_COLUMNS.map(([t, c]) => [t, dec(String(r[c]))]),
+    ) as Record<AssetType, Decimal>;
+  }
+  return s;
+};

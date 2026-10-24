@@ -1,6 +1,7 @@
 import type { IsoDate } from './dates';
 import { ZERO, type Decimal } from './decimal';
 import { amountEur, feesEur, grossNative, prepareLedger, toEur, withholdingTaxEur } from './ledger';
+import { scopeTransactions, type AssetScope } from './scope';
 import type { Transaction } from './types';
 import type { CashFlow } from './xirr';
 
@@ -12,6 +13,8 @@ export interface InvestmentFlowOptions {
   assetId?: string;
   /** Use prices before fees and ignore fee rows (for measuring fee drag). */
   excludeFees?: boolean;
+  /** Only the rows in scope (docs/kpis.md §0.2); default all. */
+  scope?: AssetScope;
 }
 
 /**
@@ -24,8 +27,9 @@ export function investmentCashFlows(
   options: InvestmentFlowOptions,
 ): CashFlow[] {
   const { asOf, assetId, excludeFees = false } = options;
+  const scoped = scopeTransactions(transactions, options.scope);
   const rows = prepareLedger(
-    assetId === undefined ? transactions : transactions.filter((t) => t.assetId === assetId),
+    assetId === undefined ? scoped : scoped.filter((t) => t.assetId === assetId),
     asOf,
   );
   const flows: CashFlow[] = [];
@@ -80,15 +84,16 @@ export interface DailyFlow {
 
 /**
  * F(d) per day with at least one flow row, oldest first, up to `asOf` (inclusive) and
- * after `after` (exclusive) when given. `assetId` keeps only that asset's rows.
+ * after `after` (exclusive) when given. `assetId` keeps only that asset's rows, `scope`
+ * only the rows in scope.
  */
 export function dailyFlows(
   transactions: readonly Transaction[],
-  options: { asOf?: IsoDate; after?: IsoDate; assetId?: string } = {},
+  options: { asOf?: IsoDate; after?: IsoDate; assetId?: string; scope?: AssetScope } = {},
 ): DailyFlow[] {
   const { after, assetId } = options;
   const out: DailyFlow[] = [];
-  for (const tx of prepareLedger(transactions, options.asOf)) {
+  for (const tx of prepareLedger(scopeTransactions(transactions, options.scope), options.asOf)) {
     if (assetId !== undefined && tx.assetId !== assetId) continue;
     if (after !== undefined && tx.tradeDate <= after) continue;
     const f = flowEur(tx);

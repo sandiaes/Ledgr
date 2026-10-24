@@ -5,6 +5,7 @@ import { ZERO, type Decimal } from './decimal';
 import { MissingValuationError } from './errors';
 import { computeHoldings, type Holding } from './holdings';
 import { prepareLedger } from './ledger';
+import { scopeTransactions, type AssetScope } from './scope';
 import type { Asset, FxLookup, PriceLookup, Transaction } from './types';
 
 export interface DayChangeInput {
@@ -16,6 +17,8 @@ export interface DayChangeInput {
   ca?: CaContext;
   /** T, the owner's local date. Yesterday Y is T - 1 day. */
   today: IsoDate;
+  /** Only the assets in scope (docs/kpis.md §0.2): V(T), V(Y) and F(T); default all. */
+  scope?: AssetScope;
 }
 
 /** One asset's day change (docs/kpis.md §2, per asset). */
@@ -59,10 +62,11 @@ export interface DayChange {
  * change. Throws MissingValuationError when a holding on either day has no value.
  */
 export function dayChange(input: DayChangeInput): DayChange {
-  const { today, transactions } = input;
+  const { today } = input;
+  const transactions = scopeTransactions(input.transactions, input.scope);
   const yesterday = addDays(today, -1);
   const valued = (asOf: IsoDate) => {
-    const holdings = computeHoldings({ ...input, asOf });
+    const holdings = computeHoldings({ ...input, transactions, asOf, scope: undefined });
     const unvalued = holdings.filter((h) => !h.marketValueEur).map((h) => h.assetId);
     if (unvalued.length > 0) throw new MissingValuationError(unvalued, asOf);
     return new Map(holdings.map((h): [string, Holding] => [h.assetId, h]));

@@ -1,6 +1,7 @@
 import { ZERO, type Decimal } from './decimal';
 import { MissingValuationError } from './errors';
 import type { Holding } from './holdings';
+import { scopeHoldings, type AssetScope } from './scope';
 
 export type AllocationDimension = 'assetType' | 'asset' | 'account' | 'currency';
 
@@ -20,13 +21,16 @@ const partsOf: Record<AllocationDimension, (h: Holding) => [string, Decimal][]> 
 };
 
 /**
- * Market value per group, largest first (ties by key). Covers positions only, not cash.
+ * Market value per group, largest first (ties by key). Covers positions only, not cash,
+ * and only the assets in `scope` (default all): weights are shares of the total in scope.
  * Throws MissingValuationError if any holding has no market value.
  */
 export function allocation(
-  holdings: readonly Holding[],
+  allHoldings: readonly Holding[],
   by: AllocationDimension,
+  scope?: AssetScope,
 ): AllocationSlice[] {
+  const holdings = scopeHoldings(allHoldings, scope);
   const unvalued = holdings.filter((h) => !h.marketValueEur).map((h) => h.assetId);
   if (unvalued.length > 0) throw new MissingValuationError([...new Set(unvalued)]);
 
@@ -53,8 +57,12 @@ export interface Concentration {
   topWeight: Decimal;
 }
 
-export function concentration(holdings: readonly Holding[], topN: number): Concentration {
+export function concentration(
+  holdings: readonly Holding[],
+  topN: number,
+  scope?: AssetScope,
+): Concentration {
   if (!Number.isInteger(topN) || topN < 1) throw new RangeError('topN must be a positive integer');
-  const top = allocation(holdings, 'asset').slice(0, topN);
+  const top = allocation(holdings, 'asset', scope).slice(0, topN);
   return { top, topWeight: top.reduce((s, x) => s.plus(x.weight), ZERO) };
 }
