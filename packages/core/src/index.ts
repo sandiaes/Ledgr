@@ -18,6 +18,7 @@ export * from './ledger';
 export * from './lookups';
 export * from './movers';
 export * from './positions';
+export * from './projection';
 export * from './prices';
 export * from './returns';
 export * from './sanity';

@@ -9,6 +9,7 @@ export type RootStackParams = {
   BrokerDetail: { accountId: string };
   Allocation: undefined;
   Performance: undefined;
+  ReturnCalculator: undefined;
   ClosedPositions: undefined;
   TransactionDetail: { id: string };
   EditTransaction: { id: string };

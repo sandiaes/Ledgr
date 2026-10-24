@@ -6,6 +6,7 @@ import type { ComponentProps } from 'react';
 import { ActivityScreen } from './activity/ActivityScreen';
 import { TransactionDetailScreen } from './activity/TransactionDetailScreen';
 import { AllocationScreen } from './allocation/AllocationScreen';
+import { CalculatorScreen } from './calculator/CalculatorScreen';
 import { CertificadosScreen } from './certificados/CertificadosScreen';
 import { FactorUpdateScreen } from './certificados/FactorUpdateScreen';
 import { DashboardScreen } from './dashboard/DashboardScreen';
@@ -133,6 +134,11 @@ export function MainTabs() {
         />
         <Stack.Screen name="Allocation" component={AllocationScreen} />
         <Stack.Screen name="Performance" component={PerformanceScreen} />
+        <Stack.Screen
+          name="ReturnCalculator"
+          component={CalculatorScreen}
+          options={{ title: 'Return calculator' }}
+        />
         <Stack.Screen
           name="ClosedPositions"
           component={ClosedPositionsScreen}

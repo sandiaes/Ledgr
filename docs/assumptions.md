@@ -3,7 +3,7 @@
 Assumptions made by `packages/core`, approved as **provisional** on 2026-10-21 (#1–#20),
 2026-10-22 (#23–#28, prices, snapshots and value now) and 2026-10-23 (#29–#34, the app's
 KPIs, decisions D1–D7 in `docs/app-plan.md` §9; #1, #3, #5, #17, #19, #21 and #22 changed
-the same day; #37–#39 written with slice 5c, 2026-10-24; #40 with slice 5d, the same day). Each one
+the same day; #37–#39 written with slice 5c, 2026-10-24; #40 with slice 5d, the same day; #41 with slice 5e, the same day). Each one
 stays `unverified` until it has been checked against an official source (or the owner's
 own records), and is then updated here with the source.
 
@@ -55,6 +55,7 @@ Paths are relative to `packages/core/src/` unless stated.
 | 38  | Default broker              | unverified         |
 | 39  | Certificado factor entry    | unverified         |
 | 40  | Asset scope (certificados)  | unverified         |
+| 41  | Return calculator           | unverified         |
 
 "Out of scope (tax)" means: **out of scope: tax reports will come from importing broker
 report exports, not from this ledger.** These items describe how the performance numbers
@@ -676,3 +677,47 @@ total:
   `accountSummaries`, `allocation`, `concentration`, `topPositions`, `topMovers`,
   `closedPositions`, `transactionRows`, `assetTransactions`, `reconcile`, and
   `PortfolioInput.excludeTypes` in `views.ts`; `client/src/rows.ts` (`SNAPSHOT_COLUMNS`).
+
+## Return calculator
+
+### 41. Projection: effective annual rate, monthly compounding, constant contribution
+
+The Return calculator (More, slice 5e; definitions in `docs/kpis.md` §11) projects a balance
+from numbers the owner chooses. It is a **projection, not a forecast**, and nothing it shows
+is stored or written to the ledger.
+
+- The expected return is the **effective annual rate** _a_; the monthly rate is
+  _i_ = (1 + _a_)^(1/12) − 1, not _a_ ÷ 12. A negative rate (above −100%) gives a negative
+  _i_; _a_ = 0 gives _i_ = 0, where the closed form is replaced by P + C k.
+- Contributions are the same nominal amount every month, at the **end** of the month by
+  default (the month's growth first, then the deposit) or at the **start** (the deposit
+  earns that month). Total contributed is P + C n.
+- Inflation only deflates the final result by (1 + f)^(n/12); the rate is nominal and the
+  contribution is **not** indexed to inflation. No tax, fees or currency effects.
+- Timeline: whole years plus 0 to 11 months, at most 60 years in the form (core accepts up to
+  100). The year-by-year table has a row at every 12th month and, with extra months, a last
+  part-year row.
+- The closed form (what the screen uses) and the month-by-month recursion agree to better than
+  1e-30 relative (property test, rates from −50% to +100%, up to 60 years). Rates below
+  about 1e-20 are not supported precisely: the annuity term (g − 1) ÷ i loses digits.
+- **Defaults**, in the current asset scope (#40): starting value V(T); annual return = XIRR
+  Since start (its solved annual rate, also for a history shorter than a year, which the
+  screen says), else the annualized TWR (needs 365 days), else empty; monthly contribution =
+  net purchases of the last 12 months ÷ 12 (÷ the whole months since the first row, at least 1,
+  for a history under a year), with buys and subscriptions at cost (fees in) and sells and
+  redemptions at proceeds (fees out), as in net invested (#24); a net seller gets 0. Timeline
+  10 years, inflation 0, end of month.
+- The fields hold the displayed text (value and contribution to cents, return to 2 decimals
+  of a percent), and the projection runs on that text, so what is on screen reproduces by hand.
+- A default return outside −20% to +30% a year gets a warning; a typed one does not.
+- The screen has its own copy of the "Include certificados" switch (the Dashboard's setting).
+  A field the owner has not edited follows the scope; an edited one keeps its text;
+  "Reset to my values" clears every edit. The inputs are never persisted.
+- Form limits: starting value ≤ €1,000,000,000, contribution ≤ €10,000,000 a month, return
+  from −50% to +100%, inflation 0% to 50%.
+
+- Status: unverified
+- Implemented in: `projection.ts` (`projectGrowth`, `projectMonthByMonth`, `monthlyRate`,
+  `averageMonthlyNetPurchases`, `projectionDefaults`, `parseProjectionForm`,
+  `returnOutsideWarningRange`), `buildProjection` in `views.ts`;
+  `apps/mobile/src/calculator/`.

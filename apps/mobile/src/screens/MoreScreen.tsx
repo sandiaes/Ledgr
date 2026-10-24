@@ -30,6 +30,7 @@ export function MoreScreen() {
         <Link label="Allocation" to="Allocation" />
         <Link label="Performance" to="Performance" />
         <Link label="Closed positions" to="ClosedPositions" />
+        <Link label="Return calculator" to="ReturnCalculator" />
       </Card>
       <Card>
         <Link label="Settings" to="Settings" />

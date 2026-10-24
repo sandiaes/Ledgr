@@ -28,6 +28,7 @@ import {
 } from './lookups';
 import { topMovers, type TopMovers } from './movers';
 import { positionDetail, type PositionDetail } from './positions';
+import { projectionDefaults, type ProjectionDefaults } from './projection';
 import {
   createTradePriceLookup,
   splitAdjustPrices,
@@ -605,5 +606,43 @@ export function buildPerformance(input: PortfolioInput): Performance {
     months,
     years: yearlyReturns(returns),
     ...bestWorstMonth(months),
+  };
+}
+
+export interface ProjectionView extends ScopedView {
+  status: 'ok';
+  today: IsoDate;
+  newestPriceDate: IsoDate | null;
+  /** What the return calculator starts from (docs/kpis.md §11.4). */
+  defaults: ProjectionDefaults;
+}
+
+export type ProjectionScreen = ProjectionView | PortfolioUnvalued;
+
+/** The return calculator's defaults: V(T), Since start XIRR / TWR, average net purchases. */
+export function buildProjection(input: PortfolioInput): ProjectionScreen {
+  const v = valuePortfolio(input);
+  if (v.status === 'unvalued') return v;
+  const valueTodayEur = v.snapshot.totalValueEur;
+  const returns = periodReturns({
+    transactions: input.transactions,
+    snapshots: input.snapshots,
+    today: input.today,
+    valueTodayEur,
+    scope: v.scope,
+  });
+  return {
+    status: 'ok',
+    today: input.today,
+    excludeTypes: v.excludeTypes,
+    emptyInScope: v.emptyInScope,
+    newestPriceDate: newestPriceDate(v.snapshot),
+    defaults: projectionDefaults({
+      transactions: input.transactions,
+      today: input.today,
+      valueTodayEur,
+      returns,
+      scope: v.scope,
+    }),
   };
 }
