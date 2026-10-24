@@ -87,6 +87,40 @@ export function filterActivity(
   );
 }
 
+/** The assets, brokers and types the rows contain: what the filters offer. */
+export function activityOptions(rows: readonly AssetTransactionRow[]): {
+  assets: Set<string>;
+  accounts: string[];
+  types: TransactionType[];
+} {
+  const assets = new Set<string>();
+  const accounts = new Set<string>();
+  const types = new Set<TransactionType>();
+  for (const r of rows) {
+    if (r.assetId) assets.add(r.assetId);
+    accounts.add(r.accountId);
+    if (r.transferToAccountId) accounts.add(r.transferToAccountId);
+    types.add(r.type);
+  }
+  return { assets, accounts: [...accounts], types: [...types] };
+}
+
+/**
+ * The filters with a value no longer offered (a certificado or its broker once
+ * certificados are left out) back to "any".
+ */
+export function offeredActivityFilters(
+  f: ActivityFilters,
+  options: ReturnType<typeof activityOptions>,
+): ActivityFilters {
+  const assetId = f.assetId && !options.assets.has(f.assetId) ? null : f.assetId;
+  const accountId = f.accountId && !options.accounts.includes(f.accountId) ? null : f.accountId;
+  const type = f.type && !options.types.includes(f.type) ? null : f.type;
+  return assetId === f.assetId && accountId === f.accountId && type === f.type
+    ? f
+    : { ...f, assetId, accountId, type };
+}
+
 export const activeActivityFilters = (f: ActivityFilters) =>
   [f.assetId, f.accountId, f.type, f.range === 'all' ? null : f.range].filter((v) => v !== null)
     .length;

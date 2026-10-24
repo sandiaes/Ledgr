@@ -47,6 +47,7 @@ import {
   type ValueSnapshot,
 } from './returns';
 import { reconcile, type ReconcileResult } from './sanity';
+import { assetScope, scopeTransactions, type AssetScope } from './scope';
 import { CHART_MAX_POINTS, thinSeries } from './series';
 import { buildSnapshot, type PortfolioSnapshot, type ValuationFlag } from './snapshot';
 import type { Asset, AssetType, PriceLookup, Transaction } from './types';
@@ -69,6 +70,11 @@ export interface PortfolioInput {
   snapshots: readonly ValueSnapshot[];
   /** value-now's totals when it answered, checked against the app's own (`reconcile`). */
   reference?: { totalValueEur: Decimal; costBasisEur: Decimal } | null;
+  /**
+   * Asset types left out of every figure (docs/kpis.md §0.2), e.g. `['certificado_aforro']`
+   * when the app's "Include certificados" setting is off; default none.
+   */
+  excludeTypes?: readonly AssetType[];
   staleAfterDays?: number;
   caMaxAgeDays?: number;
 }
@@ -91,7 +97,15 @@ export interface DashboardChartSeries extends ValueSeries {
   chart: ValueSnapshot[];
 }
 
-export interface DashboardView {
+/** What every view says about its scope (docs/kpis.md §0.2). */
+export interface ScopedView {
+  /** The asset types left out of every figure; empty when the view covers everything. */
+  excludeTypes: readonly AssetType[];
+  /** The ledger has rows, but none in scope (e.g. only certificados, and they are out). */
+  emptyInScope: boolean;
+}
+
+export interface DashboardView extends ScopedView {
   status: 'ok';
   today: IsoDate;
   /** No ledger rows yet. */
@@ -133,8 +147,9 @@ export type DashboardUnvalued = PortfolioUnvalued;
 export type Dashboard = DashboardView | PortfolioUnvalued;
 
 /** The portfolio valued at T: what every view starts from. */
-interface Valued {
+interface Valued extends ScopedView {
   status: 'ok';
+  scope: AssetScope;
   holdings: Holding[];
   snapshot: PortfolioSnapshot;
   prices: PriceLookup;
@@ -151,6 +166,7 @@ interface Valued {
  */
 function valuePortfolio(input: PortfolioInput): Valued | PortfolioUnvalued {
   const { today, transactions, assets } = input;
+  const scope = assetScope({ assets, excludeTypes: input.excludeTypes });
   const currencyOf = new Map(assets.map((a) => [a.id, a.tradingCurrency]));
   const quotes = input.liveQuotes.filter((q) => currencyOf.get(q.assetId) === q.currency);
   const closes = createPriceLookup(withLiveQuotes(splitAdjustPrices(input.prices), quotes, today));
@@ -171,7 +187,7 @@ function valuePortfolio(input: PortfolioInput): Valued | PortfolioUnvalued {
     ].sort(),
   });
 
-  const holdings = computeHoldings({ transactions, assets, asOf: today, prices, fx, ca });
+  const holdings = computeHoldings({ transactions, assets, asOf: today, prices, fx, ca, scope });
   const missing = holdings.filter((h) => !h.marketValueEur).map((h) => h.assetId);
   if (missing.length > 0) return unvalued(today, missing);
 
@@ -186,14 +202,27 @@ function valuePortfolio(input: PortfolioInput): Valued | PortfolioUnvalued {
     trackCash: false,
     staleAfterDays: input.staleAfterDays,
     caMaxAgeDays: input.caMaxAgeDays,
+    scope,
   });
   const gains = gainsSummary({
     transactions,
     holdings,
     asOf: today,
     caSubscriptions: input.ca.subscriptions,
+    scope,
   });
-  return { status: 'ok', holdings, snapshot, prices, ca, gains, unvalued };
+  return {
+    status: 'ok',
+    scope,
+    excludeTypes: scope.excludeTypes,
+    emptyInScope: transactions.length > 0 && scopeTransactions(transactions, scope).length === 0,
+    holdings,
+    snapshot,
+    prices,
+    ca,
+    gains,
+    unvalued,
+  };
 }
 
 /** D(T) with the same price source as V(T); a day without a value gives "unvalued". */
@@ -201,7 +230,15 @@ function dayChangeOf(input: PortfolioInput, v: Valued): DayChange | PortfolioUnv
   const { transactions, assets, today } = input;
   const fx = createFxLookup(input.fx);
   try {
-    return dayChange({ transactions, assets, prices: v.prices, fx, ca: v.ca, today });
+    return dayChange({
+      transactions,
+      assets,
+      prices: v.prices,
+      fx,
+      ca: v.ca,
+      today,
+      scope: v.scope,
+    });
   } catch (e) {
     if (e instanceof MissingValuationError) return v.unvalued(e.date ?? today, e.assetIds);
     throw e;
@@ -224,7 +261,7 @@ export function buildDashboard(input: PortfolioInput): Dashboard {
   if (v.status === 'unvalued') return v;
   const day = dayChangeOf(input, v);
   if ('status' in day) return day;
-  const { holdings, snapshot, gains } = v;
+  const { holdings, snapshot, gains, scope } = v;
 
   const totalValueEur = snapshot.totalValueEur;
   const netInvestedEur = snapshot.netContributionsEur;
@@ -233,7 +270,7 @@ export function buildDashboard(input: PortfolioInput): Dashboard {
 
   const series = Object.fromEntries(
     SERIES_RANGES.map((range) => {
-      const s = valueSeries(input.snapshots, now, range);
+      const s = valueSeries(input.snapshots, now, range, { scope, transactions });
       return [range, { ...s, chart: thinSeries(s.points, CHART_MAX_POINTS) }];
     }),
   ) as Record<SeriesRange, DashboardChartSeries>;
@@ -244,6 +281,8 @@ export function buildDashboard(input: PortfolioInput): Dashboard {
     status: 'ok',
     today,
     empty: transactions.length === 0,
+    excludeTypes: v.excludeTypes,
+    emptyInScope: v.emptyInScope,
     totalValueEur,
     costBasisEur,
     netInvestedEur,
@@ -255,12 +294,13 @@ export function buildDashboard(input: PortfolioInput): Dashboard {
       snapshots: input.snapshots,
       today,
       valueTodayEur: totalValueEur,
+      scope,
     }),
     series,
-    allocation: allocation(holdings, 'assetType'),
+    allocation: allocation(holdings, 'assetType', scope),
     movers: {
-      eur: topMovers({ day, holdings, by: 'eur' }),
-      pct: topMovers({ day, holdings, by: 'pct' }),
+      eur: topMovers({ day, holdings, by: 'eur', scope }),
+      pct: topMovers({ day, holdings, by: 'pct', scope }),
     },
     freshness: {
       newestPriceDate: newestPriceDate(snapshot),
@@ -275,7 +315,7 @@ export function buildDashboard(input: PortfolioInput): Dashboard {
               stale: snapshot.caValueStale,
             },
     },
-    reconcile: reconcile({ holdings, gains, netInvestedEur, reference: input.reference }),
+    reconcile: reconcile({ holdings, gains, netInvestedEur, reference: input.reference, scope }),
   };
 }
 
@@ -332,7 +372,7 @@ export interface BrokerView extends AccountSummary {
   positions: PositionRow[];
 }
 
-export interface PositionsView {
+export interface PositionsView extends ScopedView {
   status: 'ok';
   today: IsoDate;
   empty: boolean;
@@ -377,7 +417,7 @@ export function buildPositions(input: PortfolioInput): Positions {
   if (v.status === 'unvalued') return v;
   const day = dayChangeOf(input, v);
   if ('status' in day) return day;
-  const { holdings, snapshot, gains, ca } = v;
+  const { holdings, snapshot, gains, ca, scope } = v;
   const total = snapshot.totalValueEur;
   const flags = new Map(snapshot.valuationFlags.map((f) => [f.assetId, f]));
   const days = new Map(day.assets.map((a) => [a.assetId, a]));
@@ -427,6 +467,7 @@ export function buildPositions(input: PortfolioInput): Positions {
     holdings,
     asOf: today,
     caSubscriptions: ca.subscriptions,
+    scope,
   }).map((s) => ({
     ...s,
     positions: holdings
@@ -451,15 +492,21 @@ export function buildPositions(input: PortfolioInput): Positions {
     status: 'ok',
     today,
     empty: transactions.length === 0,
+    excludeTypes: v.excludeTypes,
+    emptyInScope: v.emptyInScope,
     newestPriceDate: newestPriceDate(snapshot),
     totals,
     positions: holdings.map((h) => rowOf(h)).sort(byValue),
     details,
-    types: allocation(holdings, 'assetType'),
+    types: allocation(holdings, 'assetType', scope),
     brokers,
     brokerTotals,
     brokersReconcile: TOTAL_FIELDS.every((f) => brokerTotals[f].eq(totals[f])),
-    closed: closedPositions(transactions, { asOf: today, caSubscriptions: ca.subscriptions }).sort(
+    closed: closedPositions(transactions, {
+      asOf: today,
+      caSubscriptions: ca.subscriptions,
+      scope,
+    }).sort(
       (a, b) =>
         (a.lastSale > b.lastSale ? -1 : a.lastSale < b.lastSale ? 1 : 0) ||
         a.assetId.localeCompare(b.assetId),
@@ -488,7 +535,7 @@ export const ALLOCATION_DIMENSIONS: readonly AllocationDimension[] = [
   'asset',
 ];
 
-export interface AllocationView {
+export interface AllocationView extends ScopedView {
   status: 'ok';
   today: IsoDate;
   newestPriceDate: IsoDate | null;
@@ -506,21 +553,23 @@ export type Allocation = AllocationView | PortfolioUnvalued;
 export function buildAllocation(input: PortfolioInput): Allocation {
   const v = valuePortfolio(input);
   if (v.status === 'unvalued') return v;
-  const { holdings, snapshot } = v;
+  const { holdings, snapshot, scope } = v;
   return {
     status: 'ok',
     today: input.today,
+    excludeTypes: v.excludeTypes,
+    emptyInScope: v.emptyInScope,
     newestPriceDate: newestPriceDate(snapshot),
     totalValueEur: snapshot.totalValueEur,
     slices: Object.fromEntries(
-      ALLOCATION_DIMENSIONS.map((d) => [d, allocation(holdings, d)]),
+      ALLOCATION_DIMENSIONS.map((d) => [d, allocation(holdings, d, scope)]),
     ) as Record<AllocationDimension, AllocationSlice[]>,
-    top5: concentration(holdings, 5),
-    top10: concentration(holdings, 10),
+    top5: concentration(holdings, 5, scope),
+    top10: concentration(holdings, 10, scope),
   };
 }
 
-export interface PerformanceView {
+export interface PerformanceView extends ScopedView {
   status: 'ok';
   today: IsoDate;
   newestPriceDate: IsoDate | null;
@@ -544,11 +593,14 @@ export function buildPerformance(input: PortfolioInput): Performance {
     snapshots: input.snapshots,
     today: input.today,
     valueTodayEur: v.snapshot.totalValueEur,
+    scope: v.scope,
   };
   const months = monthlyReturns(returns);
   return {
     status: 'ok',
     today: input.today,
+    excludeTypes: v.excludeTypes,
+    emptyInScope: v.emptyInScope,
     newestPriceDate: newestPriceDate(v.snapshot),
     months,
     years: yearlyReturns(returns),

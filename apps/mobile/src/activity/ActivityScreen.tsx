@@ -1,10 +1,11 @@
-import { transactionRows, type AssetTransactionRow, type TransactionType } from '@ledgr/core';
+import { assetScope, transactionRows, type AssetTransactionRow } from '@ledgr/core';
 import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { errorCode } from '../auth/errors';
 import { useLedger, useToday } from '../data/usePortfolio';
 import { formatDate, formatPeriod } from '../format';
 import { useRootNavigation } from '../navigation';
+import { useExcludeTypes } from '../settings/SettingsProvider';
 import { AssetPicker } from '../transactions/AssetPicker';
 import {
   assetLabel,
@@ -15,31 +16,39 @@ import {
 } from '../ui/labels';
 import { Money, Units } from '../ui/Money';
 import { Banner, Button, Card, Chip, Field, Segmented } from '../ui/parts';
+import { NothingInScope, ScopeNote } from '../ui/Scope';
 import { colors, space } from '../ui/theme';
 import {
   activeActivityFilters,
+  activityOptions,
   DATE_RANGES,
   filterActivity,
   groupByMonth,
   NO_ACTIVITY_FILTERS,
+  offeredActivityFilters,
   type ActivityFilters,
 } from './listing';
 
 /**
  * Every ledger row, newest first, grouped by month, with filters (asset, broker, type,
  * dates). Tap a row for its detail (edit, delete). Reads the ledger only: the totals are
- * each row's own (EUR at its rate), no prices needed.
+ * each row's own (EUR at its rate), no prices needed. Certificado rows are left out while
+ * "Include certificados" is off.
  */
 export function ActivityScreen() {
   const ledger = useLedger();
   const today = useToday();
   const names = useNames(ledger.data ?? null);
-  const [filters, setFilters] = useState<ActivityFilters>(NO_ACTIVITY_FILTERS);
+  const excludeTypes = useExcludeTypes();
+  const [chosen, setFilters] = useState<ActivityFilters>(NO_ACTIVITY_FILTERS);
   const [open, setOpen] = useState(false);
-  const all = useMemo(
-    () => (ledger.data ? transactionRows(ledger.data.transactions) : []),
-    [ledger.data],
-  );
+  const all = useMemo(() => {
+    if (!ledger.data) return [];
+    const scope = assetScope({ assets: ledger.data.assets, excludeTypes });
+    return transactionRows(ledger.data.transactions, undefined, scope);
+  }, [ledger.data, excludeTypes]);
+  const options = useMemo(() => activityOptions(all), [all]);
+  const filters = useMemo(() => offeredActivityFilters(chosen, options), [chosen, options]);
   const rows = useMemo(() => filterActivity(all, filters, today), [all, filters, today]);
   const groups = useMemo(() => groupByMonth(rows), [rows]);
   const set = (change: Partial<ActivityFilters>) => setFilters((f) => ({ ...f, ...change }));
@@ -71,11 +80,14 @@ export function ActivityScreen() {
             />
           ) : null}
         </View>
-        {open ? <FilterPanel filters={filters} set={set} all={all} names={names} /> : null}
-        {all.length === 0 ? (
+        <ScopeNote excludeTypes={excludeTypes} />
+        {open ? <FilterPanel filters={filters} set={set} options={options} names={names} /> : null}
+        {ledger.data.transactions.length === 0 ? (
           <Card>
             <Text style={styles.muted}>No transactions yet.</Text>
           </Card>
+        ) : all.length === 0 ? (
+          <NothingInScope what="transactions" />
         ) : groups.length === 0 ? (
           <Card>
             <Text style={styles.muted}>No transactions match.</Text>
@@ -108,22 +120,10 @@ export function ActivityScreen() {
 function FilterPanel(props: {
   filters: ActivityFilters;
   set(change: Partial<ActivityFilters>): void;
-  all: readonly AssetTransactionRow[];
+  options: ReturnType<typeof activityOptions>;
   names: Names;
 }) {
-  const { filters, set, all, names } = props;
-  const used = useMemo(() => {
-    const assets = new Set<string>();
-    const accounts = new Set<string>();
-    const types = new Set<TransactionType>();
-    for (const r of all) {
-      if (r.assetId) assets.add(r.assetId);
-      accounts.add(r.accountId);
-      if (r.transferToAccountId) accounts.add(r.transferToAccountId);
-      types.add(r.type);
-    }
-    return { assets, accounts: [...accounts], types: [...types] };
-  }, [all]);
+  const { filters, set, names, options: used } = props;
   const assets = [...names.assets.values()].filter((a) => used.assets.has(a.id));
   return (
     <Card>

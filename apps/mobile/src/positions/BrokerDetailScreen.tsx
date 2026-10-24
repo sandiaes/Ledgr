@@ -7,6 +7,7 @@ import { brokerLabel, useNames } from '../ui/labels';
 import { Money, Pct } from '../ui/Money';
 import { Card, Line } from '../ui/parts';
 import { PortfolioScreen } from '../ui/PortfolioScreen';
+import { excludesCertificados } from '../ui/Scope';
 import { colors } from '../ui/theme';
 import { DEFAULT_SORT, sortPositions, type Sort } from './listing';
 import { PositionRowView } from './PositionRowView';
@@ -30,7 +31,11 @@ export function BrokerDetailScreen() {
       {() =>
         !broker ? (
           <Card>
-            <Text style={styles.muted}>Nothing held or realized at this broker.</Text>
+            <Text style={styles.muted}>
+              {excludesCertificados(view?.excludeTypes)
+                ? 'Nothing at this broker without certificados.'
+                : 'Nothing held or realized at this broker.'}
+            </Text>
           </Card>
         ) : (
           <>

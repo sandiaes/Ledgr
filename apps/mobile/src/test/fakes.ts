@@ -1,6 +1,6 @@
 // Test doubles for the services behind the screens. Not part of the app bundle.
 import type { AssetRecord } from '@ledgr/client';
-import { dec, type StoredPriceRow, type Transaction } from '@ledgr/core';
+import { dec, type StoredPriceRow, type Transaction, type ValueSnapshot } from '@ledgr/core';
 import type { DataApi, Ledger, Market, Services } from '../services';
 import type { Settings } from '../settings/settings';
 
@@ -126,6 +126,7 @@ export function fakeData(fixture: {
   ledger: Ledger;
   market: Market;
   history?: StoredPriceRow[];
+  snapshots?: ValueSnapshot[];
 }): jest.Mocked<DataApi> & { rows(): Transaction[] } {
   const db = fixture.ledger;
   return {
@@ -137,7 +138,7 @@ export function fakeData(fixture: {
       ca: { ...db.ca, factors: [...db.ca.factors] },
     })),
     market: jest.fn<Promise<Market>, [string, readonly string[]]>(async () => fixture.market),
-    snapshots: jest.fn(async () => []),
+    snapshots: jest.fn(async () => fixture.snapshots ?? []),
     priceHistory: jest.fn(async (id: string) =>
       (fixture.history ?? fixture.market.prices).filter((p) => p.assetId === id),
     ),

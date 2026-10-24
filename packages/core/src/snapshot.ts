@@ -6,6 +6,7 @@ import { netInvestedEur } from './gains';
 import { computeHoldings, type Holding } from './holdings';
 import { cashBalanceEur } from './ledger';
 import { ageInDays, DEFAULT_CA_MAX_AGE_DAYS, DEFAULT_STALE_AFTER_DAYS, isStale } from './prices';
+import { scopeTransactions, type AssetScope } from './scope';
 import type { Asset, AssetType, FxLookup, PriceLookup, Transaction } from './types';
 
 export interface SnapshotInput {
@@ -30,6 +31,12 @@ export interface SnapshotInput {
   staleAfterDays?: number;
   /** A certificado value more than this many days old is flagged. Default 35. */
   caMaxAgeDays?: number;
+  /**
+   * Only the assets in scope (docs/kpis.md §0.2; default all): values, cost, net invested
+   * and flags of those assets alone, as if the other assets' rows were not in the ledger.
+   * Cash, when tracked, is not an asset and stays whole.
+   */
+  scope?: AssetScope;
 }
 
 /**
@@ -82,7 +89,8 @@ export interface PortfolioSnapshot {
  * rather than writing a snapshot with a hole in it.
  */
 export function buildSnapshot(input: SnapshotInput): PortfolioSnapshot {
-  const { date, transactions, fallbackPrices } = input;
+  const { date, fallbackPrices } = input;
+  const transactions = scopeTransactions(input.transactions, input.scope);
   const staleAfter = input.staleAfterDays ?? DEFAULT_STALE_AFTER_DAYS;
   const caMaxAge = input.caMaxAgeDays ?? DEFAULT_CA_MAX_AGE_DAYS;
 
@@ -94,7 +102,13 @@ export function buildSnapshot(input: SnapshotInput): PortfolioSnapshot {
     if (standIn) fromFallback.add(assetId);
     return standIn;
   };
-  const holdings = computeHoldings({ ...input, prices, asOf: date });
+  const holdings = computeHoldings({
+    ...input,
+    transactions,
+    prices,
+    asOf: date,
+    scope: undefined,
+  });
   const unvalued = holdings.filter((h) => !h.marketValueEur).map((h) => h.assetId);
   if (unvalued.length > 0) throw new MissingValuationError([...new Set(unvalued)], date);
 
@@ -110,7 +124,7 @@ export function buildSnapshot(input: SnapshotInput): PortfolioSnapshot {
     costBasis = costBasis.plus(h.costBasisEur);
   }
   const trackCash = input.trackCash ?? false;
-  const cashEur = trackCash ? cashBalanceEur(transactions, date) : null;
+  const cashEur = trackCash ? cashBalanceEur(input.transactions, date) : null;
   const positions = Object.values(byType).reduce((s, v) => s.plus(v), ZERO);
 
   const valuationFlags = holdings.map((h) => flagFor(h, date, fromFallback, staleAfter, caMaxAge));

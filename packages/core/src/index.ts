@@ -21,6 +21,7 @@ export * from './positions';
 export * from './prices';
 export * from './returns';
 export * from './sanity';
+export * from './scope';
 export * from './series';
 export * from './snapshot';
 export * from './twr';

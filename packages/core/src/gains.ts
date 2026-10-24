@@ -3,6 +3,7 @@ import { ZERO, type Decimal } from './decimal';
 import { MissingValuationError } from './errors';
 import { runFifo } from './fifo';
 import type { Holding } from './holdings';
+import { scopeHoldings, scopeTransactions, type AssetScope } from './scope';
 import {
   acquisitionCostEur,
   amountEur,
@@ -40,9 +41,13 @@ export function netContributions(
  * what sells and redemptions returned (fees out), EUR at each row's trade-time rate.
  * Deposits, withdrawals, income, fee rows and transfers are not counted (assumption #24).
  */
-export function netInvestedEur(transactions: readonly Transaction[], asOf?: IsoDate): Decimal {
+export function netInvestedEur(
+  transactions: readonly Transaction[],
+  asOf?: IsoDate,
+  scope?: AssetScope,
+): Decimal {
   let net = ZERO;
-  for (const tx of prepareLedger(transactions, asOf)) {
+  for (const tx of prepareLedger(scopeTransactions(transactions, scope), asOf)) {
     if (isAcquisition(tx.type)) net = net.plus(acquisitionCostEur(tx));
     else if (isDisposal(tx.type)) net = net.minus(disposalProceedsEur(tx));
   }
@@ -94,8 +99,12 @@ export function gainsSummary(input: {
   holdings: readonly Holding[];
   asOf: IsoDate;
   caSubscriptions?: readonly { id: string; transactionId: string }[];
+  /** Only the assets in scope (docs/kpis.md §0.2); default all. */
+  scope?: AssetScope;
 }): GainsSummary {
-  const { transactions, holdings, asOf } = input;
+  const { asOf } = input;
+  const transactions = scopeTransactions(input.transactions, input.scope);
+  const holdings = scopeHoldings(input.holdings, input.scope);
   const unvalued = holdings.filter((h) => !h.unrealizedGainEur).map((h) => h.assetId);
   if (unvalued.length > 0) throw new MissingValuationError([...new Set(unvalued)], asOf);
 

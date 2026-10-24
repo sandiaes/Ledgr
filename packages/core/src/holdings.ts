@@ -3,6 +3,7 @@ import type { IsoDate } from './dates';
 import { ZERO, type Decimal } from './decimal';
 import { LedgerError } from './errors';
 import { runFifo, type Lot } from './fifo';
+import { scopeTransactions, type AssetScope } from './scope';
 import type { Asset, AssetType, FxLookup, PriceLookup, PriceQuote, Transaction } from './types';
 
 export interface HoldingsInput {
@@ -13,6 +14,8 @@ export interface HoldingsInput {
   fx: FxLookup;
   /** Needed to value certificados by factor; without it they fall back to `prices`. */
   ca?: CaContext;
+  /** Only the assets in scope (docs/kpis.md §0.2); default all. */
+  scope?: AssetScope;
 }
 
 export type HoldingValuation =
@@ -74,7 +77,8 @@ export interface Holding {
 
 /** Open positions per asset as of `asOf`. Closed positions are omitted. */
 export function computeHoldings(input: HoldingsInput): Holding[] {
-  const { transactions, asOf, ca } = input;
+  const { asOf, ca } = input;
+  const transactions = scopeTransactions(input.transactions, input.scope);
   const assets = new Map(input.assets.map((a) => [a.id, a]));
   const { openLots } = runFifo(transactions, { asOf, caSubscriptions: ca?.subscriptions });
 

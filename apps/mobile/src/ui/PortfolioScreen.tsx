@@ -1,9 +1,10 @@
-import type { IsoDate, PortfolioUnvalued } from '@ledgr/core';
+import type { IsoDate, PortfolioUnvalued, ScopedView } from '@ledgr/core';
 import type { ReactNode } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { PortfolioResult, PortfolioState } from '../data/usePortfolio';
 import { formatDate, formatTime } from '../format';
 import { Banner } from './parts';
+import { NothingInScope, ScopeNote } from './Scope';
 import { colors, space } from './theme';
 
 type Ready<V> = Extract<PortfolioState<V>, { status: 'ready' }>;
@@ -11,8 +12,9 @@ type Valued<V> = Exclude<V, PortfolioUnvalued>;
 
 /**
  * The frame of every screen built from the portfolio: pull to refresh, loading, an error in
- * place (a code, never an amount), "as of" with the price date, and the "no FX rate" case
- * in which no figure is shown.
+ * place (a code, never an amount), "as of" with the price date, the "no FX rate" case in
+ * which no figure is shown, and the asset scope: "Excluding certificados" while they are
+ * left out, and an empty state when nothing else is held.
  */
 export function PortfolioScreen<V extends { status: string; today: IsoDate }>(props: {
   state: PortfolioResult<V>;
@@ -46,6 +48,7 @@ export function PortfolioScreen<V extends { status: string; today: IsoDate }>(pr
       );
     } else {
       const newest = (view as { newestPriceDate?: IsoDate | null }).newestPriceDate;
+      const scoped = view as unknown as Partial<ScopedView>;
       body = (
         <>
           <Text style={styles.asOf}>
@@ -53,7 +56,12 @@ export function PortfolioScreen<V extends { status: string; today: IsoDate }>(pr
             {newest ? ` · prices ${formatDate(newest, year)}` : ''}
             {state.liveUnavailable ? ' · live prices unavailable' : ''}
           </Text>
-          {props.children(view as Valued<V>, state as Ready<V>)}
+          <ScopeNote excludeTypes={scoped.excludeTypes} />
+          {scoped.emptyInScope ? (
+            <NothingInScope />
+          ) : (
+            props.children(view as Valued<V>, state as Ready<V>)
+          )}
         </>
       );
     }

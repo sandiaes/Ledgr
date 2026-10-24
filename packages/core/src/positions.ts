@@ -14,6 +14,7 @@ import { acquisitionCostEur, disposalProceedsEur, feesEur, prepareLedger } from 
 import type { PriceRow } from './lookups';
 import { splitAdjustPrices, withLiveQuotes, type StoredPriceRow } from './prices';
 import { rangeStart, type SeriesRange } from './returns';
+import { scopeTransactions, type AssetScope } from './scope';
 import { CHART_MAX_POINTS, thinSeries } from './series';
 import type { Transaction, TransactionType } from './types';
 
@@ -201,21 +202,26 @@ export interface AssetTransactionRow {
   totalEur: Decimal;
 }
 
-/** The asset's ledger rows up to `asOf`, newest first (the reverse of the FIFO order). */
+/**
+ * The asset's ledger rows up to `asOf`, newest first (the reverse of the FIFO order); none
+ * when the asset is not in `scope`.
+ */
 export function assetTransactions(
   transactions: readonly Transaction[],
   assetId: string,
   asOf?: IsoDate,
+  scope?: AssetScope,
 ): AssetTransactionRow[] {
-  return transactionRows(transactions, asOf).filter((r) => r.assetId === assetId);
+  return transactionRows(transactions, asOf, scope).filter((r) => r.assetId === assetId);
 }
 
-/** Every ledger row up to `asOf`, newest first (the Activity list). */
+/** Every ledger row up to `asOf` in `scope` (default all), newest first (the Activity list). */
 export function transactionRows(
   transactions: readonly Transaction[],
   asOf?: IsoDate,
+  scope?: AssetScope,
 ): AssetTransactionRow[] {
-  return prepareLedger(transactions, asOf)
+  return prepareLedger(scopeTransactions(transactions, scope), asOf)
     .reverse()
     .map((t) => ({
       id: t.id,

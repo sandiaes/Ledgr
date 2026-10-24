@@ -3,17 +3,23 @@ import { addDays, addMonths, daysBetween, yearOf, type IsoDate } from './dates';
 import { Decimal, ONE, ZERO } from './decimal';
 import { netInvestedEur, rowIncomeNetEur } from './gains';
 import { prepareLedger } from './ledger';
+import { scopeSnapshots, scopeTransactions, type AssetScope } from './scope';
 import { twr, type ValuePoint } from './twr';
-import type { Transaction } from './types';
+import type { AssetType, Transaction } from './types';
 import { xirr, type CashFlow, type XirrFailure } from './xirr';
 
-/** The two public.portfolio_snapshots columns the return figures need. */
+/** The public.portfolio_snapshots columns the return figures need. */
 export interface ValueSnapshot {
   date: IsoDate;
   /** total_value_eur: V(d). */
   valueEur: Decimal;
   /** net_contributions_eur: net invested NI(d). */
   netInvestedEur: Decimal;
+  /**
+   * The per-type value columns (stock_value_eur, ...). Needed only when a scope leaves a
+   * type out (`scopeSnapshots`).
+   */
+  valueByTypeEur?: Record<AssetType, Decimal>;
 }
 
 export interface ReturnsInput {
@@ -22,8 +28,13 @@ export interface ReturnsInput {
   snapshots: readonly ValueSnapshot[];
   /** T, the owner's local date. */
   today: IsoDate;
-  /** V(T), the value now. */
+  /** V(T), the value now (of the portfolio in scope). */
   valueTodayEur: Decimal;
+  /**
+   * The assets covered (docs/kpis.md §0.2; default all): flows and NI from the rows in
+   * scope, V(d) from the snapshots' columns of the types in scope.
+   */
+  scope?: AssetScope;
 }
 
 export type ReturnPeriod = 'sinceStart' | 'ytd' | '1y';
@@ -66,10 +77,12 @@ interface Context {
 }
 
 function context(input: ReturnsInput): Context {
-  const ledger = prepareLedger(input.transactions, input.today);
-  const snapshots = input.snapshots
-    .filter((s) => s.date < input.today)
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const ledger = prepareLedger(scopeTransactions(input.transactions, input.scope), input.today);
+  const snapshots = scopeSnapshots(
+    input.snapshots.filter((s) => s.date < input.today),
+    input.transactions,
+    input.scope,
+  ).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const byDate = new Map<IsoDate, ValueSnapshot>();
   for (const s of snapshots) {
     if (byDate.has(s.date)) throw new RangeError(`Duplicate snapshot on ${s.date}`);
@@ -307,16 +320,21 @@ export function rangeStart(range: SeriesRange, today: IsoDate, first: IsoDate): 
 
 /**
  * Value vs net invested for a chart range (docs/kpis.md §4): one point per snapshot day in
- * the range, plus today's point (V(T), NI(T)).
+ * the range, plus today's point (V(T), NI(T)), which the caller computes for the same
+ * scope. With a scope leaving types out, the snapshots are scoped (`scopeSnapshots`) from
+ * the whole ledger `transactions`.
  */
 export function valueSeries(
   snapshots: readonly ValueSnapshot[],
   today: ValueSnapshot,
   range: SeriesRange,
+  scoped?: { scope: AssetScope; transactions: readonly Transaction[] },
 ): ValueSeries {
-  const sorted = snapshots
-    .filter((s) => s.date < today.date)
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const sorted = scopeSnapshots(
+    snapshots.filter((s) => s.date < today.date),
+    scoped?.transactions ?? [],
+    scoped?.scope,
+  ).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const from = rangeStart(range, today.date, sorted[0]?.date ?? today.date);
   const points = [...sorted.filter((s) => s.date >= from), today];
   const first = points[0] as ValueSnapshot;

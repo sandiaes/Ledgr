@@ -18,6 +18,7 @@ import { assetLabel, assetName, brokerLabel, typeLabel, useNames, type Names } f
 import { Amount, Money, Pct, Units } from '../ui/Money';
 import { Banner, Button, Card, Line, Segmented } from '../ui/parts';
 import { PortfolioScreen } from '../ui/PortfolioScreen';
+import { excludesCertificados } from '../ui/Scope';
 import { colors, space } from '../ui/theme';
 import { Badge, ValuationBadge } from './PositionRowView';
 import { PriceChart } from './PriceChart';
@@ -44,6 +45,17 @@ function Detail(props: { view: PositionsView; market: Market; assetId: string; n
   const navigation = useRootNavigation();
   const p = view.details[assetId];
   const row = view.positions.find((r) => r.assetId === assetId);
+  const type = names.assets.get(assetId)?.assetType;
+  if (type && excludesCertificados(view.excludeTypes) && type === 'certificado_aforro') {
+    return (
+      <Card>
+        <Text style={styles.muted}>
+          Not included: certificados are excluded (Dashboard, “Include certificados de aforro”).
+          They stay under More › Certificados.
+        </Text>
+      </Card>
+    );
+  }
   if (!p || !row) {
     return (
       <Card>

@@ -2,6 +2,7 @@ import type { DayChange } from './daychange';
 import { ZERO, type Decimal } from './decimal';
 import { MissingValuationError } from './errors';
 import type { Holding } from './holdings';
+import { scopeHoldings, type AssetScope } from './scope';
 
 /** One open position for the Top positions card (docs/kpis.md §6). */
 export interface TopPosition {
@@ -15,10 +16,16 @@ export interface TopPosition {
 }
 
 /**
- * Open positions by value, largest first (ties by asset id); `limit` keeps the first ones.
+ * Open positions by value, largest first (ties by asset id); `limit` keeps the first ones;
+ * `scope` (default all) the assets in scope, weighted by their own total.
  * Throws MissingValuationError if any holding has no market value.
  */
-export function topPositions(holdings: readonly Holding[], limit?: number): TopPosition[] {
+export function topPositions(
+  allHoldings: readonly Holding[],
+  limit?: number,
+  scope?: AssetScope,
+): TopPosition[] {
+  const holdings = scopeHoldings(allHoldings, scope);
   assertValued(holdings);
   const total = holdings.reduce((s, h) => s.plus(h.marketValueEur as Decimal), ZERO);
   const rows = holdings
@@ -70,11 +77,14 @@ export function topMovers(input: {
   holdings: readonly Holding[];
   by?: 'eur' | 'pct';
   limit?: number;
+  /** Only the assets in scope (default all); `day` should be computed for the same scope. */
+  scope?: AssetScope;
 }): TopMovers {
-  const { day, holdings, by = 'eur', limit = 3 } = input;
+  const { day, by = 'eur', limit = 3, scope } = input;
+  const holdings = scopeHoldings(input.holdings, scope);
   assertValued(holdings);
   const dayMovers: Mover[] = day.assets
-    .filter((a) => a.held)
+    .filter((a) => a.held && (!scope || scope.includes(a.assetId)))
     .map((a) => ({
       assetId: a.assetId,
       valueEur: a.valueTodayEur,

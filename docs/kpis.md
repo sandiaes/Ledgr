@@ -98,6 +98,34 @@ Example (2025, one asset, no fees):
 - Without the sale (_V_ = 2,200 on 31 Dec), _NI_ = 2,200 and both returns are the same:
   selling moves money out, it does not create a return.
 
+## 0.2 Asset scope: with or without certificados (slice 5d, built 2026-10-24, #40)
+
+The app has one setting, "Include certificados de aforro" (default on;
+`docs/app-plan.md` §10). When it is off, **every** figure in this document is computed for
+the portfolio _without_ certificados, by the same definitions applied to scoped inputs:
+
+- **Ledger in scope** _L'_: the rows whose asset is not a certificado. Rows without an asset
+  (cash interest, fee rows, deposits, withdrawals) stay in.
+- **Holdings, _V(T)_, _V(Y)_**: FIFO and valuation over _L'_ (valuation is per asset, so
+  this is the in-scope assets' value).
+- **_V(d)_ of a past day**: the sum of that day's snapshot columns of the in-scope types,
+  `stock_value_eur + etf_value_eur + crypto_value_eur` (a sum of what is in scope, never
+  `total − certificados`). Days before the first row of _L'_ have no point (the portfolio
+  in scope did not exist yet).
+- **_F(d)_, _NI(d)_, _R_, _U_, _I_, _C_, _G_**: from _L'_. _NI(d)_ is computed from _L'_ (the
+  snapshot stores net invested only as a total).
+- **XIRR, TWR, monthly and yearly returns**: §3 and §5 with the scoped _V_ and _F_;
+  "Since start" begins the day before the first row of _L'_. They are recomputed, never
+  derived from the full figures (a rate cannot be split by subtraction).
+- **Allocation weights** divide by the scoped _V(T)_, so they sum to 100%.
+- **Brokers**: §8's rule on _L'_; a broker with nothing in scope (the certificados broker)
+  is not listed, and the brokers still add up to the scoped totals.
+- **Freshness**: no certificado factor indicator while certificados are out.
+- Not affected: the Certificados screen, the factor update and New transaction (and its
+  checks, which always use the whole ledger).
+
+With the setting on, every figure is exactly what it was before the setting existed.
+
 ## 1. Totals
 
 | KPI                     | Definition                                                                                 |
@@ -212,7 +240,8 @@ going to the earlier month. A month containing rows with `trade_date_precision =
 
 ## 6. Allocation
 
-Weight of group _k_ = _V_k(T)_ ÷ _V(T)_ (positions only; there is no cash). Groups:
+Weight of group _k_ = _V_k(T)_ ÷ _V(T)_ (positions only; there is no cash; with
+certificados excluded, both are of the scoped portfolio, §0.2). Groups:
 
 | Dimension            | Group key                       | Value of the group                                     |
 | -------------------- | ------------------------------- | ------------------------------------------------------ |
@@ -302,3 +331,4 @@ result.
 | Units held, most that can be sold on a date | `unitsHeld`, `maxDisposable` (`validation.ts`)                |
 | Certificado subscription, factor age (§8)   | `certificadoSubscriptions` (`certificados.ts`)                |
 | Factor update: change vs last month (§8)    | `factorChange`, `factorUpdateLines` (`certificados.ts`)       |
+| Asset scope (§0.2)                          | `scope.ts`; a `scope` option (`docs/app-plan.md` §10.3)       |
