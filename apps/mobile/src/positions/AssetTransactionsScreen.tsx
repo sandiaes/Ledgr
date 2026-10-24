@@ -1,90 +1,106 @@
-import { assetTransactions, buildPositions } from '@ledgr/core';
-import { useEffect, useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { assetTransactions, buildPositions, type AssetTransactionRow } from '@ledgr/core';
+import { useMemo } from 'react';
+import { View } from 'react-native';
 import { usePortfolio } from '../data/usePortfolio';
 import { formatDate } from '../format';
-import { useRootNavigation, useRootRoute } from '../navigation';
-import { assetLabel, brokerLabel, TRANSACTION_TYPE_LABELS, useNames } from '../ui/labels';
+import { useRootRoute } from '../navigation';
 import { Amount } from '../ui/Amount';
-import { Money, Units } from '../ui/Money';
-import { Card } from '../ui/parts';
+import { EmptyState } from '../ui/EmptyState';
+import {
+  assetLabel,
+  brokerLabel,
+  TRANSACTION_TYPE_LABELS,
+  useNames,
+  type Names,
+} from '../ui/labels';
+import { ListRow } from '../ui/ListRow';
 import { PortfolioScreen } from '../ui/PortfolioScreen';
-import { space, type Colors } from '../ui/theme';
-import { useStyles } from '../ui/ThemeProvider';
+import { Section } from '../ui/Section';
+import { SkeletonRows } from '../ui/Skeleton';
+import { T } from '../ui/T';
 
 /** The asset's ledger rows, newest first. */
 export function AssetTransactionsScreen() {
-  const styles = useStyles(makeStyles);
   const { assetId } = useRootRoute<'AssetTransactions'>().params;
   const state = usePortfolio(buildPositions);
   const ledger = state.status === 'ready' ? state.ledger : null;
   const names = useNames(ledger);
-  const navigation = useRootNavigation();
-  useEffect(() => {
-    navigation.setOptions({ title: `${assetLabel(names, assetId)} transactions` });
-  }, [navigation, names, assetId]);
   const rows = useMemo(
     () => (ledger ? assetTransactions(ledger.transactions, assetId) : []),
     [ledger, assetId],
   );
   return (
-    <PortfolioScreen state={state} what="transactions">
-      {(view) => (
-        <Card>
-          {rows.length === 0 ? <Text style={styles.muted}>No transactions.</Text> : null}
-          {rows.map((r) => (
-            <View key={r.id} style={styles.row} testID="asset-transaction">
-              <View style={styles.line}>
-                <Text style={styles.type}>
-                  {TRANSACTION_TYPE_LABELS[r.type]}
-                  <Text style={styles.muted}>
-                    {'  '}
-                    {r.monthOnly
-                      ? `${formatDate(r.date, view.today.slice(0, 4))} · month only`
-                      : formatDate(r.date, view.today.slice(0, 4))}
-                  </Text>
-                </Text>
-                <Money value={r.totalEur} style={styles.total} />
-              </View>
-              <View style={styles.line}>
-                <Text style={styles.muted}>
-                  {brokerLabel(names, r.accountId)}
-                  {r.transferToAccountId ? ` → ${brokerLabel(names, r.transferToAccountId)}` : ''}
-                </Text>
-                <View style={styles.figures}>
-                  {r.quantity ? <Units value={r.quantity} style={styles.muted} /> : null}
-                  {r.quantity && r.unitPrice ? (
-                    <>
-                      <Text style={styles.muted}>@</Text>
-                      <Amount value={r.unitPrice} currency={r.currency} style={styles.muted} />
-                    </>
-                  ) : null}
-                  {r.feesEur.isZero() ? null : (
-                    <>
-                      <Text style={styles.muted}>· fees</Text>
-                      <Money value={r.feesEur} style={styles.muted} />
-                    </>
-                  )}
-                </View>
-              </View>
-            </View>
-          ))}
-        </Card>
-      )}
+    <PortfolioScreen state={state} what="transactions" skeleton={<SkeletonRows n={6} />}>
+      {(view) =>
+        rows.length === 0 ? (
+          <EmptyState
+            title="No transactions"
+            line={`Nothing in the ledger for ${assetLabel(names, assetId)}.`}
+          />
+        ) : (
+          <Section title={`${assetLabel(names, assetId)} transactions`}>
+            {rows.map((r, i) => (
+              <TransactionRow
+                key={r.id}
+                r={r}
+                names={names}
+                year={view.today.slice(0, 4)}
+                last={i === rows.length - 1}
+              />
+            ))}
+          </Section>
+        )
+      }
     </PortfolioScreen>
   );
 }
 
-const makeStyles = (colors: Colors) =>
-  StyleSheet.create({
-    row: {
-      paddingVertical: space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-    figures: { flexDirection: 'row', gap: 4, alignItems: 'baseline' },
-    type: { fontSize: 14, fontWeight: '600', color: colors.text },
-    total: { fontSize: 14, color: colors.text },
-    muted: { color: colors.muted, fontSize: 12, fontWeight: '400' },
-  });
+function TransactionRow(props: {
+  r: AssetTransactionRow;
+  names: Names;
+  year: string;
+  last: boolean;
+}) {
+  const { r, names, year } = props;
+  return (
+    <ListRow
+      testID="asset-transaction"
+      last={props.last}
+      title={
+        <T variant="headline" numberOfLines={1}>
+          {TRANSACTION_TYPE_LABELS[r.type]}
+          <T variant="sub" tone="muted">
+            {'  '}
+            {r.monthOnly ? `${formatDate(r.date, year)} · month only` : formatDate(r.date, year)}
+          </T>
+        </T>
+      }
+      subtitle={
+        <View>
+          <T variant="sub" tone="muted">
+            {brokerLabel(names, r.accountId)}
+            {r.transferToAccountId ? ` → ${brokerLabel(names, r.transferToAccountId)}` : ''}
+          </T>
+          {r.quantity || !r.feesEur.isZero() ? (
+            <T variant="caption" tone="muted">
+              {r.quantity ? <Amount kind="units" value={r.quantity} /> : null}
+              {r.quantity && r.unitPrice ? (
+                <>
+                  {' @ '}
+                  <Amount value={r.unitPrice} currency={r.currency} />
+                </>
+              ) : null}
+              {r.feesEur.isZero() ? null : (
+                <>
+                  {r.quantity ? ' · fees ' : 'fees '}
+                  <Amount value={r.feesEur} />
+                </>
+              )}
+            </T>
+          ) : null}
+        </View>
+      }
+      right={<Amount value={r.totalEur} variant="headline" />}
+    />
+  );
+}

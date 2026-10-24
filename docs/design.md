@@ -1,7 +1,8 @@
 # Mobile UI overhaul: design system and plan
 
-Status: **Phase A approved 2026-10-24 with the decisions in §10. Slice U1 built
-2026-10-24** (what differs from the text below is in "Built in U1"); U2 and U3 are not built.
+Status: **Phase A approved 2026-10-24 with the decisions in §10. Slices U1 and U2 built
+2026-10-24** (what differs from the text below is in "Built in U1" and "Built in U2"); U3 is
+not built.
 This is a restyle and restructure of `apps/mobile`: no financial calculation
 changes, and the UI language stays English. The one new figure (the chart's period return,
 §6.1) is a combination of figures core already computes; it is defined in `docs/kpis.md`
@@ -39,6 +40,46 @@ Everything in §8 U1 is built. Where the build differs from the text of this doc
   order, tab bar, one dashboard build, top movers layout, chart return, privacy on every
   screen, and two source scans (no colour value outside `theme.ts`, no amount formatter outside
   `ui/Amount.tsx`).
+
+## Built in U2 (2026-10-24)
+
+Everything in §8 U2 is built: Positions (All, By broker, By type, Closed), Position detail,
+Broker detail, Asset transactions, Allocation, Performance, Activity and Transaction detail.
+No figure, sort order, filter or search rule changed. Where the build differs from the text
+below:
+
+- **Sticky controls are outside the list.** React Native can pin only one level of sticky
+  headers, so Positions keeps its segments and search row fixed above the list, and the list
+  pins its own group headers (the type names in By type, the months in Activity). Activity's
+  one control row (Filter, Clear filters) is fixed the same way. Both lists are `SectionList`s
+  that scroll themselves (`PortfolioScreen` takes `list`); the "as of" line, scope note and
+  the Sort / Filter panels are the top of the list, and opening a panel scrolls to it.
+- **Activity filters stay a Filter button and a panel** (asset search, broker, type, date as
+  chips), not the row of drop-down chips of §7.4: that would change how the filters work.
+- **Activity amounts carry a sign**: − on a purchase, subscription or fee, + on a sale,
+  redemption, dividend or interest (`listedTotal`), in the normal text colour: a purchase is
+  not a loss. The figure is the row's `totalEur`; only its sign is chosen for display.
+- **Performance order**: the Monthly / Yearly switch, the bar chart, best and worst month,
+  then the table (a long table would otherwise push the summary out of sight).
+- **Charts**: `ChartFrame` takes `xLabels` (the first and last date, faint, under the chart;
+  no y labels, which would be amounts). The price chart is the value line over its area, like
+  the Dashboard's. Bars have 12 dp bars and a 50 dp pair pitch so "Oct 2026" fits, four dashed
+  rules in `chart.axis`, a zero line in `faint`, and labels at `caption` size in `faint`
+  (they were 9 pt). The donut has a ground-coloured gap between arcs so neighbouring hues stay
+  apart in dark; on Allocation it is a thinner ring with the largest group's % in the centre.
+  Chart data and tooltip configs are memoized (core already thins every series to 300
+  points), and the tooltip is one component (`ChartTooltip`) for both line charts.
+- **`ui/Badge`** has `warning` and `danger` tints for the screens that used them (the
+  certificados "over 35 days" badge); everywhere else it is the quiet default.
+- **Empty and loading states**: `NothingInScope` is an `EmptyState`; each screen's skeleton
+  mirrors its layout; lists show "No positions match." / "No transactions match" with a
+  search icon; `FigureLine` (the Dashboard's label-and-figures row) moved to `ui/` and is
+  used by the detail screens.
+- **Lists render 20 (Positions) and 30 (Activity, whose month headers count as cells) rows
+  before virtualizing**, so a normal ledger paints without blank rows.
+- **Tests**: the Allocation row tests read the row's label at index 0 instead of 1 (the
+  colour dot is now a view, not a text). New: masked and unmasked list row and chart tooltip,
+  the lists' states and pull to refresh, signed Activity totals, distinct chart colours.
 
 ## 1. Principles
 

@@ -1,4 +1,5 @@
 import type { Decimal } from '@ledgr/core';
+import { useCallback } from 'react';
 import { Text, type StyleProp, type TextStyle } from 'react-native';
 import { formatAmount, formatPct, formatUnits } from '../format';
 import { useHideValues } from '../settings/SettingsProvider';
@@ -32,7 +33,8 @@ function format(value: Decimal | null, f: AmountFormat): string {
  */
 export function useMaskedText(): (value: Decimal | null, f?: AmountFormat) => string {
   const [hidden] = useHideValues();
-  return (value, f = {}) => (hidden ? MASK : format(value, f));
+  // Stable while the switch does not change, so a chart's tooltip config can be memoized.
+  return useCallback((value, f = {}) => (hidden ? MASK : format(value, f)), [hidden]);
 }
 
 /**

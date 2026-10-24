@@ -3,9 +3,11 @@ import {
   addMonths,
   assertIsoDate,
   type AssetTransactionRow,
+  type Decimal,
   type IsoDate,
   type TransactionType,
 } from '@ledgr/core';
+import type { IconRole } from '../ui/Icon';
 
 export type DateRange = 'all' | '1M' | '3M' | 'YTD' | '1Y' | 'custom';
 
@@ -137,4 +139,43 @@ export function groupByMonth(
     else groups.push({ month, rows: [r] });
   }
   return groups;
+}
+
+/** The icon of a row's type: down for money put in a position, up for money taken out. */
+export const ACTIVITY_ICONS: Record<TransactionType, IconRole> = {
+  buy: 'buy',
+  subscription: 'buy',
+  sell: 'sell',
+  redemption: 'sell',
+  dividend: 'income',
+  interest: 'income',
+  fee: 'other',
+  deposit: 'other',
+  withdrawal: 'other',
+  transfer: 'other',
+};
+
+/** Money leaving your pocket (a purchase, a fee) or coming back to it (proceeds, income). */
+const CASH_DIRECTION: Partial<Record<TransactionType, 'out' | 'in'>> = {
+  buy: 'out',
+  subscription: 'out',
+  fee: 'out',
+  sell: 'in',
+  redemption: 'in',
+  dividend: 'in',
+  interest: 'in',
+};
+
+/**
+ * A row's total as the list shows it: money out with a −, money in with a +, other rows
+ * (a transfer's fee, deposits) unsigned. Only the sign of the figure core computed changes;
+ * the amount is the row's own `totalEur`.
+ */
+export function listedTotal(row: Pick<AssetTransactionRow, 'type' | 'totalEur'>): {
+  value: Decimal;
+  sign: boolean;
+} {
+  const direction = CASH_DIRECTION[row.type];
+  if (direction === 'out') return { value: row.totalEur.neg(), sign: true };
+  return { value: row.totalEur, sign: direction === 'in' };
 }

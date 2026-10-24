@@ -10,13 +10,14 @@ import type {
   XirrFigure,
 } from '@ledgr/core';
 import { SERIES_RANGES } from '@ledgr/core';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { formatDate } from '../format';
 import { useRootNavigation } from '../navigation';
 import { Amount } from '../ui/Amount';
 import { ChartFrame } from '../ui/ChartFrame';
 import { Chip } from '../ui/Chip';
+import { FigureLine as Line } from '../ui/FigureLine';
 import { typeLabel } from '../ui/labels';
 import { ListRow } from '../ui/ListRow';
 import { Banner } from '../ui/parts';
@@ -34,23 +35,6 @@ const label = (assets: AssetNames, id: string) => {
   const a = assets.get(id);
   return a?.ticker || a?.name || 'Unknown asset';
 };
-
-/** A label on the left, a figure on the right. */
-function Line(props: { label: string; children: ReactNode; strong?: boolean; sub?: boolean }) {
-  const styles = useStyles(makeStyles);
-  return (
-    <View style={styles.line}>
-      <T
-        variant={props.strong ? 'headline' : 'body'}
-        tone={props.sub ? 'muted' : 'text'}
-        style={styles.lineLabel}
-      >
-        {props.label}
-      </T>
-      <View style={styles.lineValue}>{props.children}</View>
-    </View>
-  );
-}
 
 /** "2 prices stale", "1 price pending", "CA factor 41 days old"; tap for the assets. */
 export function Freshness({ view, assets }: { view: DashboardView; assets: AssetNames }) {
@@ -228,11 +212,14 @@ export function ChartSection({ view }: { view: DashboardView }) {
   const [range, setRange] = useState<SeriesRange>('1Y');
   const s = view.series[range];
   const twr = s.periodReturn.twr;
+  const first = s.chart[0];
+  const last = s.chart[s.chart.length - 1];
   return (
     <Section title="Value vs net invested" testID="chart-section">
       <ChartFrame
         height={CHART_HEIGHT}
         empty={s.chart.length < 2}
+        xLabels={first && last ? [formatDate(first.date), formatDate(last.date)] : undefined}
         controls={
           <SegmentedControl
             options={SERIES_RANGES.map((r) => ({ value: r, label: r }))}
@@ -436,7 +423,6 @@ const makeStyles = (colors: Colors) =>
       paddingVertical: space.xs,
       gap: space.md,
     },
-    lineLabel: { flexShrink: 1 },
     lineValue: { flexDirection: 'row', gap: space.sm, alignItems: 'baseline' },
     divider: {
       height: StyleSheet.hairlineWidth,

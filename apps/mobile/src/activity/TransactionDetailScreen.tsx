@@ -6,7 +6,7 @@ import {
 } from '@ledgr/core';
 import { useMutation } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { errorCode } from '../auth/errors';
 import { useLedger, useRefreshAfterWrite, useToday } from '../data/usePortfolio';
 import { formatDate } from '../format';
@@ -21,14 +21,19 @@ import {
   type Names,
 } from '../ui/labels';
 import { Amount } from '../ui/Amount';
-import { Money, Units } from '../ui/Money';
-import { Banner, Button, Card, Line } from '../ui/parts';
-import { space, type Colors } from '../ui/theme';
-import { useStyles } from '../ui/ThemeProvider';
+import { ErrorState } from '../ui/EmptyState';
+import { FigureLine } from '../ui/FigureLine';
+import { Banner, Button } from '../ui/parts';
+import { Section } from '../ui/Section';
+import { SkeletonRows } from '../ui/Skeleton';
+import { T } from '../ui/T';
+import { radius, space, type Colors } from '../ui/theme';
+import { useColors, useStyles } from '../ui/ThemeProvider';
 
 /** One ledger row: its fields, Edit (form rows only) and Delete (soft, with confirmation). */
 export function TransactionDetailScreen() {
   const styles = useStyles(makeStyles);
+  const colors = useColors();
   const { id } = useRootRoute<'TransactionDetail'>().params;
   const navigation = useRootNavigation();
   const ledger = useLedger();
@@ -54,18 +59,34 @@ export function TransactionDetailScreen() {
     [ledger.data, tx],
   );
 
+  const refresh = (
+    <RefreshControl
+      refreshing={ledger.isRefetching}
+      onRefresh={() => void ledger.refetch()}
+      colors={[colors.accent]}
+      progressBackgroundColor={colors.raised}
+    />
+  );
   if (ledger.isError) {
     return (
-      <ScrollView contentContainerStyle={styles.content}>
-        <Banner tone="error">Could not load the row ({errorCode(ledger.error)}).</Banner>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={refresh}>
+        <ErrorState title="Could not load the row" code={errorCode(ledger.error)} />
       </ScrollView>
     );
   }
-  if (!ledger.data) return <Text style={styles.status}>Loading…</Text>;
+  if (!ledger.data) {
+    return (
+      <View style={styles.loading} testID="transaction-loading">
+        <SkeletonRows n={6} />
+      </View>
+    );
+  }
   if (!tx || !row) {
     return (
-      <ScrollView contentContainerStyle={styles.content}>
-        <Banner tone="warning">This row no longer exists (deleted).</Banner>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={refresh}>
+        <Section>
+          <Banner tone="warning">This row no longer exists (deleted).</Banner>
+        </Section>
       </ScrollView>
     );
   }
@@ -73,54 +94,58 @@ export function TransactionDetailScreen() {
   const year = today.slice(0, 4);
   const title = describe(names, tx.type, tx.assetId, tx.accountId, formatDate(tx.tradeDate, year));
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <Card title={TRANSACTION_TYPE_LABELS[tx.type]}>
+    <ScrollView
+      contentContainerStyle={styles.content}
+      refreshControl={refresh}
+      keyboardShouldPersistTaps="handled"
+    >
+      <Section title={TRANSACTION_TYPE_LABELS[tx.type]}>
         {tx.assetId ? (
-          <Line label="Asset">
-            <Text style={styles.value}>
+          <FigureLine label="Asset">
+            <T variant="body" style={styles.right}>
               {assetLabel(names, tx.assetId)} · {assetName(names, tx.assetId)}
-            </Text>
-          </Line>
+            </T>
+          </FigureLine>
         ) : null}
-        <Line label="Broker">
-          <Text style={styles.value}>
+        <FigureLine label="Broker">
+          <T variant="body">
             {brokerLabel(names, tx.accountId)}
             {tx.transferToAccountId ? ` → ${brokerLabel(names, tx.transferToAccountId)}` : ''}
-          </Text>
-        </Line>
-        <Line label="Date">
-          <Text style={styles.value}>
+          </T>
+        </FigureLine>
+        <FigureLine label="Date">
+          <T variant="body">
             {formatDate(tx.tradeDate, year)}
             {row.monthOnly ? ' (month only)' : ''}
-          </Text>
-        </Line>
+          </T>
+        </FigureLine>
         {tx.quantity ? (
-          <Line label="Quantity">
-            <Units value={tx.quantity} style={styles.value} />
-          </Line>
+          <FigureLine label="Quantity">
+            <Amount kind="units" value={tx.quantity} />
+          </FigureLine>
         ) : null}
         {tx.unitPrice ? (
-          <Line label="Unit price">
-            <Amount value={tx.unitPrice} currency={tx.currency} style={styles.value} />
-          </Line>
+          <FigureLine label="Unit price">
+            <Amount value={tx.unitPrice} currency={tx.currency} />
+          </FigureLine>
         ) : null}
         {tx.amount ? (
-          <Line label="Amount">
-            <Amount value={tx.amount} currency={tx.currency} style={styles.value} />
-          </Line>
+          <FigureLine label="Amount">
+            <Amount value={tx.amount} currency={tx.currency} />
+          </FigureLine>
         ) : null}
         {tx.withholdingTax && !tx.withholdingTax.isZero() ? (
-          <Line label="Tax withheld">
-            <Amount value={tx.withholdingTax} currency={tx.currency} style={styles.value} />
-          </Line>
+          <FigureLine label="Tax withheld">
+            <Amount value={tx.withholdingTax} currency={tx.currency} />
+          </FigureLine>
         ) : null}
-        <Line label="Fee">
-          <Money value={row.feesEur} style={styles.value} />
-        </Line>
-        <Line label="Total (EUR)" strong>
-          <Money value={row.totalEur} style={styles.strong} />
-        </Line>
-      </Card>
+        <FigureLine label="Fee">
+          <Amount value={row.feesEur} />
+        </FigureLine>
+        <FigureLine label="Total (EUR)" strong>
+          <Amount value={row.totalEur} variant="headline" />
+        </FigureLine>
+      </Section>
 
       <View style={styles.buttons}>
         {editableInApp(tx) ? (
@@ -129,12 +154,12 @@ export function TransactionDetailScreen() {
             onPress={() => navigation.navigate('EditTransaction', { id: tx.id })}
           />
         ) : (
-          <Text style={styles.note}>
+          <T variant="caption" tone="muted" style={styles.note}>
             Rows of this kind are not edited in the app (it would drop fields the form does not
             have); you can delete it.
-          </Text>
+          </T>
         )}
-        <Button label="Delete" kind="plain" onPress={() => setConfirming(true)} />
+        <Button label="Delete" kind="dangerText" onPress={() => setConfirming(true)} />
       </View>
 
       <DeleteDialog
@@ -204,23 +229,26 @@ function DeleteDialog(props: {
     <Modal visible={props.visible} transparent animationType="fade" onRequestClose={props.onClose}>
       <View style={styles.backdrop}>
         <View style={styles.dialog}>
-          <Text style={styles.dialogTitle}>Delete this row?</Text>
-          <Text style={styles.value}>{props.title}</Text>
+          <T variant="title2" style={styles.dialogTitle}>
+            Delete this row?
+          </T>
+          <T variant="body">{props.title}</T>
           {b ? (
-            <Text style={styles.error}>
-              It cannot be deleted: the sale of <Units value={b.requested} style={styles.error} />{' '}
+            <T variant="sub" tone="loss" style={styles.message}>
+              It cannot be deleted: the sale of <Amount kind="units" value={b.requested} />{' '}
               {assetLabel(props.names, b.assetId)} at {brokerLabel(props.names, b.accountId)} on{' '}
               {formatDate(b.date, props.year)} would have only{' '}
-              <Units value={b.available} style={styles.error} /> units. Change or delete that sale
-              first.
-            </Text>
+              <Amount kind="units" value={b.available} /> units. Change or delete that sale first.
+            </T>
           ) : (
-            <Text style={styles.note}>
+            <T variant="sub" tone="muted" style={styles.message}>
               It is removed from every figure (kept in the database as deleted).
-            </Text>
+            </T>
           )}
           {mutation.error ? (
-            <Text style={styles.error}>Not deleted ({errorCode(mutation.error)}). Try again.</Text>
+            <T variant="sub" tone="loss" style={styles.message}>
+              Not deleted ({errorCode(mutation.error)}). Try again.
+            </T>
           ) : null}
           <Button
             label="Delete"
@@ -239,11 +267,10 @@ function DeleteDialog(props: {
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
     content: { paddingTop: space.md, paddingBottom: space.xl },
-    status: { textAlign: 'center', color: colors.muted, marginTop: space.xl },
-    value: { fontSize: 14, color: colors.text },
-    strong: { fontSize: 15, fontWeight: '700', color: colors.text },
-    note: { fontSize: 12, color: colors.muted, marginTop: space.sm },
-    error: { fontSize: 13, color: colors.loss, marginTop: space.sm },
+    loading: { paddingHorizontal: space.lg, paddingTop: space.md },
+    right: { textAlign: 'right', flexShrink: 1 },
+    note: { marginTop: space.sm },
+    message: { marginTop: space.sm },
     buttons: { marginHorizontal: space.lg },
     backdrop: {
       flex: 1,
@@ -251,6 +278,12 @@ const makeStyles = (colors: Colors) =>
       justifyContent: 'center',
       padding: space.xl,
     },
-    dialog: { backgroundColor: colors.modal.surface, borderRadius: 12, padding: space.lg },
-    dialogTitle: { fontSize: 17, fontWeight: '700', color: colors.text, marginBottom: space.sm },
+    dialog: {
+      backgroundColor: colors.modal.surface,
+      borderRadius: radius.md,
+      padding: space.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    dialogTitle: { marginBottom: space.sm },
   });

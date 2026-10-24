@@ -208,6 +208,12 @@ describe('theme tokens', () => {
       for (const fg of chart) expect(ratio(fg, bg)).toBeGreaterThanOrEqual(3);
     });
 
+    it('the allocation colours are all different, so no two slices or bars look alike', () => {
+      const lower = (list: readonly string[]) => new Set(list.map((x) => x.toLowerCase())).size;
+      expect(lower(c.palette)).toBe(c.palette.length);
+      expect(lower(Object.values(c.types))).toBe(4);
+    });
+
     it('gain and loss are told apart by their sign, since their luminance is close', () => {
       // Principle 5 of the design: never colour alone. The tokens may be close in dark.
       expect(c.gain).not.toBe(c.loss);

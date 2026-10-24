@@ -271,7 +271,7 @@ describe('Allocation', () => {
     await screen.findByText('Concentration');
     await fireEvent.press(screen.getByText('Broker'));
     const rows = screen.getAllByTestId('allocation-row');
-    expect(rows.map((r) => within(r).getAllByText(/./)[1]?.props.children)).toEqual([
+    expect(rows.map((r) => within(r).getAllByText(/./)[0]?.props.children)).toEqual([
       'Degiro',
       'IBKR',
       'AforroNet',

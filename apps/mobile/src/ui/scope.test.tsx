@@ -140,7 +140,7 @@ describe('Include certificados de aforro', () => {
       await fireEvent.press(screen.getByText('Broker'));
       const groups = screen
         .getAllByTestId('allocation-row')
-        .map((r) => within(r).getAllByText(/./)[1]?.props.children);
+        .map((r) => within(r).getAllByText(/./)[0]?.props.children);
       expect(groups).toEqual(['Degiro', 'IBKR']);
       expect(screen.getByText('3 largest positions')).toBeOnTheScreen();
     }
