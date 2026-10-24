@@ -107,7 +107,7 @@ export function sampleLedger(today: string): { ledger: Ledger; market: Market } 
       transactions: [buy('t1', '2025-01-02', 'vwce', '10', '123.456')],
       assets: [asset('vwce', 'VWCE', 'Vanguard FTSE All-World')],
       accounts: [{ id: 'degiro', name: 'Degiro' }],
-      ca: { subscriptions: [], factors: [] },
+      ca: { subscriptions: [], factors: [], series: [] },
     },
     market: {
       prices: [{ assetId: 'vwce', date: y, close: dec('145'), currency: 'EUR', splitFactor: null }],
@@ -117,19 +117,59 @@ export function sampleLedger(today: string): { ledger: Ledger; market: Market } 
   };
 }
 
+/**
+ * The data layer in memory. Writes change the ledger the next read returns, keyed by id as
+ * in the database (a second insert of the same id is a no-op), so the screens can be
+ * tested end to end.
+ */
 export function fakeData(fixture: {
   ledger: Ledger;
   market: Market;
   history?: StoredPriceRow[];
-}): jest.Mocked<DataApi> {
+}): jest.Mocked<DataApi> & { rows(): Transaction[] } {
+  const db = fixture.ledger;
   return {
-    ledger: jest.fn(async () => fixture.ledger),
+    rows: () => db.transactions,
+    ledger: jest.fn(async () => ({
+      ...db,
+      transactions: [...db.transactions],
+      assets: [...db.assets],
+      ca: { ...db.ca, factors: [...db.ca.factors] },
+    })),
     market: jest.fn<Promise<Market>, [string, readonly string[]]>(async () => fixture.market),
     snapshots: jest.fn(async () => []),
     priceHistory: jest.fn(async (id: string) =>
       (fixture.history ?? fixture.market.prices).filter((p) => p.assetId === id),
     ),
     valueNow: jest.fn(async () => null),
+    jobRuns: jest.fn(async () => ({
+      prices: { job: 'prices', status: 'ok' as const, finishedAt: '2026-10-23T05:25:41Z' },
+      snapshots: {
+        job: 'snapshots',
+        status: 'partial' as const,
+        finishedAt: '2026-10-23T05:40:12Z',
+      },
+    })),
+    insertTransaction: jest.fn(async (row: Transaction) => {
+      if (!db.transactions.some((t) => t.id === row.id))
+        db.transactions = [...db.transactions, row];
+    }),
+    updateTransaction: jest.fn(async (row: Transaction) => {
+      db.transactions = db.transactions.map((t) => (t.id === row.id ? row : t));
+    }),
+    deleteTransaction: jest.fn(async (id: string) => {
+      db.transactions = db.transactions.filter((t) => t.id !== id);
+    }),
+    insertAsset: jest.fn(async (a) => {
+      if (db.assets.some((x) => x.id === a.id)) return;
+      db.assets = [...db.assets, { ...a, priceSource: 'manual', priceSourceId: null }];
+    }),
+    insertFactors: jest.fn(async (month, rows) => {
+      db.ca.factors = [
+        ...db.ca.factors,
+        ...rows.map((r) => ({ subscriptionId: r.subscriptionId, month, factor: r.factor })),
+      ];
+    }),
   };
 }
 
@@ -249,6 +289,7 @@ export function portfolioLedger(today: string): {
       ],
       ca: {
         subscriptions: [{ id: 's1', seriesId: 'E', transactionId: 'ca-sub' }],
+        series: [{ id: 'E', code: 'E', name: 'Série E' }],
         // In force yesterday and today, and at most 35 days old (not stale).
         factors: [
           {
@@ -291,5 +332,8 @@ export function fakeServices(over: {
     },
     clearSession: jest.fn(async () => undefined),
     projectRef: 'abcdefghijklmnopqrst',
+    newId: jest.fn(() => `id-${++ids}`),
   };
 }
+
+let ids = 0;

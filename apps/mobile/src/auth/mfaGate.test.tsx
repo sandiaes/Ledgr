@@ -1,5 +1,5 @@
 import { MfaRequiredError } from '@ledgr/client';
-import { localDate } from '@ledgr/core';
+import { dec, localDate } from '@ledgr/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { AppRoot } from '../AppRoot';
 import { createSupabaseData } from '../data/supabaseData';
@@ -126,9 +126,122 @@ describe('the data layer', () => {
         'accounts',
         'assets',
         'ca_factors',
+        'ca_series',
         'ca_subscriptions',
         'transactions',
       ]),
     );
+  });
+});
+
+describe('writes', () => {
+  /**
+   * A Supabase client whose every query is recorded when sent; `answer` decides the result
+   * of an insert, an update or a read.
+   */
+  function writeClient(
+    level: 'aal1' | 'aal2',
+    answer: (op: 'insert' | 'update' | 'select', table: string) => unknown = () => ({
+      data: [],
+      error: null,
+    }),
+  ) {
+    const sent: string[] = [];
+    const from = (table: string) => {
+      let op: 'insert' | 'update' | 'select' = 'select';
+      const q: Record<string, unknown> = {};
+      for (const m of ['select', 'is', 'order', 'gte', 'eq', 'lt', 'limit', 'in', 'range']) {
+        q[m] = () => q;
+      }
+      q.insert = () => ((op = 'insert'), q);
+      q.update = () => ((op = 'update'), q);
+      q.then = (ok: (v: unknown) => unknown, fail: (e: unknown) => unknown) => {
+        sent.push(`${op} ${table}`);
+        return Promise.resolve(answer(op, table)).then(ok, fail);
+      };
+      return q;
+    };
+    const client = {
+      auth: {
+        getSession: async () => ({
+          data: { session: { access_token: token({ aal: level }) } },
+          error: null,
+        }),
+      },
+      from,
+      functions: { invoke: jest.fn() },
+    };
+    return {
+      api: createSupabaseData(client as unknown as Parameters<typeof createSupabaseData>[0]),
+      sent,
+    };
+  }
+  const row = sampleLedger(today).ledger.transactions[0]!;
+
+  it('refuses every write (and the job-run read) under aal1 before it is sent', async () => {
+    const { api, sent } = writeClient('aal1');
+    for (const call of [
+      () => api.insertTransaction(row),
+      () => api.updateTransaction(row),
+      () => api.deleteTransaction(row.id),
+      () =>
+        api.insertAsset({
+          id: 'a',
+          name: 'x',
+          assetType: 'stock',
+          ticker: 'X',
+          isin: null,
+          exchange: 'XNAS',
+          tradingCurrency: 'USD',
+        }),
+      () => api.insertFactors('2026-10-01', [{ subscriptionId: 's1', factor: dec('1.1') }]),
+      () => api.jobRuns(),
+    ]) {
+      await expect(call()).rejects.toBeInstanceOf(MfaRequiredError);
+    }
+    expect(sent).toEqual([]);
+  });
+
+  it('a retried insert whose first attempt landed (23505 on the id) counts as saved', async () => {
+    const landed = writeClient('aal2', (op) =>
+      op === 'insert'
+        ? { data: null, error: { code: '23505' } }
+        : { data: [{ id: row.id }], error: null },
+    );
+    await expect(landed.api.insertTransaction(row)).resolves.toBeUndefined();
+    expect(landed.sent).toEqual(['insert transactions', 'select transactions']);
+
+    // 23505 but no row with this id: a real conflict, reported with its code only
+    const other = writeClient('aal2', (op) =>
+      op === 'insert' ? { data: null, error: { code: '23505' } } : { data: [], error: null },
+    );
+    await expect(other.api.insertTransaction(row)).rejects.toMatchObject({ code: '23505' });
+  });
+
+  it('a delete retried after it went through counts as done; an unknown row does not', async () => {
+    const again = writeClient('aal2', (op) =>
+      op === 'update' ? { data: [], error: null } : { data: [{ id: row.id }], error: null },
+    );
+    await expect(again.api.deleteTransaction(row.id)).resolves.toBeUndefined();
+    const gone = writeClient('aal2', () => ({ data: [], error: null }));
+    await expect(gone.api.deleteTransaction(row.id)).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('a save refused for want of MFA sends the app back to the code prompt', async () => {
+    const { auth, state } = fakeAuth({ level: 'aal2' });
+    const data = fakeData(sampleLedger(today));
+    data.insertTransaction.mockImplementation(async () => {
+      state.level = 'aal1';
+      throw new MfaRequiredError();
+    });
+    await render(<AppRoot services={fakeServices({ auth, data })} />);
+    await screen.findByText('Total value');
+    await fireEvent.press(screen.getByText('New'));
+    await fireEvent.press(await screen.findByLabelText('Pick VWCE'));
+    await fireEvent.changeText(screen.getByLabelText('Quantity'), '1');
+    await fireEvent.changeText(screen.getByLabelText('Total value (€)'), '150');
+    await fireEvent.press(screen.getByText('Review'));
+    await fireEvent.press(screen.getByText('Save'));
+    expect(await screen.findByText('Two-factor code')).toBeOnTheScreen();
   });
 });

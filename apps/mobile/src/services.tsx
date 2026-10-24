@@ -1,10 +1,11 @@
-import type { AccountRecord, AssetRecord } from '@ledgr/client';
+import type { AccountRecord, AssetRecord, CaSeriesRecord, JobRunSummary } from '@ledgr/client';
 import type {
   CaFactor,
   CaSubscription,
   Decimal,
   FxRow,
   IsoDate,
+  NewAsset,
   PriceRow,
   StoredPriceRow,
   Transaction,
@@ -22,8 +23,10 @@ export interface Services {
   settings: SettingsStore;
   /** Deletes the stored session and its key (after sign-out). */
   clearSession(): Promise<void>;
-  /** The Supabase project ref, shown in More so a wrong .env is visible. */
+  /** The Supabase project ref, shown in Settings so a wrong .env is visible. */
   projectRef: string;
+  /** A random UUID (expo-crypto): the id of a row the app is about to insert. */
+  newId(): string;
 }
 
 /** The ledger: not deleted, transactions in FIFO order. */
@@ -32,7 +35,7 @@ export interface Ledger {
   assets: AssetRecord[];
   /** Brokers, by name (soft-deleted ones included, so older rows keep a name). */
   accounts: AccountRecord[];
-  ca: { subscriptions: CaSubscription[]; factors: CaFactor[] };
+  ca: { subscriptions: CaSubscription[]; factors: CaFactor[]; series: CaSeriesRecord[] };
 }
 
 export interface Market {
@@ -62,6 +65,23 @@ export interface DataApi {
   priceHistory(assetId: string): Promise<StoredPriceRow[]>;
   /** Refreshes due quotes server-side; null when value-now could not answer. */
   valueNow(): Promise<ValueNowTotals | null>;
+  /** The newest `prices` and `snapshots` runs (Settings). */
+  jobRuns(): Promise<{ prices: JobRunSummary | null; snapshots: JobRunSummary | null }>;
+
+  // Writes. Each one is safe to retry: a row whose id already exists counts as saved.
+  /** Inserts a new ledger row under its client-generated id. */
+  insertTransaction(row: Transaction): Promise<void>;
+  /** Replaces the fields of an existing, not deleted row (same id). */
+  updateTransaction(row: Transaction): Promise<void>;
+  /** Soft delete: sets deleted_at. */
+  deleteTransaction(id: string): Promise<void>;
+  /** Inserts an asset with price_source 'manual' ("price pending"). */
+  insertAsset(asset: NewAsset & { id: string }): Promise<void>;
+  /** Inserts one ca_factors row per subscription for `month` (rows are immutable). */
+  insertFactors(
+    month: IsoDate,
+    rows: readonly { subscriptionId: string; factor: Decimal }[],
+  ): Promise<void>;
 }
 
 export type SecurityLevel = 'none' | 'secret' | 'biometric';

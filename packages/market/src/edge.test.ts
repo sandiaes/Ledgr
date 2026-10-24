@@ -92,6 +92,58 @@ describe('handleJob security', () => {
     expect(run).toMatchObject({ user_id: USER, job: 'fx', trigger: 'cron', status: 'ok' });
   });
 
+  it('prices: an OpenFIGI outage during symbol resolution leaves the run partial, never 500', async () => {
+    const assetRow = {
+      id: 'aaaaaaaa-0000-4000-8000-000000000001',
+      name: 'Apple',
+      ticker: 'AAPL',
+      isin: 'US0378331005',
+      exchange: 'XNAS',
+      asset_type: 'stock',
+      trading_currency: 'USD',
+      price_source: 'manual',
+      price_source_id: null,
+    };
+    const txRow = {
+      id: 'bbbbbbbb-0000-4000-8000-000000000001',
+      account_id: 'cccccccc-0000-4000-8000-000000000001',
+      asset_id: assetRow.id,
+      type: 'buy',
+      trade_date: '2026-10-20',
+      trade_date_precision: 'day',
+      quantity: '1',
+      unit_price: '200',
+      amount: null,
+      fees: '0',
+      currency: 'EUR',
+      fx_rate_to_eur: '1',
+      ca_subscription_id: null,
+      withholding_tax: null,
+      transfer_to_account_id: null,
+    };
+    const { fetch, calls } = fakeFetch([
+      [/openfigi/, () => new Response('down', { status: 503 })],
+      [/\/rest\/v1\/assets\?/, () => jsonResponse([assetRow])],
+      [/\/rest\/v1\/transactions\?/, () => jsonResponse([txRow])],
+      [/\/rest\/v1\/job_runs$/, () => new Response(null, { status: 201 })],
+    ]);
+    const res = await handleJob(
+      'prices',
+      post({ [CRON_SECRET_HEADER]: SECRET }),
+      { ...env, TIINGO_API_KEY: 'k' },
+      { fetch, now, sleep: noSleep },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ job: 'prices', status: 'partial' });
+    const run = JSON.parse(String(calls.find((c) => c.url.endsWith('/job_runs'))?.init?.body));
+    expect(run.issues).toContainEqual({
+      code: 'unresolved',
+      assetId: assetRow.id,
+      reason: 'OpenFIGI failed (openfigi: HTTP 503)',
+    });
+    expect(calls.some((c) => c.init?.method === 'PATCH')).toBe(false);
+  });
+
   it('compares secrets by digest', async () => {
     expect(await secretMatches(SECRET, SECRET)).toBe(true);
     expect(await secretMatches(`${SECRET}x`, SECRET)).toBe(false);

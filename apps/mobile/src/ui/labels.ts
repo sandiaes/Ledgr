@@ -1,5 +1,5 @@
 import type { AccountRecord, AssetRecord } from '@ledgr/client';
-import type { AssetType } from '@ledgr/core';
+import type { AssetType, TransactionType } from '@ledgr/core';
 import { useMemo } from 'react';
 import type { Ledger } from '../services';
 
@@ -38,3 +38,16 @@ export const TYPE_LABELS: Record<AssetType, string> = {
 };
 
 export const typeLabel = (key: string) => TYPE_LABELS[key as AssetType] ?? key;
+
+export const TRANSACTION_TYPE_LABELS: Record<TransactionType, string> = {
+  buy: 'Buy',
+  sell: 'Sell',
+  dividend: 'Dividend',
+  interest: 'Interest',
+  fee: 'Fee',
+  deposit: 'Deposit',
+  withdrawal: 'Withdrawal',
+  subscription: 'Subscription',
+  redemption: 'Redemption',
+  transfer: 'Transfer',
+};

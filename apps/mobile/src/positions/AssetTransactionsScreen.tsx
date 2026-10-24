@@ -1,27 +1,14 @@
-import { assetTransactions, buildPositions, type TransactionType } from '@ledgr/core';
+import { assetTransactions, buildPositions } from '@ledgr/core';
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { usePortfolio } from '../data/usePortfolio';
 import { formatDate } from '../format';
 import { useRootNavigation, useRootRoute } from '../navigation';
-import { assetLabel, brokerLabel, useNames } from '../ui/labels';
+import { assetLabel, brokerLabel, TRANSACTION_TYPE_LABELS, useNames } from '../ui/labels';
 import { Amount, Money, Units } from '../ui/Money';
 import { Card } from '../ui/parts';
 import { PortfolioScreen } from '../ui/PortfolioScreen';
 import { colors, space } from '../ui/theme';
-
-const TYPE_NAMES: Record<TransactionType, string> = {
-  buy: 'Buy',
-  sell: 'Sell',
-  dividend: 'Dividend',
-  interest: 'Interest',
-  fee: 'Fee',
-  deposit: 'Deposit',
-  withdrawal: 'Withdrawal',
-  subscription: 'Subscription',
-  redemption: 'Redemption',
-  transfer: 'Transfer',
-};
 
 /** The asset's ledger rows, newest first. */
 export function AssetTransactionsScreen() {
@@ -46,7 +33,7 @@ export function AssetTransactionsScreen() {
             <View key={r.id} style={styles.row} testID="asset-transaction">
               <View style={styles.line}>
                 <Text style={styles.type}>
-                  {TYPE_NAMES[r.type]}
+                  {TRANSACTION_TYPE_LABELS[r.type]}
                   <Text style={styles.muted}>
                     {'  '}
                     {r.monthOnly

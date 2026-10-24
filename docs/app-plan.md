@@ -4,8 +4,9 @@ Status: **plan approved with decisions D1–D7 on 2026-10-23** (§9). **Slice 5a
 2026-10-23** (`packages/core` and docs only, §8). **Slice 5a-app built 2026-10-23**
 (`apps/mobile` foundation, sign-in with MFA, lock, Dashboard; §8). **Slice 5b built
 2026-10-23** (Positions, Position and Broker detail, Allocation, Performance, Closed
-positions; §8); 5c starts only when asked. KPI definitions are in `docs/kpis.md`; calculation
-assumptions in `docs/assumptions.md`.
+positions; §8). **Slice 5c built 2026-10-24** (New transaction, Activity, Certificados,
+Settings, symbol resolution in `prices-daily`; §8). KPI definitions are in `docs/kpis.md`;
+calculation assumptions in `docs/assumptions.md`.
 
 `apps/mobile`: Expo + React Native + TypeScript, Android only, run with Expo Go during
 development and installable as an APK built with EAS. All numbers come from
@@ -220,7 +221,7 @@ from. The importer already checked every sell against its own broker's holdings 
   with their cost", "partial transfer splits a lot").
 - `docs/assumptions.md` #1 (renamed "FIFO lots per account"), #21 (transfers move lots)
   and #22 (the importer's check now matches FIFO) are rewritten; the change is dated.
-- The Edge Function bundle must be rebuilt and redeployed (`docs/prices.md` step 6) so the
+- The Edge Function bundle must be rebuilt and redeployed (`docs/prices.md`, "Redeploying after an update") so the
   daily snapshots and value-now use the same rule as the app. The app compares its own
   cost basis with value-now's (§5) and shows a warning if they differ.
 
@@ -346,7 +347,7 @@ factors: insert only. Add asset: insert `assets`.
   functions run an older core, e.g. before the FIFO change); when an asset has no price
   ("price pending") or no FX rate (the dashboard shows "—" for the totals and names the
   currency, rather than a wrong total).
-- In the jobs (as today): `sanity.csv` and `job_runs.issues`; the More screen shows the
+- In the jobs (as today): `sanity.csv` and `job_runs.issues`; More → Settings shows the
   last run's status.
 
 ## 6. Security
@@ -438,7 +439,7 @@ rule, `dayChange`, `periodReturns`, `valueSeries`, `monthlyReturns`, `yearlyRetu
 `maxDisposable`, `certificadoSubscriptions` (pulled forward from 5b/5c as asked). Still to
 do from 5a step 2: `reconcile`, `localDate`, `buildDashboard`; from 5b/5c: `positionDetail`,
 `buildPositions`, the validation and input functions, `factorChange`, `mostUsedAccount`.
-After it: rebuild and redeploy the functions (`docs/prices.md`, "After a core change").
+After it: rebuild and redeploy the functions (`docs/prices.md`, "Redeploying after an update").
 
 **5a — Foundation, login, lock, Dashboard** (5a-app built 2026-10-23: steps 2–6 below;
 `reconcile`, `localDate`, `buildDashboard` and `thinSeries` in core; `packages/client`;
@@ -476,7 +477,19 @@ Core: `accountSummaries`, `positionDetail`, `closedPositions`, `monthlyReturns`,
 filters, sort), Position detail (price chart from paginated history), Broker detail,
 Allocation, Performance, Closed positions.
 
-**5c — New transaction, Activity, certificados, settings**
+**5c — New transaction, Activity, certificados, settings** (built 2026-10-24: core
+`parseDecimalInput`, `unitPriceFromTotal`, `validateNewTransaction`, `validateLedgerChange`,
+`previewTransaction`, `mostUsedAccount`, `sellableAccounts`, `editableInApp`,
+`validateNewAsset`, `factorChange`, `factorUpdateLines`, `transactionRows` (assumptions
+#37–#39); `packages/client` `transactionToRow`; the app's writes behind the same aal2 guard
+as its reads, with a retry-safe insert (an existing id counts as saved); `prices-daily`
+symbol resolution with its tests; redeploy steps in `docs/prices.md`, "Redeploying after an
+update". Differences from the plan above: the date is a YYYY-MM-DD field with Today / −1 day
+buttons rather than a native date picker (no new native dependency); the form uses React
+state with core's validation rather than `react-hook-form`; Settings moved from the More
+screen to its own screen under More; the unresolved symbol's reason is in `job_runs` but
+not shown in the app, which the 5c request did not list; the Activity date filter has 1M /
+3M / YTD / 1Y presets and a From–to range)
 
 Core: `unitsHeld`, `maxDisposable`, `validateNewTransaction`, `validateLedgerChange`,
 `previewTransaction`, `parseDecimalInput`, `unitPriceFromTotal`, `mostUsedAccount`,

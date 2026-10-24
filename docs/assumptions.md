@@ -3,7 +3,7 @@
 Assumptions made by `packages/core`, approved as **provisional** on 2026-10-21 (#1–#20),
 2026-10-22 (#23–#28, prices, snapshots and value now) and 2026-10-23 (#29–#34, the app's
 KPIs, decisions D1–D7 in `docs/app-plan.md` §9; #1, #3, #5, #17, #19, #21 and #22 changed
-the same day). Each one
+the same day; #37–#39 written with slice 5c, 2026-10-24). Each one
 stays `unverified` until it has been checked against an official source (or the owner's
 own records), and is then updated here with the source.
 
@@ -51,6 +51,9 @@ Paths are relative to `packages/core/src/` unless stated.
 | 34  | Units that can be sold      | unverified         |
 | 35  | Positions and brokers       | unverified         |
 | 36  | Position price chart        | unverified         |
+| 37  | App-entered rows            | unverified         |
+| 38  | Default broker              | unverified         |
+| 39  | Certificado factor entry    | unverified         |
 
 "Out of scope (tax)" means: **out of scope: tax reports will come from importing broker
 report exports, not from this ledger.** These items describe how the performance numbers
@@ -582,3 +585,56 @@ first close and its %. Long ranges are thinned for drawing only.
 - Status: unverified
 - Implemented in: `positions.ts` (`priceSeries`), `returns.ts` (`rangeStart`), `series.ts`
   (`thinSeries`).
+
+### 37. App-entered rows
+
+The New transaction form (slice 5c) writes buy, sell, dividend and interest rows only (D5,
+D7), in EUR at fx 1 with day precision, under a client-generated UUID (a retried save
+finds its own row instead of adding a second). Buy / sell: quantity and **total value**,
+the EUR amount the broker charged or paid for the units **before the fee**; the fee
+(optional, ≥ 0) is a separate field, added to the cost or deducted from the proceeds (#3).
+The stored unit price is total ÷ quantity rounded half-even to 18 decimals, so quantity ×
+unit price can differ from the typed total in the 18th decimal (never at cents). Dividend /
+interest: the net amount received, no withholding and no fee (D6); interest has no asset.
+Typed numbers take one `,` or `.` as the decimal point; thousands separators, exponents,
+more than 18 decimals and more than 20 integer digits are refused. Refused: a type the
+form does not offer, a missing, unknown or deleted asset or broker, a certificado, an
+invalid or future date (Europe/Lisbon), a quantity, total or amount that is not above 0
+(or so small that the unit price rounds to 0), a negative fee, a fee on income, and a sale
+above `maxDisposable` (#34) in its broker. The final check is `runFifo` over the whole
+ledger with the row, which also refuses an edit or a delete that would leave a later sale
+or transfer without units, naming that row. Only rows the form can show exactly are
+editable (form types in EUR at fx 1, no withholding, income without a fee); the type of a
+saved row never changes; saving an unchanged trade keeps its stored unit price; an
+imported month-level date stays month-level unless the date is changed. Deletes are soft
+(`deleted_at`).
+
+- Status: unverified
+- Implemented in: `input.ts` (`parseDecimalInput`, `unitPriceFromTotal`), `validation.ts`
+  (`validateNewTransaction`, `validateLedgerChange`, `editableInApp`, `formFromTransaction`,
+  `previewTransaction`), `assetInput.ts` (`validateNewAsset`: ISIN check digit, the
+  supported exchanges and their listing currency, #26).
+
+### 38. Default broker
+
+For a sale: the broker with the most units of the asset on the date (`sellableAccounts`,
+which lists only brokers holding units then, with what each can sell). Otherwise: the
+broker of the most rows of that type dated in the 12 months to today (after
+`addMonths(today, −12)`), all time when there are none, all types when there are none of
+that type; ties go to the most recent row in ledger order. Deleted brokers are never
+proposed. Changing it in the form is always possible.
+
+- Status: unverified
+- Implemented in: `validation.ts` (`mostUsedAccount`, `sellableAccounts`).
+
+### 39. Certificado factor entry
+
+The factor update screen lists the subscriptions held today. For the chosen month (the
+current month by default, earlier months allowed, never a later one) each gets one input,
+shown with the latest factor of an earlier month; the change is next − previous per unit,
+units × that in EUR, and next ÷ previous − 1 in %. A decrease is a warning, not a block.
+A month already recorded is read-only (#14: rows are never changed); a retried save that
+finds the same factor stored counts as saved. Values are labeled "from factor".
+
+- Status: unverified
+- Implemented in: `certificados.ts` (`factorChange`, `factorUpdateLines`).

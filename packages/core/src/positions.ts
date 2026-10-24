@@ -176,9 +176,11 @@ export function positionDetail(input: {
   };
 }
 
-/** One ledger row of an asset, as the asset's Transactions list shows it. */
+/** One ledger row, as the Transactions and Activity lists show it. */
 export interface AssetTransactionRow {
   id: string;
+  /** null for cash rows (interest, fees, deposits, withdrawals). */
+  assetId: string | null;
   date: IsoDate;
   /** Imported month-level row (#22): only the month is known. */
   monthOnly: boolean;
@@ -205,11 +207,19 @@ export function assetTransactions(
   assetId: string,
   asOf?: IsoDate,
 ): AssetTransactionRow[] {
+  return transactionRows(transactions, asOf).filter((r) => r.assetId === assetId);
+}
+
+/** Every ledger row up to `asOf`, newest first (the Activity list). */
+export function transactionRows(
+  transactions: readonly Transaction[],
+  asOf?: IsoDate,
+): AssetTransactionRow[] {
   return prepareLedger(transactions, asOf)
-    .filter((t) => t.assetId === assetId)
     .reverse()
     .map((t) => ({
       id: t.id,
+      assetId: t.assetId,
       date: t.tradeDate,
       monthOnly: t.tradeDatePrecision === 'month',
       type: t.type,

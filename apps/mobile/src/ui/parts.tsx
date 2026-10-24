@@ -1,10 +1,25 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type StyleProp,
+  type TextInputProps,
+  type ViewStyle,
+} from 'react-native';
 import { colors, space } from './theme';
 
-export function Card(props: { title?: string; children: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function Card(props: {
+  title?: string;
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
+}) {
   return (
-    <View style={[styles.card, props.style]}>
+    <View style={[styles.card, props.style]} testID={props.testID}>
       {props.title ? <Text style={styles.title}>{props.title}</Text> : null}
       {props.children}
     </View>
@@ -59,17 +74,85 @@ export function Button(props: {
   label: string;
   onPress(): void;
   disabled?: boolean;
-  kind?: 'primary' | 'plain';
+  kind?: 'primary' | 'plain' | 'danger';
+  /** Shows a spinner (and is disabled). */
+  busy?: boolean;
+  accessibilityLabel?: string;
 }) {
   const plain = props.kind === 'plain';
+  const disabled = props.disabled || props.busy;
   return (
     <Pressable
       onPress={props.onPress}
-      disabled={props.disabled}
+      disabled={disabled}
       accessibilityRole="button"
-      style={[styles.button, plain && styles.buttonPlain, props.disabled && styles.disabled]}
+      accessibilityLabel={props.accessibilityLabel}
+      accessibilityState={{ disabled: !!disabled, busy: !!props.busy }}
+      style={[
+        styles.button,
+        plain && styles.buttonPlain,
+        props.kind === 'danger' && styles.buttonDanger,
+        disabled && styles.disabled,
+      ]}
     >
-      <Text style={[styles.buttonText, plain && styles.buttonTextPlain]}>{props.label}</Text>
+      {props.busy ? (
+        <ActivityIndicator color="#fff" accessibilityLabel="Saving" />
+      ) : (
+        <Text style={[styles.buttonText, plain && styles.buttonTextPlain]}>{props.label}</Text>
+      )}
+    </Pressable>
+  );
+}
+
+/** A labeled text input with an optional hint and an inline error. */
+export function Field(
+  props: TextInputProps & { label: string; hint?: string; error?: ReactNode; testID?: string },
+) {
+  const { label, hint, error, style, ...input } = props;
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        accessibilityLabel={label}
+        placeholderTextColor={colors.muted}
+        autoCorrect={false}
+        style={[styles.input, error ? styles.inputError : null, style]}
+        {...input}
+      />
+      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
+      {error ? <FieldError>{error}</FieldError> : null}
+    </View>
+  );
+}
+
+export function FieldError(props: { children: ReactNode }) {
+  return (
+    <Text style={styles.error} accessibilityRole="alert">
+      {props.children}
+    </Text>
+  );
+}
+
+/** One selectable chip (a broker, an asset type, a filter value). */
+export function Chip(props: {
+  label: ReactNode;
+  selected: boolean;
+  onPress(): void;
+  accessibilityLabel?: string;
+}) {
+  return (
+    <Pressable
+      onPress={props.onPress}
+      accessibilityRole="button"
+      accessibilityLabel={props.accessibilityLabel}
+      accessibilityState={{ selected: props.selected }}
+      style={[styles.chip, styles.chipBordered, props.selected && styles.chipOn]}
+    >
+      {typeof props.label === 'string' ? (
+        <Text style={[styles.chipText, props.selected && styles.chipTextOn]}>{props.label}</Text>
+      ) : (
+        props.label
+      )}
     </Pressable>
   );
 }
@@ -114,7 +197,24 @@ export const styles = StyleSheet.create({
   buttonPlain: { backgroundColor: 'transparent' },
   buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   buttonTextPlain: { color: colors.accent },
+  buttonDanger: { backgroundColor: colors.loss },
   disabled: { opacity: 0.5 },
+  chipBordered: { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  field: { marginBottom: space.md },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    fontSize: 16,
+    color: colors.text,
+    backgroundColor: colors.card,
+  },
+  inputError: { borderColor: colors.loss },
+  hint: { fontSize: 12, color: colors.muted, marginTop: 4 },
+  error: { fontSize: 13, color: colors.loss, marginTop: 4 },
   line: {
     flexDirection: 'row',
     justifyContent: 'space-between',

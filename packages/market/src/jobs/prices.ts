@@ -2,7 +2,8 @@
 // before each holding period to the day it ended). Certificados are never fetched.
 //   backfill  every holding period; ranges already stored are skipped unless refetch
 //   daily     assets held in the last 5 days: from the day after the newest stored close
-//             (re-reading the last 5 days for late corrections) up to yesterday
+//             (re-reading the last 5 days for late corrections) up to yesterday; with
+//             `resolve`, assets still waiting for a symbol are resolved first (resolve.ts)
 // A missing price never fails the run: the asset is flagged stale and snapshots fall back
 // to the last known price. Upserts on (asset_id, price_date) are idempotent.
 import {
@@ -18,6 +19,7 @@ import type { PriceUpsert } from '../db';
 import { ProviderError } from '../http';
 import { NOT_FETCHED, type PriceProvider } from '../providers';
 import { errorIssue, IssueLog, type JobContext, type JobOutcome } from './common';
+import { resolvePendingSymbols, type ResolveCounts, type ResolveStepOptions } from './resolve';
 
 export const DAILY_REFRESH_DAYS = 5;
 
@@ -29,6 +31,12 @@ export interface PricesOptions {
   to?: IsoDate;
   /** Backfill: fetch ranges that already look complete too. */
   refetch?: boolean;
+  /**
+   * Daily only: first resolve the symbols of assets still on price_source 'manual' (added
+   * in the app), so their closes are fetched in the same run (jobs/resolve.ts). Its
+   * problems make the run 'partial' at worst.
+   */
+  resolve?: ResolveStepOptions;
 }
 
 type Range = { from: IsoDate; to: IsoDate };
@@ -67,6 +75,14 @@ export async function runPrices(ctx: JobContext, opts: PricesOptions): Promise<J
   };
   const exhausted = new Set<string>();
   const lastCall = new Map<string, number>();
+  let resolution: ResolveCounts | null = null;
+  if (opts.mode === 'daily' && opts.resolve) {
+    resolution = await resolvePendingSymbols(
+      ctx,
+      { assets, transactions, to, log, lastCall },
+      opts.resolve,
+    );
+  }
 
   const fetchBars = async (
     provider: PriceProvider,
@@ -186,8 +202,8 @@ export async function runPrices(ctx: JobContext, opts: PricesOptions): Promise<J
   }
 
   return {
-    status: counts.failed === 0 ? 'ok' : 'partial',
-    counts: { ...counts, issues_dropped: log.dropped },
+    status: counts.failed === 0 && !resolution?.unresolved ? 'ok' : 'partial',
+    counts: { ...counts, ...resolution, issues_dropped: log.dropped },
     issues: log.issues,
   };
 }

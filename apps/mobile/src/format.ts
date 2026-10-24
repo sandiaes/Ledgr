@@ -72,3 +72,10 @@ export function formatTime(ms: number): string {
   const t = new Date(ms);
   return `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
 }
+
+/** A timestamp as local "23 Oct 05:25" (with the year when it is not `thisYear`). */
+export function formatDateTime(ms: number, thisYear?: string): string {
+  const t = new Date(ms);
+  const day = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  return `${formatDate(day, thisYear)} ${formatTime(ms)}`;
+}

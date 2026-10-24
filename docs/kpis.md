@@ -301,3 +301,4 @@ result.
 | Positions, Allocation, Performance screens  | `buildPositions`, `buildAllocation`, `buildPerformance`       |
 | Units held, most that can be sold on a date | `unitsHeld`, `maxDisposable` (`validation.ts`)                |
 | Certificado subscription, factor age (§8)   | `certificadoSubscriptions` (`certificados.ts`)                |
+| Factor update: change vs last month (§8)    | `factorChange`, `factorUpdateLines` (`certificados.ts`)       |

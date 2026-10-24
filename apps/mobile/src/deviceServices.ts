@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { randomUUID } from 'expo-crypto';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as ScreenCapture from 'expo-screen-capture';
 import { createSupabaseData } from './data/supabaseData';
@@ -18,6 +19,7 @@ export function createDeviceServices(config: {
     auth: supabase.auth,
     data: createSupabaseData(supabase),
     projectRef: config.projectRef,
+    newId: () => randomUUID(),
     clearSession: () => storage.clear(),
     device: {
       async securityLevel() {

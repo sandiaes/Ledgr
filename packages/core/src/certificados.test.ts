@@ -4,6 +4,8 @@ import {
   certificadoSubscriptions,
   createRuleBasedCaValuer,
   defaultCaRateRule,
+  factorChange,
+  factorUpdateLines,
   type CaContext,
   type CaFactor,
   type CaSeries,
@@ -369,5 +371,61 @@ describe('certificadoSubscriptions', () => {
       certificadoSubscriptions({ transactions, asOf: '2024-04-06', ca, caMaxAgeDays: 40 })[0]!
         .stale,
     ).toBe(false);
+  });
+});
+
+describe('factorChange and factorUpdateLines', () => {
+  it('the change vs the previous factor, per unit, in value and in %', () => {
+    const c = factorChange({ previous: d('1.1'), next: d('1.1055'), units: d('1000') });
+    expectDec(c.perUnitEur, '0.0055');
+    expectDec(c.valueEur, '5.5');
+    expectDec(c.pct, '0.005');
+    expect(c.decreased).toBe(false);
+    expect(factorChange({ previous: d('1.1'), next: d('1.09'), units: d('10') }).decreased).toBe(
+      true,
+    );
+    expect(factorChange({ previous: null, next: d('1.01'), units: d('10') })).toEqual({
+      perUnitEur: null,
+      valueEur: null,
+      pct: null,
+      decreased: false,
+    });
+  });
+
+  // s1 held (1000), s2 held (500, no factor yet), s3 fully redeemed
+  const transactions = [
+    subscribe('2024-01-15', 'CA', '1000', '1', { id: 'tx1', account: 'aforro' }),
+    subscribe('2024-02-10', 'CA', '500', '1', { id: 'tx2', account: 'aforro' }),
+    subscribe('2024-01-20', 'CA', '200', '1', { id: 'tx3', account: 'aforro' }),
+    redeem('2024-03-01', 'CA', '200', '1.002', { account: 'aforro', caSubscriptionId: 's3' }),
+  ];
+  const subscriptions = [
+    { id: 's1', seriesId: 'E', transactionId: 'tx1' },
+    { id: 's2', seriesId: 'F', transactionId: 'tx2' },
+    { id: 's3', seriesId: 'E', transactionId: 'tx3' },
+  ];
+  const factors: CaFactor[] = [
+    { subscriptionId: 's1', month: '2024-03-01', factor: d('1.0054') },
+    { subscriptionId: 's1', month: '2024-04-01', factor: d('1.0063') },
+    { subscriptionId: 's1', month: '2024-05-01', factor: d('1.0071') },
+  ];
+  const lines = (month: string) =>
+    factorUpdateLines({ transactions, subscriptions, factors, month, today: '2024-05-20' });
+
+  it('one line per held subscription with the factor before the month and the recorded one', () => {
+    const may = lines('2024-05-01');
+    expect(may.map((l) => l.subscriptionId)).toEqual(['s1', 's2']);
+    expect(may[0]?.previous?.month).toBe('2024-04-01');
+    expectDec(may[0]?.recorded?.factor, '1.0071');
+    expectDec(may[0]?.units, '1000');
+    expect(may[1]).toMatchObject({ seriesId: 'F', previous: null, recorded: null });
+    const april = lines('2024-04-01');
+    expect(april[0]?.previous?.month).toBe('2024-03-01');
+    expect(april[0]?.recorded?.month).toBe('2024-04-01');
+  });
+
+  it('the month must be a 1st and not after today', () => {
+    expect(() => lines('2024-05-02')).toThrow(RangeError);
+    expect(() => lines('2024-06-01')).toThrow(RangeError);
   });
 });

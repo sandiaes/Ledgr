@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MissingValuationError } from './errors';
 import { computeHoldings } from './holdings';
 import { createFxLookup, createPriceLookup, type PriceRow } from './lookups';
-import { assetTransactions, positionDetail, priceSeries } from './positions';
+import { assetTransactions, positionDetail, priceSeries, transactionRows } from './positions';
 import type { StoredPriceRow } from './prices';
 import { buy, d, dividend, expectDec, fee, sell, transfer } from './test-utils';
 import type { Asset, Transaction } from './types';
@@ -176,6 +176,20 @@ describe('assetTransactions', () => {
   it('stops at asOf', () => {
     const rows = [buy('2025-01-01', 'X', '1', '1'), buy('2025-07-01', 'X', '1', '1')];
     expect(assetTransactions(rows, 'X', T)).toHaveLength(1);
+  });
+
+  it('transactionRows: every row, cash rows included, newest first (sells after buys in a day)', () => {
+    const rows = [
+      sell('2025-02-01', 'X', '1', '12', { id: 's' }),
+      buy('2025-02-01', 'X', '1', '10', { id: 'b' }),
+      fee('2025-03-01', '9', { id: 'f' }),
+    ];
+    expect(transactionRows(rows).map((r) => [r.id, r.assetId])).toEqual([
+      ['f', null],
+      ['s', 'X'],
+      ['b', 'X'],
+    ]);
+    expectDec(transactionRows(rows)[0]?.totalEur, '9');
   });
 });
 

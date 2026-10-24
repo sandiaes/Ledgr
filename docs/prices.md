@@ -6,14 +6,14 @@ repository folder. Nothing here needs admin rights or Docker.
 
 ## What runs where
 
-| Piece                          | Where                            | What it does                                                                      |
-| ------------------------------ | -------------------------------- | --------------------------------------------------------------------------------- |
-| `pnpm prices resolve`          | your computer (`scripts/prices`) | finds each asset's provider symbol and fills `assets.price_source(_id)`           |
-| `pnpm prices backfill`         | your computer                    | ECB rates, prices and daily snapshots from your first trade, then a sanity report |
-| `fx-daily` Edge Function       | Supabase, 05:15 UTC daily        | ECB rates up to today (re-reads the last 7 days)                                  |
-| `prices-daily` Edge Function   | Supabase, 05:25 UTC daily        | closes up to yesterday for what you hold (re-reads the last 5 days)               |
-| `snapshot-daily` Edge Function | Supabase, 05:40 UTC daily        | snapshots from the 1st of last month to yesterday                                 |
-| `value-now` Edge Function      | Supabase, when the app asks      | the portfolio valued with intraday quotes (see "Value now" below)                 |
+| Piece                          | Where                            | What it does                                                                                         |
+| ------------------------------ | -------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `pnpm prices resolve`          | your computer (`scripts/prices`) | finds each asset's provider symbol and fills `assets.price_source(_id)`                              |
+| `pnpm prices backfill`         | your computer                    | ECB rates, prices and daily snapshots from your first trade, then a sanity report                    |
+| `fx-daily` Edge Function       | Supabase, 05:15 UTC daily        | ECB rates up to today (re-reads the last 7 days)                                                     |
+| `prices-daily` Edge Function   | Supabase, 05:25 UTC daily        | closes up to yesterday for what you hold (re-reads the last 5 days); first resolves app-added assets |
+| `snapshot-daily` Edge Function | Supabase, 05:40 UTC daily        | snapshots from the 1st of last month to yesterday                                                    |
+| `value-now` Edge Function      | Supabase, when the app asks      | the portfolio valued with intraday quotes (see "Value now" below)                                    |
 
 | Data                       | Provider                                     | Key      | Free limits                                                                           |
 | -------------------------- | -------------------------------------------- | -------- | ------------------------------------------------------------------------------------- |
@@ -201,6 +201,7 @@ settings turn JWT verification off:
 | `LEDGR_ALLOWED_ORIGINS`  | value-now: browser origins of the desktop app, comma-separated (e.g. `http://localhost:5173`); not needed for Android |
 | `LEDGR_ANON_KEY`         | value-now, only if the legacy keys are disabled: your `sb_publishable_…` key                                          |
 | `LEDGR_TIME_ZONE`        | value-now, optional, default `Europe/Lisbon` (decides "today")                                                        |
+| `OPENFIGI_API_KEY`       | prices-daily, optional: symbol resolution works without it (25 OpenFIGI requests/minute, plenty for 5 a day)          |
 
 `SUPABASE_URL` and the service-role key are provided to functions by Supabase. Generate the
 cron secret on your computer and paste it straight into the Dashboard (and, in step 7, into
@@ -386,14 +387,110 @@ those days with the step %, the flow as a % of the value before it, the row type
 rows are month-level, and how each traded asset was valued that day (`price`, `trade` =
 trade-price stand-in, `stale`). No amounts are printed or written.
 
-## After a core change
+## Redeploying after an update
 
-The daily functions run the `packages/core` that was bundled when they were deployed. After
-a change to core (for example FIFO per account, 2026-10-23), rebuild and deploy them again
-(step 6: `pnpm functions:build`, then the four `deploy` commands, or the Dashboard route),
-so snapshots and value-now use the same rules as the app. Secrets and the schedule stay as
-they are. When the change alters stored figures, also recompute the snapshots with
-`pnpm prices backfill --only snapshots` (from your first trade).
+The daily functions and value-now run the `packages/market` + `packages/core` bundle that
+was built when they were deployed. After an update that changes them, rebuild and deploy
+again. Secrets and the schedule stay as they are. Run everything from the repository folder
+in Git Bash.
+
+### What to deploy
+
+| Update                                   | Deploy                                                                   | Afterwards                                                                                |
+| ---------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| FIFO per account (5a-core, 2026-10-23)   | all four functions                                                       | `pnpm prices backfill --only snapshots` (from your first trade) if stored figures changed |
+| Symbol resolution (slice 5c, 2026-10-24) | `prices-daily` (the other three use the same bundle but behave the same) | the hand-run below; optionally the `OPENFIGI_API_KEY` secret                              |
+
+**What changed in 5c:** before fetching prices, `prices-daily` takes up to 5 held assets
+still on `price_source = 'manual'` (assets added in the app, "price pending") that have an
+ISIN and a supported exchange (crypto: a ticker like `BTCEUR`), and runs each through the
+same check as `pnpm prices resolve` (OpenFIGI ticker, then the provider's symbol; nothing
+is guessed). A confirmed symbol is written to `assets.price_source(_id)` and that asset's
+closes are fetched in the same run, from 14 days before its first buy. Each asset is
+resolved on its own with a 15 s limit (40 s for all of them): a failure, a timeout or an
+OpenFIGI outage becomes an issue in `job_runs` and the run carries on with the other
+assets. Resolution problems make the run `partial` at worst, never `failed`.
+
+### Steps
+
+1. Get the update and build the bundle (`main` once the update is merged, or its branch,
+   e.g. `claude/upbeat-volta-tsynyt` for slice 5c):
+   ```bash
+   git checkout main && git pull     # or: git fetch && git checkout <branch> && git pull
+   pnpm install
+   pnpm functions:build              # writes supabase/functions/_shared/ledgr-jobs.js (git-ignored)
+   ```
+2. **Deploy with the CLI** (Docker not needed):
+   ```bash
+   npx supabase login                # or: export SUPABASE_ACCESS_TOKEN=<token> (Dashboard → Account → Access Tokens)
+   npx supabase functions deploy prices-daily --project-ref <ref> --use-api --no-verify-jwt
+   ```
+   For an update that needs all four, repeat the last line with `fx-daily`,
+   `snapshot-daily` and `value-now`.
+3. **If the CLI fails on the company network** (proxy, TLS inspection, blocked
+   `api.supabase.com`), deploy from the Dashboard instead:
+   1. Make one self-contained file **outside the repository** (so it is never committed):
+      ```bash
+      { cat supabase/functions/_shared/ledgr-jobs.js
+        echo "Deno.serve((req) => handleJob('prices', req, Deno.env.toObject()));"; } > ~/prices-daily.single.ts
+      notepad ~/prices-daily.single.ts     # Ctrl+A, Ctrl+C
+      ```
+      (For the others: `'fx'` for `fx-daily`, `'snapshots'` for `snapshot-daily`; for
+      `value-now` the last line is
+      `Deno.serve((req) => handleValueNow(req, Deno.env.toObject()));`.)
+   2. Dashboard → Edge Functions → `prices-daily` → **Code**. Select everything in the
+      editor (Ctrl+A), paste (Ctrl+V), so the file no longer imports `../_shared/…`, then
+      **Deploy** (the button may read "Deploy updates").
+   3. Same function → **Details** (or Settings): JWT verification (**Enforce JWT
+      verification** / "Verify JWT") must be **off**. The function checks the cron secret
+      itself; with JWT verification on, the scheduled call gets a 401 from Supabase before
+      reaching it.
+   4. Delete the file: `rm ~/prices-daily.single.ts`.
+4. Optional: Dashboard → Edge Functions → Secrets → add `OPENFIGI_API_KEY` (from
+   openfigi.com → Sign up → API key). Not needed for 5 assets a day.
+5. **Run it once by hand** (the secret is read without echo, so it stays out of your shell
+   history):
+   ```bash
+   read -rs LEDGR_SECRET              # paste the cron secret, Enter
+   curl.exe -sS -X POST "https://<ref>.supabase.co/functions/v1/prices-daily" \
+     -H "x-ledgr-cron-secret: $LEDGR_SECRET" -H "Content-Length: 0"
+   unset LEDGR_SECRET
+   ```
+   The answer has counts only, e.g.
+   `{"job":"prices","status":"ok","counts":{"assets":21,...,"resolve_candidates":0,"resolve_attempted":0,"resolved":0,"unresolved":0,"issues_dropped":0},"issues":0}`.
+   **`resolve_candidates` in `counts` proves the new bundle is live**; without it, the old
+   one still runs (redo step 2 or 3). `{"error":"unauthorized"}` means the secret was
+   mistyped; a 401 without that body means JWT verification is still on (step 3.3).
+   Running it by hand is safe: prices are upserts, and it only repeats what the 05:25 run
+   does.
+6. **Check the run in `job_runs`** — Table Editor → `job_runs`, newest row with
+   `job = prices`, or in the SQL Editor:
+   ```sql
+   select finished_at, status, counts, issues
+   from public.job_runs where job = 'prices'
+   order by finished_at desc limit 1;
+   ```
+   `status` `ok` (or `partial` with the reason in `issues`, codes in "When a provider
+   breaks"). In the app, More → Settings shows the same run as "Last price update".
+
+**Rolling back:** check out the previous version, rebuild and deploy it the same way, then
+return to the current branch:
+
+```bash
+git checkout <previous commit or tag>
+pnpm install && pnpm functions:build
+npx supabase functions deploy prices-daily --project-ref <ref> --use-api --no-verify-jwt   # or the Dashboard route
+git checkout main
+```
+
+**An asset added in the app** stays "price pending" (valued at its trade price, flagged)
+until the next 05:25 UTC run resolves it; then its closes appear and the snapshots from the
+next 05:40 run use them. If its first buy is older than the snapshot window (the 1st of
+last month), recompute those snapshots locally:
+`pnpm prices backfill --only prices,snapshots --from <first buy date>`. If it stays
+pending, the newest `prices` run has an `unresolved` issue with the `reason`; fix the asset
+(Dashboard → Table Editor → `assets`: `isin`, `exchange`, `ticker`) and wait for the next
+run, or run `pnpm prices resolve --commit` now.
 
 ## Rotating a key
 
@@ -427,7 +524,11 @@ Nothing fails hard: snapshots keep using the last known close and mark the asset
    | `currency_mismatch`              | provider quotes another currency than the listing; nothing stored; check the asset                                                                               |
    | `stale`                          | newest close older than the limit (holiday, or one of the above)                                                                                                 |
    | `split`                          | the provider reports a split: see "Splits" below                                                                                                                 |
-   | `no_price_source`                | asset has no symbol (`manual`): resolve it                                                                                                                       |
+   | `no_price_source`                | asset has no symbol (`manual`): the daily run tries to resolve it (below); else `pnpm prices resolve`                                                            |
+   | `symbol_resolved`                | an asset added in the app got its symbol (`provider` says which); its closes were fetched in the same run                                                        |
+   | `unresolved` + `reason`          | the symbol could not be confirmed (ISIN/exchange/ticker do not match OpenFIGI, the provider does not know it, OpenFIGI down): fix the asset; retried daily       |
+   | `resolve_timeout`                | OpenFIGI or the provider did not answer within 15 s; retried the next day                                                                                        |
+   | `resolve_deferred`               | the run's time budget for resolving (40 s) was used up; the asset waits for the next day                                                                         |
    | `no_price_before_first_trade`    | history starts after your first buy (e.g. a SPAC); trade price used until then                                                                                   |
    | `missing_fx` (snapshots)         | no ECB rate yet for that day: run `pnpm prices backfill --only fx`                                                                                               |
 
@@ -436,7 +537,8 @@ Nothing fails hard: snapshots keep using the last known close and mark the asset
    `checkSymbol`), register it in `createProviders`, add its symbol rule in
    `packages/market/src/symbols.ts`, run `pnpm check`, then `pnpm prices resolve --commit`,
    `pnpm prices backfill --only prices,snapshots --refetch --from <first affected date>`,
-   rebuild and redeploy the functions (step 6) and add its key to the secrets.
+   rebuild and redeploy the functions ("Redeploying after an update") and add its key to the
+   secrets.
 
 ## Splits
 
