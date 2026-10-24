@@ -1,6 +1,5 @@
 import {
   buildPositions,
-  type AssetType,
   type BrokerView,
   type PositionsView,
   type PortfolioTotals,
@@ -19,8 +18,10 @@ import {
   activeFilterCount,
   DEFAULT_SORT,
   filterClosed,
+  filterOptions,
   filterPositions,
   NO_FILTERS,
+  offeredFilters,
   SORT_LABELS,
   sortPositions,
   type Filters,
@@ -51,8 +52,10 @@ function Positions({ view, names }: { view: PositionsView; names: Names }) {
   const [segment, setSegment] = useState<Segment>('all');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [chosen, setFilters] = useState<Filters>(NO_FILTERS);
   const [panel, setPanel] = useState<'sort' | 'filter' | null>(null);
+  const options = useMemo(() => filterOptions(view, names), [view, names]);
+  const filters = useMemo(() => offeredFilters(chosen, options), [chosen, options]);
 
   const rows = useMemo(
     () => sortPositions(filterPositions(view.positions, names, query, filters), sort),
@@ -102,7 +105,7 @@ function Positions({ view, names }: { view: PositionsView; names: Names }) {
       ) : null}
       {listed && panel === 'filter' ? (
         <FilterPanel
-          view={view}
+          options={options}
           names={names}
           filters={filters}
           onChange={setFilters}
@@ -220,31 +223,14 @@ function Chips<T extends string>(props: {
 }
 
 function FilterPanel(props: {
-  view: PositionsView;
+  options: ReturnType<typeof filterOptions>;
   names: Names;
   filters: Filters;
   onChange(f: Filters): void;
   closed: boolean;
 }) {
-  const { view, names, filters: f, onChange } = props;
-  const types = [
-    ...new Set([
-      ...view.positions.map((p) => p.assetType),
-      ...view.closed.flatMap((c) => names.assets.get(c.assetId)?.assetType ?? []),
-    ]),
-  ].sort() as AssetType[];
-  const brokers = [
-    ...new Set([
-      ...view.positions.flatMap((p) => p.accountIds),
-      ...view.closed.flatMap((c) => c.accounts.map((a) => a.accountId)),
-    ]),
-  ].sort((a, b) => brokerLabel(names, a).localeCompare(brokerLabel(names, b)));
-  const currencies = [
-    ...new Set([
-      ...view.positions.map((p) => p.currency),
-      ...view.closed.flatMap((c) => names.assets.get(c.assetId)?.tradingCurrency ?? []),
-    ]),
-  ].sort();
+  const { names, filters: f, onChange } = props;
+  const { types, brokers, currencies } = props.options;
   return (
     <Card>
       <Chips

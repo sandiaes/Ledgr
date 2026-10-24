@@ -3,7 +3,7 @@
 Assumptions made by `packages/core`, approved as **provisional** on 2026-10-21 (#1–#20),
 2026-10-22 (#23–#28, prices, snapshots and value now) and 2026-10-23 (#29–#34, the app's
 KPIs, decisions D1–D7 in `docs/app-plan.md` §9; #1, #3, #5, #17, #19, #21 and #22 changed
-the same day; #37–#39 written with slice 5c, 2026-10-24). Each one
+the same day; #37–#39 written with slice 5c, 2026-10-24; #40 with slice 5d, the same day). Each one
 stays `unverified` until it has been checked against an official source (or the owner's
 own records), and is then updated here with the source.
 
@@ -54,6 +54,7 @@ Paths are relative to `packages/core/src/` unless stated.
 | 37  | App-entered rows            | unverified         |
 | 38  | Default broker              | unverified         |
 | 39  | Certificado factor entry    | unverified         |
+| 40  | Asset scope (certificados)  | unverified         |
 
 "Out of scope (tax)" means: **out of scope: tax reports will come from importing broker
 report exports, not from this ledger.** These items describe how the performance numbers
@@ -638,3 +639,40 @@ finds the same factor stored counts as saved. Values are labeled "from factor".
 
 - Status: unverified
 - Implemented in: `certificados.ts` (`factorChange`, `factorUpdateLines`).
+
+### 40. Asset scope: with or without certificados
+
+The app's "Include certificados de aforro" setting (on by default, kept on the device)
+applies to every figure, chart and list except the Certificados screen, the factor update
+and New transaction. When it is off, figures are those of the portfolio **without**
+certificados, recomputed from its own inputs, never by subtracting certificados from a
+total:
+
+- A ledger row is left out when its asset is a certificado; rows without an asset (cash
+  interest, fee rows, deposits, withdrawals) and rows of an unknown asset stay. FIFO,
+  holdings, V(T), V(Y), flows, net invested, realized, income, costs, XIRR, TWR, monthly
+  and yearly returns, allocation, top movers, brokers, closed positions and the Activity
+  list all run on the rows that stay.
+- V(d) of a past day is the sum of the snapshot's per-type values of the types in scope
+  (valuation is per asset, so that is exactly the value of the assets in scope); net
+  invested NI(d) comes from the rows in scope (the snapshot stores it as a total only).
+  Days before the first row in scope are left out. Each stored column is rounded to 18
+  decimals on its own, so a sum can differ from a recomputed total in the 18th decimal.
+- Allocation weights are shares of the value in scope (they sum to 100%). A broker is
+  listed when it has open lots, or any realized gain, income or cost, among the rows in
+  scope, so the brokers still add up to the totals; a broker holding only certificados is
+  not listed. The certificado factor indicator is not shown.
+- value-now returns whole-portfolio totals, so the app compares its figures with them only
+  when everything is included; the identities V − NI = R + U and Σ brokers = totals are
+  checked in both modes.
+- With the setting on, every figure is the same as before the setting existed: the stored
+  totals are used unchanged.
+
+- Status: unverified
+- Implemented in: `scope.ts` (`assetScope`, `scopeTransactions`, `scopeHoldings`,
+  `scopeSnapshots`), the `scope` option of `computeHoldings`, `buildSnapshot`,
+  `gainsSummary`, `netInvestedEur`, `dailyFlows`, `investmentCashFlows`, `dayChange`,
+  `periodReturns`, `twrSteps`, `monthlyReturns`, `yearlyReturns`, `valueSeries`,
+  `accountSummaries`, `allocation`, `concentration`, `topPositions`, `topMovers`,
+  `closedPositions`, `transactionRows`, `assetTransactions`, `reconcile`, and
+  `PortfolioInput.excludeTypes` in `views.ts`; `client/src/rows.ts` (`SNAPSHOT_COLUMNS`).

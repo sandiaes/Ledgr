@@ -9,6 +9,11 @@ export interface Settings {
   lockTimeoutMinutes: LockTimeout;
   hideValues: boolean;
   blockScreenshots: boolean;
+  /**
+   * "Include certificados de aforro": when off, every figure, chart and list leaves the
+   * certificados out (docs/app-plan.md §10). A preference, not financial data.
+   */
+  includeCertificados: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -16,6 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   lockTimeoutMinutes: 1,
   hideValues: false,
   blockScreenshots: true,
+  includeCertificados: true,
 };
 
 export const SETTINGS_KEY = 'ledgr.settings.v1';
@@ -31,5 +37,6 @@ export function parseSettings(raw: unknown): Settings {
       : DEFAULT_SETTINGS.lockTimeoutMinutes,
     hideValues: bool(r.hideValues, DEFAULT_SETTINGS.hideValues),
     blockScreenshots: bool(r.blockScreenshots, DEFAULT_SETTINGS.blockScreenshots),
+    includeCertificados: bool(r.includeCertificados, DEFAULT_SETTINGS.includeCertificados),
   };
 }

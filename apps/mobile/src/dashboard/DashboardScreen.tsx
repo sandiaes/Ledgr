@@ -4,6 +4,7 @@ import { useDashboard } from '../data/usePortfolio';
 import { formatDate, formatTime } from '../format';
 import { Money } from '../ui/Money';
 import { Banner, Card } from '../ui/parts';
+import { IncludeCertificadosSwitch, NothingInScope, ScopeNote } from '../ui/Scope';
 import { colors, space } from '../ui/theme';
 import {
   AllocationCard,
@@ -47,6 +48,7 @@ export function DashboardScreen() {
           {prices}
           {state.liveUnavailable ? ' · live prices unavailable' : ''}
         </Text>
+        {view.status === 'ok' ? <ScopeNote excludeTypes={view.excludeTypes} /> : null}
         {view.status === 'unvalued' ? (
           <>
             <Card>
@@ -62,6 +64,8 @@ export function DashboardScreen() {
           <Card>
             <Text style={styles.caption}>No transactions yet.</Text>
           </Card>
+        ) : view.emptyInScope ? (
+          <NothingInScope />
         ) : (
           <>
             <ReconcileBanner view={view} />
@@ -78,6 +82,7 @@ export function DashboardScreen() {
   }
   return (
     <ScrollView refreshControl={refresh} contentContainerStyle={styles.content}>
+      <IncludeCertificadosSwitch />
       <View>{body}</View>
     </ScrollView>
   );

@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { errorCode } from '../auth/errors';
 import { useServices, type Ledger, type Market } from '../services';
+import { useExcludeTypes } from '../settings/SettingsProvider';
 
 export const TIME_ZONE = 'Europe/Lisbon';
 const MINUTE = 60_000;
@@ -46,11 +47,14 @@ export type PortfolioResult<V> = PortfolioState<V> & {
  * The fetched rows turned into one screen's view by a core builder (docs/app-plan.md §5):
  * value-now first (it refreshes the quotes), the ledger and snapshots in parallel, then
  * prices. Every screen shares the same cached queries; core does all the arithmetic.
- * `build` must be a stable function (a core builder).
+ * `build` must be a stable function (a core builder). The "Include certificados" setting
+ * goes into the build, not into any query key: switching it recomputes from the rows
+ * already fetched, with no request.
  */
 export function usePortfolio<V>(build: (input: PortfolioInput) => V): PortfolioResult<V> {
   const { data: api } = useServices();
   const today = localDate(new Date(), TIME_ZONE);
+  const excludeTypes = useExcludeTypes();
 
   const valueNow = useQuery({
     queryKey: ['valueNow'],
@@ -89,12 +93,22 @@ export function usePortfolio<V>(build: (input: PortfolioInput) => V): PortfolioR
           ca: ledger.data.ca,
           snapshots: snapshots.data,
           reference,
+          excludeTypes,
         }),
       };
     } catch (e) {
       return { error: errorCode(e) };
     }
-  }, [build, today, ledger.data, snapshots.data, market.data, valueNow.data, valueNow.isFetched]);
+  }, [
+    build,
+    today,
+    excludeTypes,
+    ledger.data,
+    snapshots.data,
+    market.data,
+    valueNow.data,
+    valueNow.isFetched,
+  ]);
 
   const refresh = useCallback(async () => {
     await valueNow.refetch();

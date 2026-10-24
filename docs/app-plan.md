@@ -5,8 +5,9 @@ Status: **plan approved with decisions D1–D7 on 2026-10-23** (§9). **Slice 5a
 (`apps/mobile` foundation, sign-in with MFA, lock, Dashboard; §8). **Slice 5b built
 2026-10-23** (Positions, Position and Broker detail, Allocation, Performance, Closed
 positions; §8). **Slice 5c built 2026-10-24** (New transaction, Activity, Certificados,
-Settings, symbol resolution in `prices-daily`; §8). **Slice 5d planned 2026-10-24**
-(the app-wide "Include certificados de aforro" toggle, §10; awaiting approval). KPI
+Settings, symbol resolution in `prices-daily`; §8). **Slice 5d built 2026-10-24**
+(the app-wide "Include certificados de aforro" toggle, §10; plan approved the same day with
+the recommendations of §10.5). KPI
 definitions are in `docs/kpis.md`; calculation assumptions in `docs/assumptions.md`.
 
 `apps/mobile`: Expo + React Native + TypeScript, Android only, run with Expo Go during
@@ -503,11 +504,11 @@ negative values are blocked; Save is disabled while saving and a double tap inse
 row; a retried insert with the same id does not duplicate. Plus symbol resolution in
 `prices-daily` (§5, D3) with its tests and the `docs/prices.md` redeploy steps.
 
-**5d — "Include certificados de aforro" toggle** (planned 2026-10-24, awaiting approval;
-the full plan is §10). Core first: `AssetScope` and a `scope` option on every KPI, series
-and aggregation function, with the tests listed in §10.6; then the app: the setting, the
-switch on the Dashboard, the "Excluding certificados" note on every affected screen, and
-component tests. No schema change.
+**5d — "Include certificados de aforro" toggle** (built 2026-10-24; the plan and what was
+built are §10). Core first: `AssetScope` and a `scope` option on every KPI, series and
+aggregation function, with the tests listed in §10.6 (assumption #40); then the app: the
+setting, the switch on the Dashboard, the "Excluding certificados" note on every affected
+screen, and component tests. No schema change, no function to redeploy.
 
 ## 9. Decisions (approved 2026-10-23)
 
@@ -533,7 +534,22 @@ component tests. No schema change.
 
 ## 10. Asset scope: the certificados toggle (slice 5d)
 
-Status: **plan, 2026-10-24, awaiting approval** (Phase A). Nothing below is built yet.
+Status: **built 2026-10-24** (plan approved the same day with the recommendations in
+§10.5: brokers by today's rule on the rows in scope, the value-now comparison only with
+everything included, rows without an asset always in scope, the fixture test in
+`scripts/import`). Details settled while building:
+
+- `scopeSnapshots` also drops the snapshot days before the first row in scope (the
+  portfolio in scope did not exist yet; the daily job starts at the first row, #27), and
+  sets the per-type values of the excluded types to 0. Both make the scoped series exactly
+  the one the CA-free ledger's snapshots give (the property test found the first).
+- The Positions filter, like Activity's, stops applying a chosen value that is no longer
+  offered (e.g. type "Certificados").
+- Precision found by the broker property test, unrelated to the toggle: after a partial
+  sell of a lot bought with a fee, the pro-rata cost can need more than 50 significant
+  digits, and the brokers' sums can then differ from the portfolio's in the last digit
+  (~1e-48), which shows the "brokers do not add up" banner. Left as is and reported
+  separately; the toggle tests use fee-free ledgers for that one check.
 
 ### 10.1 What the snapshots store, and whether it is enough
 
@@ -642,23 +658,23 @@ Edge Function needs redeploying.
 
 ### 10.5 Edge cases
 
-| Case                                                                 | Handling                                                                                                                                                                                                                      |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Only certificados held (or the ledger has only CA rows)              | `emptyInScope`: "No holdings without certificados" on Dashboard, Positions, Allocation, Performance; charts show their empty state; returns "—" with "no rows in scope"; Activity says "No transactions without certificados" |
-| In-scope value 0 at a period start, certificados held then           | V(S) = 0 for the scoped portfolio; "Since start" starts the day before the first in-scope row; the TWR from-zero rule (#17) handles a later first buy                                                                         |
-| All in-scope positions sold, later re-entered                        | as today: TWR skips zero→zero steps and uses the from-zero rule on re-entry                                                                                                                                                   |
-| A snapshot missing for a day                                         | missing in both modes alike: "snapshot missing" as today                                                                                                                                                                      |
-| A non-CA asset without an FX rate                                    | "unvalued" in both modes (certificados are EUR, so they never cause it)                                                                                                                                                       |
-| Brokers                                                              | listed when they have in-scope open lots or any in-scope realized gain, income or cost (today's rule on the scoped rows): the Aforro broker disappears, a broker with only closed in-scope positions stays, totals add up     |
-| Assetless rows (cash interest, fee rows) booked at the Aforro broker | they are not certificados, so they stay in scope, and that broker then stays listed with value 0                                                                                                                              |
-| CA stale-factor indicator                                            | not shown when excluded (no CA holding in scope, `caFactor` null); the stale-price count never included certificados                                                                                                          |
-| value-now comparison (yellow banner)                                 | only with the full scope; the scoped identities (V − NI = R + U, Σ brokers = totals) are still checked                                                                                                                        |
-| A Position or Broker detail open on a now out-of-scope item          | the toggle is on the Dashboard tab and details are pushed above the tabs, so this needs going back first; if it happens anyway, the screen says "Not included: certificados are excluded" instead of failing                  |
-| Activity filter set to a certificado asset or the Aforro broker      | the filter resets to "All" when its value is no longer offered                                                                                                                                                                |
-| "approx." badges in Performance                                      | from the in-scope rows only: a month whose only month-level rows were certificados loses the badge when excluded                                                                                                              |
-| Allocation percentages                                               | weights divide by the in-scope total, so they sum to 1 (to Decimal precision); labels rounded to 2 decimals may add up to 99.99 or 100.01, as they can today                                                                  |
-| Hide values                                                          | unchanged: amounts masked in both modes                                                                                                                                                                                       |
-| Old app installs                                                     | no stored value → included (today's behavior)                                                                                                                                                                                 |
+| Case                                                                   | Handling                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Only certificados held (or the ledger has only CA rows)                | `emptyInScope`: "No holdings without certificados" on Dashboard, Positions, Allocation, Performance; charts show their empty state; returns "—" with "no rows in scope"; Activity says "No transactions without certificados" |
+| In-scope value 0 at a period start, certificados held then             | V(S) = 0 for the scoped portfolio; "Since start" starts the day before the first in-scope row; the TWR from-zero rule (#17) handles a later first buy                                                                         |
+| All in-scope positions sold, later re-entered                          | as today: TWR skips zero→zero steps and uses the from-zero rule on re-entry                                                                                                                                                   |
+| A snapshot missing for a day                                           | missing in both modes alike: "snapshot missing" as today                                                                                                                                                                      |
+| A non-CA asset without an FX rate                                      | "unvalued" in both modes (certificados are EUR, so they never cause it)                                                                                                                                                       |
+| Brokers                                                                | listed when they have in-scope open lots or any in-scope realized gain, income or cost (today's rule on the scoped rows): the Aforro broker disappears, a broker with only closed in-scope positions stays, totals add up     |
+| Assetless rows (cash interest, fee rows) booked at the Aforro broker   | they are not certificados, so they stay in scope, and that broker then stays listed with value 0                                                                                                                              |
+| CA stale-factor indicator                                              | not shown when excluded (no CA holding in scope, `caFactor` null); the stale-price count never included certificados                                                                                                          |
+| value-now comparison (yellow banner)                                   | only with the full scope; the scoped identities (V − NI = R + U, Σ brokers = totals) are still checked                                                                                                                        |
+| A Position or Broker detail open on a now out-of-scope item            | the toggle is on the Dashboard tab and details are pushed above the tabs, so this needs going back first; if it happens anyway, the screen says "Not included: certificados are excluded" instead of failing                  |
+| Activity or Positions filter set to a certificado or the Aforro broker | the filter stops applying a value that is no longer offered ("All" / no filter)                                                                                                                                               |
+| "approx." badges in Performance                                        | from the in-scope rows only: a month whose only month-level rows were certificados loses the badge when excluded                                                                                                              |
+| Allocation percentages                                                 | weights divide by the in-scope total, so they sum to 1 (to Decimal precision); labels rounded to 2 decimals may add up to 99.99 or 100.01, as they can today                                                                  |
+| Hide values                                                            | unchanged: amounts masked in both modes                                                                                                                                                                                       |
+| Old app installs                                                       | no stored value → included (today's behavior)                                                                                                                                                                                 |
 
 ### 10.6 Tests (Phase B)
 

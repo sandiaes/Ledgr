@@ -1,7 +1,7 @@
 // Search, filters and sort of the Positions list. Comparisons only: every figure comes
 // from core (buildPositions).
-import type { AssetType, ClosedPosition, Decimal, PositionRow } from '@ledgr/core';
-import type { Names } from '../ui/labels';
+import type { AssetType, ClosedPosition, Decimal, PositionRow, PositionsView } from '@ledgr/core';
+import { brokerLabel, type Names } from '../ui/labels';
 
 export type SortKey = 'value' | 'weight' | 'gain' | 'day';
 export interface Sort {
@@ -29,6 +29,49 @@ export const NO_FILTERS: Filters = { types: [], brokers: [], currencies: [], sta
 
 export const activeFilterCount = (f: Filters) =>
   f.types.length + f.brokers.length + f.currencies.length + (f.staleOnly ? 1 : 0);
+
+/** The values the filter offers: those of the open and closed positions in the view. */
+export function filterOptions(
+  view: Pick<PositionsView, 'positions' | 'closed'>,
+  names: Names,
+): { types: AssetType[]; brokers: string[]; currencies: string[] } {
+  const types = [
+    ...new Set([
+      ...view.positions.map((p) => p.assetType),
+      ...view.closed.flatMap((c) => names.assets.get(c.assetId)?.assetType ?? []),
+    ]),
+  ].sort() as AssetType[];
+  const brokers = [
+    ...new Set([
+      ...view.positions.flatMap((p) => p.accountIds),
+      ...view.closed.flatMap((c) => c.accounts.map((a) => a.accountId)),
+    ]),
+  ].sort((a, b) => brokerLabel(names, a).localeCompare(brokerLabel(names, b)));
+  const currencies = [
+    ...new Set([
+      ...view.positions.map((p) => p.currency),
+      ...view.closed.flatMap((c) => names.assets.get(c.assetId)?.tradingCurrency ?? []),
+    ]),
+  ].sort();
+  return { types, brokers, currencies };
+}
+
+/**
+ * The chosen values still offered (e.g. "Certificados" is no longer a type once they are
+ * left out): a value that is not offered any more stops filtering.
+ */
+export function offeredFilters(f: Filters, options: ReturnType<typeof filterOptions>): Filters {
+  const keep = <T>(chosen: T[], offered: readonly T[]) => {
+    const kept = chosen.filter((v) => offered.includes(v));
+    return kept.length === chosen.length ? chosen : kept;
+  };
+  const types = keep(f.types, options.types);
+  const brokers = keep(f.brokers, options.brokers);
+  const currencies = keep(f.currencies, options.currencies);
+  return types === f.types && brokers === f.brokers && currencies === f.currencies
+    ? f
+    : { ...f, types, brokers, currencies };
+}
 
 /** Case-insensitive match on ticker, name or ISIN; an empty query matches everything. */
 export function matchesSearch(names: Names, assetId: string, query: string): boolean {

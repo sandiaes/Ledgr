@@ -1,3 +1,4 @@
+import type { AssetType } from '@ledgr/core';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useServices } from '../services';
 import { DEFAULT_SETTINGS, parseSettings, type Settings } from './settings';
@@ -52,6 +53,23 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
 export function useSettings(): SettingsValue {
   return useContext(SettingsContext);
+}
+
+const ALL_TYPES: readonly AssetType[] = [];
+const WITHOUT_CERTIFICADOS: readonly AssetType[] = ['certificado_aforro'];
+
+/**
+ * The asset types left out of every figure (the "Include certificados" setting), as a
+ * stable array for the core builders.
+ */
+export function useExcludeTypes(): readonly AssetType[] {
+  return useSettings().settings.includeCertificados ? ALL_TYPES : WITHOUT_CERTIFICADOS;
+}
+
+/** Whether certificados are included, and the switch. */
+export function useIncludeCertificados(): [boolean, (on: boolean) => void] {
+  const { settings, update } = useSettings();
+  return [settings.includeCertificados, (on) => update({ includeCertificados: on })];
 }
 
 /** Whether amounts are masked ("••••"). */

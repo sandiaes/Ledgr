@@ -98,7 +98,7 @@ Example (2025, one asset, no fees):
 - Without the sale (_V_ = 2,200 on 31 Dec), _NI_ = 2,200 and both returns are the same:
   selling moves money out, it does not create a return.
 
-## 0.2 Asset scope: with or without certificados (slice 5d, planned)
+## 0.2 Asset scope: with or without certificados (slice 5d, built 2026-10-24, #40)
 
 The app has one setting, "Include certificados de aforro" (default on;
 `docs/app-plan.md` §10). When it is off, **every** figure in this document is computed for
@@ -110,7 +110,8 @@ the portfolio _without_ certificados, by the same definitions applied to scoped 
   this is the in-scope assets' value).
 - **_V(d)_ of a past day**: the sum of that day's snapshot columns of the in-scope types,
   `stock_value_eur + etf_value_eur + crypto_value_eur` (a sum of what is in scope, never
-  `total − certificados`).
+  `total − certificados`). Days before the first row of _L'_ have no point (the portfolio
+  in scope did not exist yet).
 - **_F(d)_, _NI(d)_, _R_, _U_, _I_, _C_, _G_**: from _L'_. _NI(d)_ is computed from _L'_ (the
   snapshot stores net invested only as a total).
 - **XIRR, TWR, monthly and yearly returns**: §3 and §5 with the scoped _V_ and _F_;
@@ -330,4 +331,4 @@ result.
 | Units held, most that can be sold on a date | `unitsHeld`, `maxDisposable` (`validation.ts`)                |
 | Certificado subscription, factor age (§8)   | `certificadoSubscriptions` (`certificados.ts`)                |
 | Factor update: change vs last month (§8)    | `factorChange`, `factorUpdateLines` (`certificados.ts`)       |
-| Asset scope (§0.2, planned for slice 5d)    | `scope.ts`; a `scope` option (`docs/app-plan.md` §10.3)       |
+| Asset scope (§0.2)                          | `scope.ts`; a `scope` option (`docs/app-plan.md` §10.3)       |
