@@ -219,6 +219,25 @@ point (_T_, _V(T)_, _NI(T)_). Ranges: **1M** from `addMonths(T, −1)`, **3M**
 snapshot. The chart reads the selected range's first and last points: value change and the
 change in net invested. Long ranges are thinned for drawing only (`docs/app-plan.md` §5).
 
+### 4.1 Return for the chart's range (approved 2026-10-24, `docs/design.md` §10 D4; slice U1)
+
+Under the value vs net invested chart the Dashboard shows only the selected range's return,
+replacing "value change" and "net invested change". For a range with window (_S_, _T_]:
+
+- **Window start** _S_: for 1M, 3M, YTD and 1Y, the date of the range's first chart point
+  (the first snapshot on or after `rangeStart`, §4); for **All**, the day before the first
+  ledger row in scope (_V(S)_ = _NI(S)_ = 0), the same start as "Since start" (§3).
+- **Market gain €** = (_V(T)_ − _V(S)_) − (_NI(T)_ − _NI(S)_): the value change minus the net
+  contributions of the window, i.e. the capital gain made in it (as the monthly market gain,
+  §5). For All it is _V(T)_ − _NI(T)_ = _R_ + _U_ (§1). Like _NI_, it leaves income and fee
+  rows out.
+- **Return %** = TWR over (_S_, _T_] by §3's steps, cumulative (not annualized). For All it
+  equals the TWR Since start. Unlike the market gain, it counts income and fee rows (§0.1),
+  so the two can differ in sign when income is large relative to the price move. "—" with
+  the reason when the TWR is undefined or the start snapshot is missing.
+- Same asset scope as every other figure (§0.2). Computed in core next to `valueSeries`
+  (`returns.ts`); the app only formats it.
+
 ## 5. Monthly and yearly returns
 
 For calendar month _m_ with end _E_m_ (its last day, or _T_ for the current month) and start

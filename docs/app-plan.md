@@ -8,7 +8,9 @@ positions; §8). **Slice 5c built 2026-10-24** (New transaction, Activity, Certi
 Settings, symbol resolution in `prices-daily`; §8). **Slice 5d built 2026-10-24**
 (the app-wide "Include certificados de aforro" toggle, §10; plan approved the same day with
 the recommendations of §10.5). **Slice 5e built 2026-10-24** (the Return calculator under
-More, "Return calculator" below and `docs/kpis.md` §11). KPI
+More, "Return calculator" below and `docs/kpis.md` §11). **UI overhaul (U1–U3) planned
+2026-10-24**: Phase A approved with decisions D1–D6 (§11, `docs/design.md`); no slice built
+yet, so §1 below still describes the app as it is. KPI
 definitions are in `docs/kpis.md`; calculation assumptions in `docs/assumptions.md`.
 
 `apps/mobile`: Expo + React Native + TypeScript, Android only, run with Expo Go during
@@ -94,6 +96,9 @@ Segmented **Type / Broker / Currency / Asset**: donut plus table (group, €, %)
 
 ### New transaction
 
+(After slice U3, §11: only Buy and Sell by default, Dividend and Interest when switched on in
+the drawer, no "More" button, and the Fee field hidden for new rows.)
+
 1. **Type**: Buy, Sell, Dividend as large buttons; "More" reveals Interest. Deposits and
    withdrawals stay in the schema but are not in this form (they change no figure, D5);
    transfers, certificado subscriptions and redemptions are not in it either (D7).
@@ -170,6 +175,9 @@ above 0), a stacked chart of contributed vs growth and a year-by-year table.
   One line says it is a projection, not a forecast.
 
 ### More / Settings
+
+(After slice U1, §11: More is gone; these settings move into the side drawer, and the Return
+calculator becomes a tab.)
 
 Appearance (System default, Light, Dark; saved in AsyncStorage with the other toggles, applied
 before the first screen renders; System follows the phone live; every colour comes from
@@ -424,7 +432,9 @@ off and explains why. The lock is local: it does not touch the Supabase session.
 
 **Hide values**: a toggle (eye icon in headers, and in Settings), remembered. All amounts
 and units render as "••••" through one `<Money>` / `<Units>` component; percentages stay;
-chart axes and scrub labels hide amounts.
+chart axes and scrub labels hide amounts. (Changes in slice U1, §11 D2: one `<Amount>`
+component, "•••••", and percentages are masked too; the eye in the shared header is the same
+switch.)
 
 **Screenshot blocking**: `expo-screen-capture` (`preventScreenCaptureAsync`) sets
 Android's `FLAG_SECURE`: no screenshots, no screen recording, and a blank thumbnail in the
@@ -734,3 +744,28 @@ By broker (Aforro gone), Allocation, Performance, Closed positions and Activity,
 showing "Excluding certificados"; no query runs again on switching; the preference
 survives a remount (stored and read back); Certificados and Factor update still work with
 certificados excluded; hide values still masks every amount in both modes.
+
+## 11. UI overhaul of `apps/mobile` (slices U1–U3, planned 2026-10-24)
+
+A restyle and restructure, specified in `docs/design.md`: dark-first design system, one
+shared header with the portfolio value (expandable to today's and total result) and a
+privacy eye, a side drawer holding the settings (no More screen), a tab bar with Dashboard,
+Positions, a raised "+" for New transaction, Activity and Calculator. No financial
+calculation changes; the UI language stays English. The only new figure is the chart's
+period return (`docs/kpis.md` §4.1), computed in core.
+
+Slices (each: plan, build, tests, `pnpm check`, commit, stop): **U1** design system, header,
+drawer shell, tab bar, Dashboard; **U2** Positions, Allocation, Performance, Closed positions,
+Activity; **U3** drawer content, New transaction, Calculator, Certificados, sign-in, MFA and
+lock screens.
+
+Decisions, approved 2026-10-24 (details in `docs/design.md` §10):
+
+| #   | Decision                                                                                                                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D1  | Header "Total result": total gain _G_ € and the TWR Since start (cumulative) %.                                                                                                                                                |
+| D2  | Privacy masks every amount, unit count **and percentage** ("•••••"), app-wide, through one `Amount` component; one switch (the existing `hideValues`), persisted.                                                              |
+| D3  | Amounts in pt-PT order: `14.250,50 €`; other currencies `412,37 USD`. Numeric dates `24/10/2026`. Formatting stays string-based on `Decimal` (no `Intl`).                                                                      |
+| D4  | Chart return per range: market gain € and TWR %; "All" starts the day before the first row in scope (`docs/kpis.md` §4.1).                                                                                                     |
+| D5  | No Fee transaction type. The Fee field is hidden in New transaction (new Buy/Sell rows saved with fee 0, as an empty field is today); Edit shows it only for rows that already have a fee. Drawer toggles: Dividend, Interest. |
+| D6  | Dark is the default appearance for new installs; saved settings are not migrated.                                                                                                                                              |
